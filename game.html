@@ -119,7 +119,11 @@ function updateFade() {
       if (fromScene === 'room6') { player.x = R1-R1W-PLAYER_R-20; player.y = R1/2; }
       else                       { player.x = R1/2; player.y = R1-R1W-PLAYER_R-20; }
     }
-    else if (currentScene === 'room6')      { player.x = R1W+PLAYER_R+20; player.y = R1/2; }
+    else if (currentScene === 'room6')      {
+      if (fromScene === 'room7') { player.x = R1-R1W-PLAYER_R-20; player.y = R1/2; }
+      else                       { player.x = R1W+PLAYER_R+20; player.y = R1/2; }
+    }
+    else if (currentScene === 'room7')      { player.x = R1W+PLAYER_R+20; player.y = R1/2; }
     fadeDir = -1;
   }
   if (fadeDir === -1 && fadeAlpha <= 0) fadeDir = 0;
@@ -408,6 +412,27 @@ canvas.addEventListener('mousedown', e => {
       if (!lock2Solved && cx>=ox2 && cx<=ox2+dw) {
         if (cy>=dy0-arH-8 && cy<=dy0-8)        { lockDigits2[i]=(lockDigits2[i]+1)%10; checkLock(); return; }
         if (cy>=dy0+dh+8  && cy<=dy0+dh+8+arH) { lockDigits2[i]=(lockDigits2[i]+9)%10; checkLock(); return; }
+      }
+    }
+    return;
+  }
+
+  if (currentScene === 'room7' && !r7Solved) {
+    for (let i = 0; i < R7_CELLS.length; i++) {
+      const cell = R7_CELLS[i];
+      if (cx >= cell.x && cx <= cell.x+CELL7 && cy >= cell.y && cy <= cell.y+CELL7) {
+        if (r7Wrong) return;
+        if (r7Selected.includes(i)) {
+          r7Selected = r7Selected.filter(v => v !== i);
+        } else if (r7Selected.length < 3) {
+          r7Selected.push(i);
+          if (r7Selected.length === 3) {
+            const s = [...r7Selected].sort((a,b)=>a-b).join();
+            if (s === [...R7_CORRECT].sort((a,b)=>a-b).join()) { r7Solved = true; }
+            else { r7Wrong = true; r7WrongTimer = 60; }
+          }
+        }
+        return;
       }
     }
     return;
@@ -2586,6 +2611,147 @@ const R6_PLACEHOLDERS = R6_CIRCLES.map((_, i) => {
   return cv;
 });
 
+// ─── Room 7 ───────────────────────────────────────────────────────────────────
+const CELL7 = 120, GAP7 = 18;
+const R7_COLS = 3, R7_ROWS = 3;
+const R7_GRID_W = R7_COLS*(CELL7+GAP7) - GAP7;
+const R7_GRID_H = R7_ROWS*(CELL7+GAP7) - GAP7;
+const R7_START_X = R1/2 - R7_GRID_W/2;
+const R7_START_Y = 590   - R7_GRID_H/2;
+const R7_CELLS = (() => {
+  const arr = [];
+  for (let r = 0; r < R7_ROWS; r++)
+    for (let c = 0; c < R7_COLS; c++)
+      arr.push({ id: r*R7_COLS+c, x: R7_START_X + c*(CELL7+GAP7), y: R7_START_Y + r*(CELL7+GAP7) });
+  return arr;
+})();
+const R7_CORRECT = [0, 4, 8]; // placeholder — top-left, center, bottom-right
+
+let r7Selected = [];
+let r7Solved   = false;
+let r7Wrong    = false;
+let r7WrongTimer = 0;
+
+const R6_ROOM7_DOOR = { cx: R1-R1W, cy: R1/2 };
+function r6Room7DoorDist() {
+  const dx = player.x - R6_ROOM7_DOOR.cx, dy = player.y - R6_ROOM7_DOOR.cy;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+const R7_EXIT = { cx: R1W, cy: R1/2 };
+let r7TWasDown = false;
+function r7ExitDist() {
+  const dx = player.x - R7_EXIT.cx, dy = player.y - R7_EXIT.cy;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+
+const R7_PLACEHOLDERS = R7_CELLS.map((_, i) => {
+  const cv = document.createElement('canvas');
+  cv.width = CELL7; cv.height = CELL7;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#1a1814'; g.fillRect(0, 0, CELL7, CELL7);
+  const ph = CELL7 * 0.72, ox = (CELL7-ph)/2, oy = (CELL7-ph)/2;
+  g.fillStyle = '#26221c'; g.fillRect(ox, oy, ph, ph);
+  g.strokeStyle = '#3e3830'; g.lineWidth = 1.5;
+  g.strokeRect(ox, oy, ph, ph);
+  g.beginPath(); g.moveTo(ox, oy);    g.lineTo(ox+ph, oy+ph); g.stroke();
+  g.beginPath(); g.moveTo(ox+ph, oy); g.lineTo(ox, oy+ph);    g.stroke();
+  g.fillStyle = '#6e6858'; g.font = 'bold 17px Cinzel, serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(String(i+1), CELL7/2, CELL7/2 + ph*0.3);
+  return cv;
+});
+
+function updateRoom7() {
+  if (fadeDir !== 0) return;
+  let dx=0, dy=0;
+  if(keys['ArrowLeft'] ||keys['a']||keys['A'])dx-=1;
+  if(keys['ArrowRight']||keys['d']||keys['D'])dx+=1;
+  if(keys['ArrowUp']   ||keys['w']||keys['W'])dy-=1;
+  if(keys['ArrowDown'] ||keys['s']||keys['S'])dy+=1;
+  if(dx&&dy){dx*=Math.SQRT1_2;dy*=Math.SQRT1_2;}
+  player.x=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.x+dx*PLAYER_SPEED));
+  player.y=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
+  pulseTime += 0.05;
+  if (r7Wrong && --r7WrongTimer <= 0) { r7Wrong = false; r7Selected = []; }
+  const tDown = keys['t']||keys['T'];
+  if (tDown && !r7TWasDown && r7ExitDist() <= HOUSE_INTERACT_RANGE) triggerTransition('room6');
+  r7TWasDown = tDown;
+}
+
+function drawRoom7() {
+  ctx.fillStyle = '#0f110e'; ctx.fillRect(0,0,R1,R1);
+  ctx.fillStyle = '#131510'; ctx.fillRect(R1W,R1W,R1-R1W*2,R1-R1W*2);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#c8a84b'; ctx.font = 'bold 26px Cinzel, serif';
+  ctx.fillText('The Seventh Seal', R1/2, 65);
+  ctx.fillStyle = '#7a7060'; ctx.font = '17px Cinzel, serif';
+  ctx.fillText('Choose three.', R1/2, 102);
+
+  ctx.strokeStyle='#22241e'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(R1W+40,124); ctx.lineTo(R1-R1W-40,124); ctx.stroke();
+
+  const pulse7 = 0.5+0.5*Math.sin(pulseTime);
+  for (let i = 0; i < R7_CELLS.length; i++) {
+    const cell = R7_CELLS[i];
+    const sel  = r7Selected.includes(i);
+
+    ctx.strokeStyle = r7Wrong && sel ? '#c0392b' : r7Solved && sel ? `rgba(200,168,75,${0.6+0.4*pulse7})` : sel ? '#6a9a5a' : '#2e2c24';
+    ctx.lineWidth = sel ? 2.5 : 1.5;
+    ctx.strokeRect(cell.x-3, cell.y-3, CELL7+6, CELL7+6);
+
+    ctx.drawImage(R7_PLACEHOLDERS[i], cell.x, cell.y);
+
+    if (sel) {
+      ctx.fillStyle = r7Wrong ? 'rgba(192,57,43,0.28)' : 'rgba(106,154,90,0.22)';
+      ctx.fillRect(cell.x, cell.y, CELL7, CELL7);
+      if (!r7Wrong) {
+        const bx = cell.x+CELL7-18, by = cell.y+18;
+        ctx.fillStyle = '#c8a84b';
+        ctx.beginPath(); ctx.arc(bx, by, 13, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#0f110e'; ctx.font = 'bold 14px sans-serif';
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText('✓', bx, by);
+        ctx.textBaseline='alphabetic';
+      }
+    }
+  }
+
+  if (r7Wrong) {
+    ctx.fillStyle=`rgba(192,40,40,${((r7WrongTimer/60)*0.22).toFixed(3)})`;
+    ctx.fillRect(0,0,R1,R1);
+  }
+
+  if (r7Solved) {
+    ctx.save();
+    ctx.fillStyle='rgba(0,0,0,0.52)'; ctx.fillRect(0,0,R1,R1);
+    ctx.shadowColor='rgba(0,0,0,0.8)'; ctx.shadowBlur=28;
+    ctx.fillStyle='#1a1608'; ctx.fillRect(R1/2-230,R1/2-44,460,88);
+    ctx.shadowBlur=0;
+    ctx.strokeStyle='#c8a84b'; ctx.lineWidth=2; ctx.strokeRect(R1/2-230,R1/2-44,460,88);
+    ctx.fillStyle='#c8a84b'; ctx.font='bold 30px Cinzel, serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('Puzzle Solved!', R1/2, R1/2);
+    ctx.textBaseline='alphabetic';
+    ctx.restore();
+  }
+
+  const exitInRange = r7ExitDist() <= HOUSE_INTERACT_RANGE;
+  const r7p = 0.5+0.5*Math.sin(pulseTime);
+  drawPanelDoor(ctx, R7_EXIT.cx, R7_EXIT.cy, R1W+12, 72, exitInRange ? 18+r7p*14 : 6);
+  if (exitInRange) {
+    ctx.fillStyle='#ffe066'; ctx.font='bold 15px sans-serif';
+    ctx.textAlign='center';
+    ctx.fillText('[T]', R7_EXIT.cx + (R1W+12)/2 + 24, R7_EXIT.cy);
+  }
+
+  ctx.fillStyle='#3a3828'; ctx.font='bold 18px Cinzel, serif';
+  ctx.textAlign='right'; ctx.textBaseline='alphabetic';
+  ctx.fillText('Puzzle Seven', R1-R1W-14, R1-R1W-14);
+
+  drawPlayer(ctx);
+}
+
 function updateRoom6() {
   if (fadeDir !== 0) return;
   let dx=0, dy=0;
@@ -2601,8 +2767,9 @@ function updateRoom6() {
   if (r6Wrong && --r6WrongTimer <= 0) { r6Wrong = false; r6Input = []; }
 
   const tDown = keys['t']||keys['T'];
-  if (tDown && !r6TWasDown && r6ExitDist() <= HOUSE_INTERACT_RANGE) {
-    triggerTransition('basement');
+  if (tDown && !r6TWasDown) {
+    if      (r6ExitDist()      <= HOUSE_INTERACT_RANGE) triggerTransition('basement');
+    else if (r6Room7DoorDist() <= HOUSE_INTERACT_RANGE) triggerTransition('room7');
   }
   r6TWasDown = tDown;
 }
@@ -2692,6 +2859,16 @@ function drawRoom6() {
     ctx.fillText('[T]', R6_EXIT.cx + (R1W+12)/2 + 24, R6_EXIT.cy);
   }
 
+  // Room7 door (right wall)
+  const r7DoorInRange = r6Room7DoorDist() <= HOUSE_INTERACT_RANGE;
+  const r7dp = 0.5+0.5*Math.sin(pulseTime);
+  drawPanelDoor(ctx, R6_ROOM7_DOOR.cx, R6_ROOM7_DOOR.cy, R1W+12, 72, r7DoorInRange ? 18+r7dp*14 : 6);
+  if (r7DoorInRange) {
+    ctx.fillStyle='#ffe066'; ctx.font='bold 15px sans-serif';
+    ctx.textAlign='center';
+    ctx.fillText('[T]', R6_ROOM7_DOOR.cx - (R1W+12)/2 - 24, R6_ROOM7_DOOR.cy);
+  }
+
   // Room label
   ctx.fillStyle='#3e3858'; ctx.font='bold 18px Cinzel, serif';
   ctx.textAlign='right'; ctx.textBaseline='alphabetic';
@@ -2706,6 +2883,7 @@ function update() {
   else if (currentScene==='house')    updateHouse();
   else if (currentScene==='basement') updateBasement();
   else if (currentScene==='room6')    updateRoom6();
+  else if (currentScene==='room7')    updateRoom7();
   else                                updateSubRoom();
   updateFade();
 }
@@ -2715,6 +2893,7 @@ function draw() {
   else if (currentScene==='house')    drawHouse();
   else if (currentScene==='basement') drawBasement();
   else if (currentScene==='room6')    drawRoom6();
+  else if (currentScene==='room7')    drawRoom7();
   else                                drawSubRoom();
   if (fadeAlpha>0){ctx.fillStyle=`rgba(0,0,0,${fadeAlpha})`;ctx.fillRect(0,0,VIEWPORT,VIEWPORT);}
 }

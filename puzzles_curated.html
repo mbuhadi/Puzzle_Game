@@ -808,6 +808,111 @@ function buildPuzzleSix() {
   tick();
 }
 
+function buildPuzzleSeven() {
+  const wrap = document.getElementById('p7grid'); if (!wrap) return;
+  wrap.innerHTML = '';
+
+  const COLS = 3, ROWS = 3, CELL = 100, GAP = 14;
+  const PAD = 20;
+  const totalW = COLS*CELL + (COLS-1)*GAP + PAD*2;
+  const totalH = ROWS*CELL + (ROWS-1)*GAP + PAD*2;
+  const cv = document.createElement('canvas');
+  cv.width = totalW; cv.height = totalH;
+  cv.style.cssText = 'display:block; max-width:100%; border-radius:10px; background:#131510; cursor:pointer;';
+  wrap.appendChild(cv);
+  const g = cv.getContext('2d');
+
+  const cells = [];
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      cells.push({ id: r*COLS+c, x: PAD + c*(CELL+GAP), y: PAD + r*(CELL+GAP) });
+
+  const P7_CORRECT = [0, 4, 8];
+  let selected = [], solved = false, wrong = false, wrongTimer = 0;
+
+  function draw() {
+    g.clearRect(0, 0, cv.width, cv.height);
+    g.fillStyle = '#131510'; g.fillRect(0, 0, cv.width, cv.height);
+
+    for (const cell of cells) {
+      const sel = selected.includes(cell.id);
+      g.strokeStyle = wrong && sel ? '#c0392b' : solved && sel ? '#c8a84b' : sel ? '#6a9a5a' : '#2e2c24';
+      g.lineWidth = sel ? 2.5 : 1.5;
+      g.strokeRect(cell.x-2, cell.y-2, CELL+4, CELL+4);
+
+      g.fillStyle = sel ? (wrong ? '#1e1008' : '#111a10') : '#1a1814';
+      g.fillRect(cell.x, cell.y, CELL, CELL);
+
+      const ph = CELL * 0.68, ox = cell.x+(CELL-ph)/2, oy = cell.y+(CELL-ph)/2;
+      g.fillStyle = '#26221c'; g.fillRect(ox, oy, ph, ph);
+      g.strokeStyle = '#3e3830'; g.lineWidth = 1.2;
+      g.strokeRect(ox, oy, ph, ph);
+      g.beginPath(); g.moveTo(ox, oy);    g.lineTo(ox+ph, oy+ph); g.stroke();
+      g.beginPath(); g.moveTo(ox+ph, oy); g.lineTo(ox, oy+ph);    g.stroke();
+      g.fillStyle = '#6e6858'; g.font = 'bold 14px Cinzel, serif';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(String(cell.id+1), cell.x+CELL/2, cell.y+CELL/2 + ph*0.3);
+
+      if (sel && !wrong) {
+        const bx = cell.x+CELL-14, by = cell.y+14;
+        g.fillStyle = '#c8a84b';
+        g.beginPath(); g.arc(bx, by, 11, 0, Math.PI*2); g.fill();
+        g.fillStyle = '#131510'; g.font = 'bold 12px sans-serif';
+        g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText('✓', bx, by);
+      }
+    }
+
+    if (wrong) {
+      g.fillStyle = `rgba(192,40,40,${((wrongTimer/40)*0.18).toFixed(3)})`;
+      g.fillRect(0, 0, cv.width, cv.height);
+    }
+    if (solved) {
+      g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(0, 0, cv.width, cv.height);
+      g.fillStyle = '#1a1608'; g.fillRect(cv.width/2-140, cv.height/2-28, 280, 56);
+      g.strokeStyle = '#c8a84b'; g.lineWidth = 2;
+      g.strokeRect(cv.width/2-140, cv.height/2-28, 280, 56);
+      g.fillStyle = '#c8a84b'; g.font = 'bold 22px Cinzel, serif';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('Correct!', cv.width/2, cv.height/2);
+    }
+    g.textBaseline = 'alphabetic';
+  }
+
+  function tick() {
+    if (wrong && --wrongTimer <= 0) { wrong = false; selected = []; }
+    draw(); requestAnimationFrame(tick);
+  }
+
+  cv.addEventListener('click', e => {
+    if (wrong) return;
+    const rect = cv.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (cv.width / rect.width);
+    const my = (e.clientY - rect.top)  * (cv.height / rect.height);
+    for (const cell of cells) {
+      if (mx >= cell.x && mx <= cell.x+CELL && my >= cell.y && my <= cell.y+CELL) {
+        if (solved) return;
+        if (selected.includes(cell.id)) {
+          selected = selected.filter(v => v !== cell.id);
+        } else if (selected.length < 3) {
+          selected.push(cell.id);
+          if (selected.length === 3) {
+            const s = [...selected].sort((a,b)=>a-b).join();
+            if (s === [...P7_CORRECT].sort((a,b)=>a-b).join()) solved = true;
+            else { wrong = true; wrongTimer = 40; }
+          }
+        }
+        return;
+      }
+    }
+  });
+
+  const resetBtn = document.getElementById('p7reset');
+  if (resetBtn) resetBtn.onclick = () => { selected = []; solved = false; wrong = false; };
+
+  tick();
+}
+
 /* ───────────────── Puzzle content ───────────────── */
 const TV_HTML=`
   <div class="tv"><div class="tv-screen">
@@ -1032,11 +1137,22 @@ const PUZZLES = [
       <div class="answer">1 → 3 → 5 → 2 → 4 → 6</div>
       <p style="font-family:sans-serif;color:var(--muted);line-height:1.7;">Press the circles in this order (by their displayed number). The correct sequence in the game is defined as <code>[0, 2, 4, 1, 3, 5]</code> (zero-indexed), which maps to circles <b>1 → 3 → 5 → 2 → 4 → 6</b> as labelled on screen.</p>`,
   },
+  {
+    num:'7', name:'The Seventh Seal', loc:'Beyond Puzzle Six', build:'puzzle7',
+    given:`<p>Description coming soon.</p>
+      <p>A 3 × 3 grid of nine items. Three of them are the answer — and the order does not matter. Click them below to try it out:</p>
+      <div id="p7grid" style="margin:20px 0;"></div>
+      <button class="reveal-btn" id="p7reset" style="margin-top:8px;">↺ RESET</button>`,
+    problem:`<p>Click any three cells in the grid. Selection toggles — click a selected cell to deselect it. Once three are chosen the grid checks automatically. If wrong it flashes red and resets. Find the right three to break the seal.</p>`,
+    solution:`
+      <div class="answer">1 &nbsp; 5 &nbsp; 9</div>
+      <p style="font-family:sans-serif;color:var(--muted);line-height:1.7;">The three correct cells are <b>1, 5, and 9</b> (top-left, center, bottom-right). Order does not matter — as long as those three are selected the puzzle is solved.</p>`,
+  },
 ];
 
 /* ───────────────── Rendering ───────────────── */
 function buildPuzzle5(){buildCircles(); buildCylinderLock();}
-const BUILDERS={tree:buildFamilyTree, windows:buildWindows, courtyard:buildCourtyard, circles:buildCircles, clothes:buildClothes, puzzle5:buildPuzzle5, puzzle6:buildPuzzleSix};
+const BUILDERS={tree:buildFamilyTree, windows:buildWindows, courtyard:buildCourtyard, circles:buildCircles, clothes:buildClothes, puzzle5:buildPuzzle5, puzzle6:buildPuzzleSix, puzzle7:buildPuzzleSeven};
 const plist=document.getElementById('plist'), detail=document.getElementById('detail');
 let teardown=null;   // cleanup for the previously-built interactive puzzle
 
