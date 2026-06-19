@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Puzzle Five - 5 Shapes</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: linear-gradient(135deg, #f5f3f0 0%, #e8e4dc 100%);
+      font-family: 'Cinzel', serif;
+      padding: 40px 20px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: #5a5244;
+      margin-bottom: 10px;
+      font-size: 32px;
+      letter-spacing: 2px;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #8a7a6a;
+      font-size: 14px;
+      letter-spacing: 1px;
+      margin-bottom: 40px;
+      font-family: sans-serif;
+    }
+
+    .shapes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 30px;
+      padding: 20px;
+    }
+
+    .shape-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .shape-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+    }
+
+    svg {
+      width: 100%;
+      max-width: 180px;
+      height: 180px;
+      margin-bottom: 12px;
+    }
+
+    .shape-name {
+      color: #5a5244;
+      font-size: 16px;
+      font-weight: bold;
+      letter-spacing: 1px;
+      text-align: center;
+    }
+
+    .shape-number {
+      color: #a08a7a;
+      font-size: 12px;
+      margin-top: 6px;
+      font-family: sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Puzzle Five</h1>
+    <div class="subtitle">5 Calming Hand-Drawn Shapes</div>
+
+    <div class="shapes-grid">
+      <!-- Shape 1: Triangle -->
+      <div class="shape-card">
+        <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="100,30 40,160 160,160" fill="#a8d5d5" stroke="#6ba8a8" stroke-width="3" stroke-linejoin="round" opacity="0.9"/>
+        </svg>
+        <div class="shape-name">Triangle</div>
+        <div class="shape-number">Shape 1</div>
+      </div>
+
+      <!-- Shape 2: Pentagon -->
+      <div class="shape-card">
+        <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="100,25 175,75 150,160 50,160 25,75" fill="#c8b5d4" stroke="#8a6ba8" stroke-width="3" stroke-linejoin="round" opacity="0.9"/>
+        </svg>
+        <div class="shape-name">Pentagon</div>
+        <div class="shape-number">Shape 2</div>
+      </div>
+
+<!-- Shape 4: Four-Pointed Star -->
+      <div class="shape-card">
+        <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="100,20 120,85 185,100 120,115 100,180 80,115 15,100 80,85" fill="#d4b5c8" stroke="#a86b8a" stroke-width="3" stroke-linejoin="round" opacity="0.9"/>
+        </svg>
+        <div class="shape-name">Four-Pointed Star</div>
+        <div class="shape-number">Shape 4</div>
+      </div>
+
+<!-- Shape 6: Octagon -->
+      <div class="shape-card">
+        <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="50,20 150,20 175,50 175,150 150,180 50,180 25,150 25,50" fill="#d4d4b5" stroke="#a8a86b" stroke-width="3" stroke-linejoin="round" opacity="0.9"/>
+        </svg>
+        <div class="shape-name">Octagon</div>
+        <div class="shape-number">Shape 6</div>
+      </div>
+
+      <!-- Shape 7: Circle -->
+      <div class="shape-card">
+        <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="100" cy="100" r="75" fill="#d4c8b5" stroke="#a88a6b" stroke-width="3" opacity="0.9"/>
+        </svg>
+        <div class="shape-name">Circle</div>
+        <div class="shape-number">Shape 7</div>
+      </div>
+
+<!-- Shape 9: Eight-Pointed Star -->
+      <div class="shape-card">
+        <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="100,15 130,70 185,100 130,130 100,185 70,130 15,100 70,70" fill="#c8d4b5" stroke="#8aa86b" stroke-width="3" stroke-linejoin="round" opacity="0.9"/>
+        </svg>
+        <div class="shape-name">Eight-Pointed Star</div>
+        <div class="shape-number">Shape 9</div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>
