@@ -115,7 +115,11 @@ function updateFade() {
     else if (currentScene === 'room_left')  { player.x = R1-R1W-PLAYER_R-20; player.y = R1/2; }
     else if (currentScene === 'room_right') { player.x = R1W+PLAYER_R+20;    player.y = R1/2; }
     else if (currentScene === 'room_top')   { player.x = R1/2; player.y = R1-R1W-PLAYER_R-20; }
-    else if (currentScene === 'basement')   { player.x = R1/2; player.y = R1-R1W-PLAYER_R-20; }
+    else if (currentScene === 'basement')   {
+      if (fromScene === 'room6') { player.x = R1-R1W-PLAYER_R-20; player.y = R1/2; }
+      else                       { player.x = R1/2; player.y = R1-R1W-PLAYER_R-20; }
+    }
+    else if (currentScene === 'room6')      { player.x = R1W+PLAYER_R+20; player.y = R1/2; }
     fadeDir = -1;
   }
   if (fadeDir === -1 && fadeAlpha <= 0) fadeDir = 0;
@@ -404,6 +408,25 @@ canvas.addEventListener('mousedown', e => {
       if (!lock2Solved && cx>=ox2 && cx<=ox2+dw) {
         if (cy>=dy0-arH-8 && cy<=dy0-8)        { lockDigits2[i]=(lockDigits2[i]+1)%10; checkLock(); return; }
         if (cy>=dy0+dh+8  && cy<=dy0+dh+8+arH) { lockDigits2[i]=(lockDigits2[i]+9)%10; checkLock(); return; }
+      }
+    }
+    return;
+  }
+
+  if (currentScene === 'room6' && !r6Solved && !r6Wrong) {
+    for (const c of R6_CIRCLES) {
+      const ddx = cx - c.cx, ddy = cy - c.cy;
+      if (Math.sqrt(ddx*ddx + ddy*ddy) <= CIRCLE_R6) {
+        if (!r6Input.includes(c.id)) {
+          r6Input.push(c.id);
+          const len = r6Input.length;
+          if (r6Input[len-1] !== R6_CORRECT[len-1]) {
+            r6Wrong = true; r6WrongTimer = 60;
+          } else if (len === R6_CORRECT.length) {
+            r6Solved = true;
+          }
+        }
+        return;
       }
     }
     return;
@@ -2354,6 +2377,8 @@ function updateBasement() {
       basementNoteOpen = true;
     } else if (basementExitDist() <= HOUSE_INTERACT_RANGE) {
       triggerTransition('house');
+    } else if (basementR6DoorDist() <= HOUSE_INTERACT_RANGE) {
+      triggerTransition('room6');
     }
   }
   basementTWasDown = tDown;
@@ -2435,6 +2460,19 @@ function drawBasement() {
   ctx.fillText('السرداب', R1 - R1W - 14, R1 - R1W - 14);
   ctx.direction='ltr';
 
+  // Door to Room 6 (right wall)
+  {
+    const d = BASEMENT_R6_DOOR;
+    const inRange = basementR6DoorDist() <= HOUSE_INTERACT_RANGE;
+    const bpulse = 0.5+0.5*Math.sin(pulseTime);
+    drawPanelDoor(ctx, d.cx, d.cy, d.dw, d.dh, inRange ? 18+bpulse*14 : 6);
+    if (inRange && !basementNoteOpen) {
+      ctx.fillStyle='#ffe066'; ctx.font='bold 15px sans-serif';
+      ctx.textAlign='center';
+      ctx.fillText('[T]', d.cx - d.dw/2 - 24, d.cy);
+    }
+  }
+
   // Player (hidden while reading the note)
   if (!basementNoteOpen) drawPlayer(ctx);
 
@@ -2478,11 +2516,196 @@ function drawBasement() {
   }
 }
 
+// ─── Room 6 — Circle Sequence Puzzle ─────────────────────────────────────────
+const CIRCLE_R6 = 70;
+const GRID_GAP6 = 30;
+
+const R6_CIRCLES = (() => {
+  const cols = 3, rows = 2;
+  const offsetX = (cols-1) * (CIRCLE_R6*2 + GRID_GAP6) / 2;
+  const offsetY = (rows-1) * (CIRCLE_R6*2 + GRID_GAP6) / 2;
+  const arr = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      arr.push({
+        id: r*cols + c,
+        cx: R1/2 - offsetX + c*(CIRCLE_R6*2 + GRID_GAP6),
+        cy: 610   - offsetY + r*(CIRCLE_R6*2 + GRID_GAP6),
+      });
+    }
+  }
+  return arr;
+})();
+
+const R6_CORRECT    = [0, 2, 4, 1, 3, 5];
+let   r6Input       = [];
+let   r6Solved      = false;
+let   r6Wrong       = false;
+let   r6WrongTimer  = 0;
+
+const R6_POEM = [
+  'The Sixth Seal',
+  '',
+  'Six circles stand in silent wait,',
+  'Touch them true to open fate.',
+  'The pattern hides within the verse —',
+  'each wrong step makes the seal grow worse.',
+  '',
+  'Find the order. Break the seal.',
+];
+
+const BASEMENT_R6_DOOR = { cx: R1-R1W, cy: R1/2, dw: R1W+12, dh: 72 };
+function basementR6DoorDist() {
+  const dx = player.x - BASEMENT_R6_DOOR.cx, dy = player.y - BASEMENT_R6_DOOR.cy;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+
+const R6_EXIT = { cx: R1W, cy: R1/2 };
+let r6TWasDown = false;
+function r6ExitDist() {
+  const dx = player.x - R6_EXIT.cx, dy = player.y - R6_EXIT.cy;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+
+// One placeholder canvas per circle: dark background, gray cross-hatched square, index number
+const R6_PLACEHOLDERS = R6_CIRCLES.map((_, i) => {
+  const cv = document.createElement('canvas');
+  const s  = CIRCLE_R6;
+  cv.width = s*2; cv.height = s*2;
+  const g  = cv.getContext('2d');
+  g.fillStyle = '#1c192e'; g.fillRect(0, 0, s*2, s*2);
+  const ph = s * 0.72, ox = s - ph/2, oy = s - ph/2;
+  g.fillStyle   = '#28253e'; g.fillRect(ox, oy, ph, ph);
+  g.strokeStyle = '#3e3a58'; g.lineWidth = 1.5;
+  g.strokeRect(ox, oy, ph, ph);
+  g.beginPath(); g.moveTo(ox, oy);     g.lineTo(ox+ph, oy+ph); g.stroke();
+  g.beginPath(); g.moveTo(ox+ph, oy); g.lineTo(ox, oy+ph);    g.stroke();
+  g.fillStyle = '#5a5470'; g.font = 'bold 17px Cinzel, serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(String(i+1), s, s + ph*0.5 + 11);
+  return cv;
+});
+
+function updateRoom6() {
+  if (fadeDir !== 0) return;
+  let dx=0, dy=0;
+  if(keys['ArrowLeft'] ||keys['a']||keys['A'])dx-=1;
+  if(keys['ArrowRight']||keys['d']||keys['D'])dx+=1;
+  if(keys['ArrowUp']   ||keys['w']||keys['W'])dy-=1;
+  if(keys['ArrowDown'] ||keys['s']||keys['S'])dy+=1;
+  if(dx&&dy){dx*=Math.SQRT1_2;dy*=Math.SQRT1_2;}
+  player.x=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.x+dx*PLAYER_SPEED));
+  player.y=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
+  pulseTime += 0.05;
+
+  if (r6Wrong && --r6WrongTimer <= 0) { r6Wrong = false; r6Input = []; }
+
+  const tDown = keys['t']||keys['T'];
+  if (tDown && !r6TWasDown && r6ExitDist() <= HOUSE_INTERACT_RANGE) {
+    triggerTransition('basement');
+  }
+  r6TWasDown = tDown;
+}
+
+function drawRoom6() {
+  // Floor & walls
+  ctx.fillStyle = '#0e0c18'; ctx.fillRect(0,0,R1,R1);
+  ctx.fillStyle = '#130f20'; ctx.fillRect(R1W,R1W,R1-R1W*2,R1-R1W*2);
+
+  // Poem
+  ctx.textAlign = 'center';
+  R6_POEM.forEach((line, i) => {
+    const isTitle = i === 0;
+    ctx.fillStyle = isTitle ? '#c8a84b' : '#7a708e';
+    ctx.font      = isTitle ? 'bold 26px Cinzel, serif' : '17px Cinzel, serif';
+    ctx.fillText(line, R1/2, 65 + i*34);
+  });
+
+  // Divider
+  ctx.strokeStyle='#2a2240'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(R1W+40,348); ctx.lineTo(R1-R1W-40,348); ctx.stroke();
+
+  // Circles
+  const p6 = 0.5+0.5*Math.sin(pulseTime);
+  for (const c of R6_CIRCLES) {
+    const pressed = r6Input.includes(c.id);
+
+    // Outer ring
+    ctx.beginPath(); ctx.arc(c.cx, c.cy, CIRCLE_R6+5, 0, Math.PI*2);
+    if      (r6Wrong  && pressed) { ctx.strokeStyle='#c0392b'; ctx.lineWidth=3.5; }
+    else if (r6Solved)            { ctx.strokeStyle=`rgba(200,168,75,${0.6+0.4*p6})`; ctx.lineWidth=3; }
+    else if (pressed)             { ctx.strokeStyle='#6a5a9a'; ctx.lineWidth=2.5; }
+    else                          { ctx.strokeStyle='#2a2642'; ctx.lineWidth=2; }
+    ctx.stroke();
+
+    // Clip circle & draw placeholder image
+    ctx.save();
+    ctx.beginPath(); ctx.arc(c.cx, c.cy, CIRCLE_R6, 0, Math.PI*2); ctx.clip();
+    ctx.drawImage(R6_PLACEHOLDERS[c.id], c.cx-CIRCLE_R6, c.cy-CIRCLE_R6);
+    if (pressed) {
+      ctx.fillStyle = r6Wrong ? 'rgba(192,57,43,0.32)' : 'rgba(106,90,154,0.30)';
+      ctx.fillRect(c.cx-CIRCLE_R6, c.cy-CIRCLE_R6, CIRCLE_R6*2, CIRCLE_R6*2);
+    }
+    ctx.restore();
+
+    // Press-order badge (top-right of circle)
+    const ord = r6Input.indexOf(c.id);
+    if (ord >= 0) {
+      const bx = c.cx + CIRCLE_R6*0.62, by = c.cy - CIRCLE_R6*0.62;
+      ctx.fillStyle = r6Wrong ? '#c0392b' : '#c8a84b';
+      ctx.beginPath(); ctx.arc(bx, by, 14, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle='#0e0c18'; ctx.font='bold 13px Cinzel, serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(String(ord+1), bx, by);
+      ctx.textBaseline='alphabetic';
+    }
+  }
+
+  // Wrong flash overlay
+  if (r6Wrong) {
+    ctx.fillStyle=`rgba(192,40,40,${((r6WrongTimer/60)*0.22).toFixed(3)})`;
+    ctx.fillRect(0,0,R1,R1);
+  }
+
+  // Solved banner
+  if (r6Solved) {
+    ctx.save();
+    ctx.fillStyle='rgba(0,0,0,0.52)'; ctx.fillRect(0,0,R1,R1);
+    ctx.shadowColor='rgba(0,0,0,0.8)'; ctx.shadowBlur=28;
+    ctx.fillStyle='#1a1608'; ctx.fillRect(R1/2-230,R1/2-44,460,88);
+    ctx.shadowBlur=0;
+    ctx.strokeStyle='#c8a84b'; ctx.lineWidth=2; ctx.strokeRect(R1/2-230,R1/2-44,460,88);
+    ctx.fillStyle='#c8a84b'; ctx.font='bold 30px Cinzel, serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('Puzzle Solved!', R1/2, R1/2);
+    ctx.textBaseline='alphabetic';
+    ctx.restore();
+  }
+
+  // Exit door (left wall)
+  const exitInRange = r6ExitDist() <= HOUSE_INTERACT_RANGE;
+  const r6pulse = 0.5+0.5*Math.sin(pulseTime);
+  drawPanelDoor(ctx, R6_EXIT.cx, R6_EXIT.cy, R1W+12, 72, exitInRange ? 18+r6pulse*14 : 6);
+  if (exitInRange) {
+    ctx.fillStyle='#ffe066'; ctx.font='bold 15px sans-serif';
+    ctx.textAlign='center';
+    ctx.fillText('[T]', R6_EXIT.cx + (R1W+12)/2 + 24, R6_EXIT.cy);
+  }
+
+  // Room label
+  ctx.fillStyle='#3e3858'; ctx.font='bold 18px Cinzel, serif';
+  ctx.textAlign='right'; ctx.textBaseline='alphabetic';
+  ctx.fillText('Puzzle Six', R1-R1W-14, R1-R1W-14);
+
+  drawPlayer(ctx);
+}
+
 // ─── Main loop ────────────────────────────────────────────────────────────────
 function update() {
   if      (currentScene==='room1')    updateRoom1();
   else if (currentScene==='house')    updateHouse();
   else if (currentScene==='basement') updateBasement();
+  else if (currentScene==='room6')    updateRoom6();
   else                                updateSubRoom();
   updateFade();
 }
@@ -2491,6 +2714,7 @@ function draw() {
   if      (currentScene==='room1')    drawRoom1();
   else if (currentScene==='house')    drawHouse();
   else if (currentScene==='basement') drawBasement();
+  else if (currentScene==='room6')    drawRoom6();
   else                                drawSubRoom();
   if (fadeAlpha>0){ctx.fillStyle=`rgba(0,0,0,${fadeAlpha})`;ctx.fillRect(0,0,VIEWPORT,VIEWPORT);}
 }
