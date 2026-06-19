@@ -692,6 +692,128 @@ function buildCylinderLock(){
   lock.appendChild(lockDiv);
 }
 
+/* ───────────────── Puzzle Six: Circle Sequence ───────────────── */
+const P6_CORRECT = [0, 2, 4, 1, 3, 5];
+function buildPuzzleSix() {
+  const wrap = document.getElementById('p6grid'); if (!wrap) return;
+  wrap.innerHTML = '';
+
+  const COLS = 3, ROWS = 2, R = 64, GAP = 24;
+  const totalW = COLS * R*2 + (COLS-1)*GAP;
+  const totalH = ROWS * R*2 + (ROWS-1)*GAP;
+  const cv = document.createElement('canvas');
+  cv.width  = totalW + 60;
+  cv.height = totalH + 60;
+  cv.style.cssText = 'display:block; max-width:100%; border-radius:10px; background:#130f20; cursor:pointer;';
+  wrap.appendChild(cv);
+  const g = cv.getContext('2d');
+
+  const circles = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      circles.push({
+        id: r*COLS + c,
+        cx: 30 + R + c*(R*2 + GAP),
+        cy: 30 + R + r*(R*2 + GAP),
+      });
+    }
+  }
+
+  let input = [], solved = false, wrong = false, wrongTimer = 0;
+
+  function draw() {
+    g.clearRect(0, 0, cv.width, cv.height);
+    g.fillStyle = '#130f20'; g.fillRect(0, 0, cv.width, cv.height);
+
+    for (const c of circles) {
+      const pressed = input.includes(c.id);
+
+      // Outer ring
+      g.beginPath(); g.arc(c.cx, c.cy, R+4, 0, Math.PI*2);
+      if      (wrong && pressed) { g.strokeStyle = '#c0392b'; g.lineWidth = 3.5; }
+      else if (solved)           { g.strokeStyle = '#c8a84b'; g.lineWidth = 3; }
+      else if (pressed)          { g.strokeStyle = '#6a5a9a'; g.lineWidth = 2.5; }
+      else                       { g.strokeStyle = '#2a2642'; g.lineWidth = 2; }
+      g.stroke();
+
+      // Circle fill
+      g.beginPath(); g.arc(c.cx, c.cy, R, 0, Math.PI*2);
+      g.fillStyle = pressed ? (wrong ? '#2a1218' : '#1e1a30') : '#1c192e';
+      g.fill();
+
+      // Placeholder image (cross-hatch square)
+      const ph = R * 0.72, ox = c.cx - ph/2, oy = c.cy - ph/2;
+      g.fillStyle = '#28253e'; g.fillRect(ox, oy, ph, ph);
+      g.strokeStyle = '#3e3a58'; g.lineWidth = 1.5;
+      g.strokeRect(ox, oy, ph, ph);
+      g.beginPath(); g.moveTo(ox, oy);     g.lineTo(ox+ph, oy+ph); g.stroke();
+      g.beginPath(); g.moveTo(ox+ph, oy); g.lineTo(ox, oy+ph);    g.stroke();
+
+      // Circle number label (bottom of placeholder)
+      g.fillStyle = '#5a5470'; g.font = 'bold 15px Cinzel, serif';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(String(c.id + 1), c.cx, c.cy + ph*0.5 + 10);
+
+      // Press-order badge
+      const ord = input.indexOf(c.id);
+      if (ord >= 0) {
+        const bx = c.cx + R*0.62, by = c.cy - R*0.62;
+        g.fillStyle = wrong ? '#c0392b' : '#c8a84b';
+        g.beginPath(); g.arc(bx, by, 13, 0, Math.PI*2); g.fill();
+        g.fillStyle = '#0e0c18'; g.font = 'bold 12px Cinzel, serif';
+        g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(String(ord + 1), bx, by);
+      }
+    }
+
+    // Wrong flash
+    if (wrong) {
+      g.fillStyle = `rgba(192,40,40,${((wrongTimer/40)*0.18).toFixed(3)})`;
+      g.fillRect(0, 0, cv.width, cv.height);
+    }
+
+    // Solved banner
+    if (solved) {
+      g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(0, 0, cv.width, cv.height);
+      g.fillStyle = '#1a1608'; g.fillRect(cv.width/2-140, cv.height/2-28, 280, 56);
+      g.strokeStyle = '#c8a84b'; g.lineWidth = 2;
+      g.strokeRect(cv.width/2-140, cv.height/2-28, 280, 56);
+      g.fillStyle = '#c8a84b'; g.font = 'bold 22px Cinzel, serif';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('Sequence Correct!', cv.width/2, cv.height/2);
+    }
+
+    g.textBaseline = 'alphabetic';
+  }
+
+  function tick() {
+    if (wrong && --wrongTimer <= 0) { wrong = false; input = []; }
+    draw();
+    requestAnimationFrame(tick);
+  }
+
+  cv.addEventListener('click', e => {
+    if (solved || wrong) return;
+    const rect = cv.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (cv.width / rect.width);
+    const my = (e.clientY - rect.top)  * (cv.height / rect.height);
+    for (const c of circles) {
+      if (Math.hypot(mx - c.cx, my - c.cy) <= R && !input.includes(c.id)) {
+        input.push(c.id);
+        const len = input.length;
+        if (input[len-1] !== P6_CORRECT[len-1]) { wrong = true; wrongTimer = 40; }
+        else if (len === P6_CORRECT.length) solved = true;
+        return;
+      }
+    }
+  });
+
+  const resetBtn = document.getElementById('p6reset');
+  if (resetBtn) resetBtn.onclick = () => { input = []; solved = false; wrong = false; };
+
+  tick();
+}
+
 /* ───────────────── Puzzle content ───────────────── */
 const TV_HTML=`
   <div class="tv"><div class="tv-screen">
@@ -896,11 +1018,31 @@ const PUZZLES = [
       <div class="answer">Correct Order: Triangle → Pentagon → Four-Pointed Star → Circle → Eight-Pointed Star</div>
       <p style="font-family:sans-serif;color:var(--muted);line-height:1.7;">The color combinations shown in the intersecting areas correspond to adjacent pairs of basic colors. By identifying which shape color represents each combination, you can deduce the sequence that unlocks the chest.</p>`,
   },
+  ,{
+    num:'PUZZLE SIX', name:'The Circle Sequence', loc:'Beyond the Basement', build:'puzzle6',
+    given:`
+      <p>Past the basement door lies a dark room. On the wall hangs a poem — the only clue:</p>
+      <div class="clue">
+        <div class="head">The Sixth Seal</div>
+        Six circles stand in silent wait,<br>
+        Touch them true to open fate.<br>
+        The pattern hides within the verse —<br>
+        each wrong step makes the seal grow worse.<br><br>
+        Find the order. Break the seal.
+      </div>
+      <p>Below the poem, a 3 × 2 grid of six circles — each with a placeholder image — waits to be pressed in the right sequence. Click them below to try it out:</p>
+      <div id="p6grid" style="margin:20px 0;"></div>
+      <button class="reveal-btn" id="p6reset" style="margin-top:8px;">↺ RESET</button>`,
+    problem:`<p>Click the six circles in the correct order. A numbered badge appears on each circle you press. Any wrong press flashes red and resets your progress. Get all six right in sequence to break the seal.</p>`,
+    solution:`
+      <div class="answer">1 → 3 → 5 → 2 → 4 → 6</div>
+      <p style="font-family:sans-serif;color:var(--muted);line-height:1.7;">Press the circles in this order (by their displayed number). The correct sequence in the game is defined as <code>[0, 2, 4, 1, 3, 5]</code> (zero-indexed), which maps to circles <b>1 → 3 → 5 → 2 → 4 → 6</b> as labelled on screen.</p>`,
+  },
 ];
 
 /* ───────────────── Rendering ───────────────── */
 function buildPuzzle5(){buildCircles(); buildCylinderLock();}
-const BUILDERS={tree:buildFamilyTree, windows:buildWindows, courtyard:buildCourtyard, circles:buildCircles, clothes:buildClothes, puzzle5:buildPuzzle5};
+const BUILDERS={tree:buildFamilyTree, windows:buildWindows, courtyard:buildCourtyard, circles:buildCircles, clothes:buildClothes, puzzle5:buildPuzzle5, puzzle6:buildPuzzleSix};
 const plist=document.getElementById('plist'), detail=document.getElementById('detail');
 let teardown=null;   // cleanup for the previously-built interactive puzzle
 
