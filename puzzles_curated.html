@@ -122,6 +122,11 @@
   .lock-shape-btn:hover{border-color:var(--gold); transform:scale(1.05);}
   .lock-shape-btn.selected{border-color:var(--gold-bright); background:#1a1a14; box-shadow:0 0 10px rgba(255,224,102,0.3);}
   .lock-status{color:var(--gold); font-weight:bold; text-align:center; margin-top:20px; font-size:18px;}
+
+  /* ── Scene illustrations ── */
+  .scene-preview{margin:0 0 22px;}
+  .scene-preview canvas{display:block; max-width:100%; border-radius:8px; border:1px solid var(--line);}
+  .scene-label{font-size:10px; color:var(--dim); font-family:sans-serif; letter-spacing:2px; margin-top:6px;}
 </style>
 </head>
 <body>
@@ -207,6 +212,7 @@ const TREE_NAMES=['عيسى','رزان','مشاري','غازي','فيصل','عب
 const TREE_CORRECT=['عيسى','فيصل','عبدالعزيز','عبدالرحمن','غازي','مشاري','عيسى','رزان','عيسى','عبدالعزيز'];
 
 function buildFamilyTree(){
+  sceneIllustration('preview-p1', drawSceneGate);
   const stage=document.getElementById('treeStage'); if(!stage)return;
   const names=Array(10).fill(null); names[3]='عبدالرحمن'; names[9]='عبدالعزيز';
   const NS='http://www.w3.org/2000/svg';
@@ -245,6 +251,7 @@ function buildFamilyTree(){
 }
 
 function buildWindows(){
+  sceneIllustration('preview-p2', drawSceneWindow);
   const k=document.getElementById('kitchenWin'); if(k)drawWindowScene(k.getContext('2d'),k.width,k.height,'top');
   const l=document.getElementById('livingWin'); if(l)drawWindowScene(l.getContext('2d'),l.width,l.height,'bottom');
   const f=document.getElementById('combinedWin'); if(f)drawWindowScene(f.getContext('2d'),f.width,f.height,'full');
@@ -256,6 +263,7 @@ const COURT_SEQ=[11,12,1,2,3,4,5,4,3,2,3,4,5,6,7,8,9,10,11,12];
 const COURT_AR={1:'١',2:'٢',3:'٣',4:'٤',5:'٥',6:'٦',7:'٧',8:'٨',9:'٩',10:'١٠',11:'١١',12:'١٢'};
 
 function buildCourtyard(){
+  sceneIllustration('preview-p4', drawScenePaper);
   const cv=document.getElementById('courtyardCanvas'); if(!cv)return null;
   const ctx=cv.getContext('2d');
   const W=cv.width, H=cv.height;
@@ -478,7 +486,7 @@ function drawClothesline(g,W,H){
     if(gi<CLOTHES_CODE.length-1)x+=GRPGAP;
   });
 }
-function buildClothes(){ const cv=document.getElementById('clothesCanvas'); if(cv)drawClothesline(cv.getContext('2d'),cv.width,cv.height); }
+function buildClothes(){ sceneIllustration('preview-p3', drawSceneRadio); const cv=document.getElementById('clothesCanvas'); if(cv)drawClothesline(cv.getContext('2d'),cv.width,cv.height); }
 
 /* ───────────────── Combination Lock (Puzzle 5) ───────────────── */
 const LOCK_SHAPES=[
@@ -689,6 +697,7 @@ function buildCylinderLock(){
 /* ───────────────── Puzzle Six: Circle Sequence ───────────────── */
 const P6_CORRECT = [0, 2, 4, 1, 3, 5];
 function buildPuzzleSix() {
+  sceneIllustration('preview-p6', drawScenePoemWall);
   const wrap = document.getElementById('p6grid'); if (!wrap) return;
   wrap.innerHTML = '';
 
@@ -913,6 +922,156 @@ function buildPuzzleSeven() {
   tick();
 }
 
+/* ───────────────── Scene illustrations ─────────────────────────────────── */
+function sceneIllustration(id, fn) {
+  const cv = document.getElementById(id); if (!cv) return;
+  fn(cv.getContext('2d'), cv.width, cv.height);
+}
+
+function drawSceneGate(g, w, h) {
+  g.fillStyle='#14120e'; g.fillRect(0,0,w,h);
+  // Floor tiles
+  g.strokeStyle='#1e1a14'; g.lineWidth=0.7;
+  for(let x=0;x<w;x+=32) for(let y=h*0.42;y<h;y+=32) g.strokeRect(x,y,32,32);
+  // Stone wall
+  const wallH=h*0.44;
+  g.fillStyle='#3a3020'; g.fillRect(0,0,w,wallH);
+  g.strokeStyle='#2a2010'; g.lineWidth=0.8;
+  for(let row=0;row*14<wallH+2;row++){const off=(row%2===0)?0:24; for(let bx=-off;bx<w+24;bx+=48)g.strokeRect(bx,row*14,48,14);}
+  // Gate opening
+  const gW=86,gX=w/2-gW/2;
+  g.fillStyle='#100e0c'; g.fillRect(gX,0,gW,wallH+10);
+  // Bars
+  const bars=5,barW=5,bGap=(gW-bars*barW)/(bars+1);
+  for(let i=0;i<bars;i++){
+    const bx=gX+bGap+i*(barW+bGap);
+    g.fillStyle='#5a4a2a'; g.fillRect(bx,0,barW,wallH+10);
+    g.fillStyle='#8a7a4a';
+    g.beginPath(); g.moveTo(bx+barW/2,-11); g.lineTo(bx,0); g.lineTo(bx+barW,0); g.closePath(); g.fill();
+  }
+  [wallH*0.22,wallH*0.62].forEach(y=>{g.fillStyle='#6a5a3a'; g.fillRect(gX,y,gW,4);});
+  // Glow
+  g.save(); g.shadowColor='#ffe066'; g.shadowBlur=18;
+  g.strokeStyle='#ffe066'; g.lineWidth=1.8; g.strokeRect(gX-8,-2,gW+16,wallH+14); g.restore();
+  g.fillStyle='#ffe066'; g.font='bold 12px sans-serif'; g.textAlign='center';
+  g.fillText('[T]', gX+gW+28, wallH*0.5+5);
+}
+
+function drawSceneWindow(g, w, h) {
+  g.fillStyle='#1a1810'; g.fillRect(0,0,w,h);
+  g.fillStyle='#1e1c14'; g.fillRect(20,20,w-40,h-40);
+  g.fillStyle='#2e2a18'; g.fillRect(20,20,w-40,38);
+  // Window in wall
+  const wx=w/2-44,wy=26,ww=88,wh2=28;
+  g.fillStyle='#5a3e1e'; g.fillRect(wx-5,wy-3,ww+10,wh2+6);
+  const sk=g.createLinearGradient(wx,wy,wx,wy+wh2);
+  sk.addColorStop(0,'#1a3a5c'); sk.addColorStop(1,'#4a8ab0');
+  g.fillStyle=sk; g.fillRect(wx,wy,ww,wh2);
+  g.strokeStyle='#5a3e1e'; g.lineWidth=2;
+  g.beginPath(); g.moveTo(wx+ww/2,wy); g.lineTo(wx+ww/2,wy+wh2); g.stroke();
+  g.beginPath(); g.moveTo(wx,wy+wh2/2); g.lineTo(wx+ww,wy+wh2/2); g.stroke();
+  // Glow
+  g.save(); g.shadowColor='#ffe066'; g.shadowBlur=12;
+  g.strokeStyle='#ffe066'; g.lineWidth=1.5; g.strokeRect(wx-5,wy-3,ww+10,wh2+6); g.restore();
+  g.fillStyle='#ffe066'; g.font='bold 11px sans-serif'; g.textAlign='center';
+  g.fillText('[T]', wx+ww/2, wy+wh2+20);
+  // Player
+  g.fillStyle='#c8a84b'; g.beginPath(); g.arc(w/2,h*0.65,9,0,Math.PI*2); g.fill();
+  g.fillStyle='rgba(200,168,75,0.35)'; g.beginPath(); g.arc(w/2,h*0.65,22,0,Math.PI*2); g.fill();
+}
+
+function drawSceneRadio(g, w, h) {
+  g.fillStyle='#1a1814'; g.fillRect(0,0,w,h);
+  g.fillStyle='#1e1c14'; g.fillRect(20,20,w-40,h-40);
+  const rx=w/2-20, ry=h*0.52;
+  // Table
+  g.fillStyle='#5a3a1a'; g.fillRect(rx-46,ry+18,92,14);
+  g.strokeStyle='#3a2010'; g.lineWidth=1.5; g.strokeRect(rx-46,ry+18,92,14);
+  g.fillStyle='#4a3015'; g.fillRect(rx-40,ry+32,8,20); g.fillRect(rx+32,ry+32,8,20);
+  // Body
+  g.fillStyle='#2a2218'; g.fillRect(rx-36,ry-18,72,36);
+  g.strokeStyle='#5a4a2a'; g.lineWidth=1.5; g.strokeRect(rx-36,ry-18,72,36);
+  // Grille
+  g.strokeStyle='#3a3020'; g.lineWidth=1;
+  for(let i=0;i<4;i++){const gx=rx-24+i*8; g.beginPath(); g.moveTo(gx,ry-10); g.lineTo(gx,ry+8); g.stroke();}
+  // LED
+  g.save(); g.shadowColor='#ff3300'; g.shadowBlur=14;
+  g.fillStyle='#ff3300'; g.beginPath(); g.arc(rx+26,ry,6,0,Math.PI*2); g.fill(); g.restore();
+  g.strokeStyle='#5a1a05'; g.lineWidth=1; g.beginPath(); g.arc(rx+26,ry,6,0,Math.PI*2); g.stroke();
+  // Antenna
+  g.strokeStyle='#6a5a3a'; g.lineWidth=2;
+  g.beginPath(); g.moveTo(rx+28,ry-18); g.lineTo(rx+40,ry-52); g.stroke();
+  // Morse dots above
+  g.fillStyle='#ff8c00'; g.font='bold 20px monospace'; g.textAlign='center';
+  g.fillText('·  ·  —', rx, ry-64);
+  // Player
+  g.fillStyle='#c8a84b'; g.beginPath(); g.arc(w*0.7,h*0.65,9,0,Math.PI*2); g.fill();
+}
+
+function drawScenePaper(g, w, h) {
+  g.fillStyle='#1a1810'; g.fillRect(0,0,w,h);
+  g.fillStyle='#201d16'; g.fillRect(20,20,w-40,h-40);
+  g.strokeStyle='#2a2618'; g.lineWidth=0.6;
+  for(let x=20;x<w;x+=28) g.strokeRect(x,20,28,h-40);
+  for(let y=20;y<h;y+=28) g.strokeRect(20,y,w-40,28);
+  g.save();
+  g.translate(w/2,h/2+8); g.rotate(0.18);
+  g.shadowColor='rgba(0,0,0,0.4)'; g.shadowBlur=8; g.shadowOffsetY=4;
+  const pg=g.createLinearGradient(-60,-44,0,44);
+  pg.addColorStop(0,'#f5f0e2'); pg.addColorStop(1,'#e8dfc8');
+  g.fillStyle=pg; g.fillRect(-60,-44,120,88);
+  g.shadowBlur=0;
+  g.strokeStyle='#c0a87a'; g.lineWidth=1.5; g.strokeRect(-60,-44,120,88);
+  g.strokeStyle='rgba(160,130,80,0.4)'; g.lineWidth=1; g.strokeRect(-52,-36,104,72);
+  g.strokeStyle='rgba(42,31,10,0.45)'; g.lineWidth=1.2;
+  [-22,-6,10,26].forEach(y=>{g.beginPath(); g.moveTo(-44,y); g.lineTo(44,y); g.stroke();});
+  g.restore();
+  g.fillStyle='#ffe066'; g.font='bold 12px sans-serif'; g.textAlign='center';
+  g.fillText('[T]', w/2, h/2-56);
+}
+
+function drawSceneNote(g, w, h) {
+  g.fillStyle='#0e1218'; g.fillRect(0,0,w,h);
+  g.strokeStyle='#141a20'; g.lineWidth=0.7;
+  for(let x=0;x<w;x+=30) g.strokeRect(x,0,30,h);
+  for(let y=0;y<h;y+=30) g.strokeRect(0,y,w,30);
+  g.save();
+  g.translate(w/2,h/2+4); g.rotate(-0.12);
+  g.shadowColor='rgba(0,0,0,0.4)'; g.shadowBlur=8; g.shadowOffsetY=4;
+  g.fillStyle='#f0ead8'; g.fillRect(-52,-38,104,76);
+  g.shadowBlur=0;
+  g.strokeStyle='#c8b89a'; g.lineWidth=1; g.strokeRect(-52,-38,104,76);
+  g.strokeStyle='#b0a080'; g.lineWidth=0.8;
+  [-22,-10,2,14,26].forEach(y=>{g.beginPath(); g.moveTo(-40,y); g.lineTo(40,y); g.stroke();});
+  g.restore();
+  g.fillStyle='#ffe066'; g.font='bold 12px sans-serif'; g.textAlign='center';
+  g.fillText('[T]', w/2, h/2-50);
+}
+
+function drawScenePoemWall(g, w, h) {
+  g.fillStyle='#0e0c18'; g.fillRect(0,0,w,h);
+  g.fillStyle='#130f20'; g.fillRect(20,20,w-40,h-40);
+  const lines=['The Sixth Seal','','Six circles stand in silent wait,','Touch them true to open fate.','The pattern hides within the verse —','each wrong step makes the seal grow worse.'];
+  g.textAlign='center';
+  lines.forEach((line,i)=>{
+    const isT=i===0;
+    g.fillStyle=isT?'#c8a84b':'#6e6888';
+    g.font=isT?'bold 16px Cinzel, serif':'11px Cinzel, serif';
+    g.fillText(line,w/2,46+i*22);
+  });
+  g.strokeStyle='#2a2240'; g.lineWidth=1;
+  g.beginPath(); g.moveTo(40,183); g.lineTo(w-40,183); g.stroke();
+  // Small circle grid hint
+  const r=12,gap=10,cols=3,rows=2;
+  const gridW=cols*(r*2+gap)-gap;
+  const sx=w/2-gridW/2;
+  for(let row=0;row<rows;row++) for(let col=0;col<cols;col++){
+    const cx=sx+col*(r*2+gap)+r, cy=195+row*(r*2+gap)+r;
+    g.strokeStyle='#3a3454'; g.lineWidth=1.5;
+    g.beginPath(); g.arc(cx,cy,r,0,Math.PI*2); g.stroke();
+  }
+}
+
 /* ───────────────── Puzzle content ───────────────── */
 const TV_HTML=`
   <div class="tv"><div class="tv-screen">
@@ -938,6 +1097,7 @@ const PUZZLES = [
   {
     num:'1', name:'The Family Tree', loc:'At the Gate', build:'tree',
     given:`
+      <div class="scene-preview"><canvas id="preview-p1" width="380" height="200"></canvas><div class="scene-label">IN GAME — THE ENTRANCE GATE</div></div>
       <p>The family tree below is the actual puzzle — <b>click any empty box</b> and pick a name from عبدالرحمن's relatives.
       Two boxes are locked in: <span class="arabic">عبدالرحمن</span> and his child <span class="arabic">عبدالعزيز</span>.
       Fill every box correctly to solve it.</p>
@@ -974,6 +1134,7 @@ const PUZZLES = [
   {
     num:'2', name:'The Window Code', loc:'Study Door · Lock 1', build:'windows',
     given:`
+      <div class="scene-preview"><canvas id="preview-p2" width="380" height="200"></canvas><div class="scene-label">IN GAME — KITCHEN WINDOW (ROOM_LEFT)</div></div>
       <p>This study-door lock is marked with a <b>window</b> icon. Its code is split across the two windows in the house —
       each window shows <b>half</b> of a three-digit number.</p>
       <div class="windows-wrap">
@@ -998,6 +1159,7 @@ const PUZZLES = [
   {
     num:'3', name:'The Morse Code', loc:'Study Door · Lock 2', build:'clothes',
     given:`
+      <div class="scene-preview"><canvas id="preview-p3" width="380" height="200"></canvas><div class="scene-label">IN GAME — RADIO IN THE KITCHEN (ROOM_LEFT)</div></div>
       <p>The code for this study-door lock is pegged out on the <b>washing line</b> as Morse. Each garment is one symbol:
       a <b>small</b> item is a <b>dot</b>, a <b>wide</b> item is a <b>dash</b>. The three groups (separated by the larger gaps) are the three digits.</p>
       <div class="clothes-wrap"><canvas id="clothesCanvas" width="720" height="300"></canvas></div>
@@ -1016,6 +1178,7 @@ const PUZZLES = [
   {
     num:'4', name:'The Clock Pool', loc:'The Courtyard', build:'courtyard',
     given:`
+      <div class="scene-preview"><canvas id="preview-p4" width="380" height="200"></canvas><div class="scene-label">IN GAME — PAPER IN THE STUDY (ROOM_TOP)</div></div>
       <p>The courtyard pool is ringed by the <b>twelve clock numbers</b> (<span class="arabic">١٢ ، ١ ، ٢ … ١١</span>)
       laid into the floor tiles. Each number lights up as you stand on it.</p>
       <p>A paper found in the study reads:</p>
@@ -1047,6 +1210,7 @@ const PUZZLES = [
   {
     num:'5', name:'The Circle Diagram', loc:'The Basement', incomplete:false, build:'puzzle5',
     given:`
+      <div class="scene-preview"><canvas id="preview-p5" width="380" height="200"></canvas><div class="scene-label">IN GAME — NOTE ON THE BASEMENT FLOOR</div></div>
       <p>A note lies on the basement floor with ten hand-drawn shapes in calming colors:</p>
       <div class="shapes-grid">
         <div class="shape-item">
@@ -1120,6 +1284,7 @@ const PUZZLES = [
   ,{
     num:'6', name:'The Circle Sequence', loc:'Beyond the Basement', build:'puzzle6',
     given:`
+      <div class="scene-preview"><canvas id="preview-p6" width="380" height="240"></canvas><div class="scene-label">IN GAME — POEM ON THE WALL (ROOM SIX)</div></div>
       <p>Past the basement door lies a dark room. On the wall hangs a poem — the only clue:</p>
       <div class="clue">
         <div class="head">The Sixth Seal</div>
@@ -1151,7 +1316,7 @@ const PUZZLES = [
 ];
 
 /* ───────────────── Rendering ───────────────── */
-function buildPuzzle5(){buildCircles(); buildCylinderLock();}
+function buildPuzzle5(){ sceneIllustration('preview-p5', drawSceneNote); buildCircles(); buildCylinderLock(); }
 const BUILDERS={tree:buildFamilyTree, windows:buildWindows, courtyard:buildCourtyard, circles:buildCircles, clothes:buildClothes, puzzle5:buildPuzzle5, puzzle6:buildPuzzleSix, puzzle7:buildPuzzleSeven};
 const plist=document.getElementById('plist'), detail=document.getElementById('detail');
 let teardown=null;   // cleanup for the previously-built interactive puzzle
