@@ -23,18 +23,14 @@
 
   /* ── Sidebar ── */
   #sidebar{
-    width:300px; flex-shrink:0; background:var(--panel);
-    border-right:1px solid var(--line); padding:28px 0; overflow-y:auto;
+    width:60px; flex-shrink:0; background:var(--panel);
+    border-right:1px solid var(--line); padding:20px 0; overflow-y:auto;
   }
-  #sidebar h1{font-size:22px; color:var(--gold); text-align:center; letter-spacing:1px; margin-bottom:6px;}
-  #sidebar .sub{font-size:12px; color:var(--dim); text-align:center; margin-bottom:24px; font-family:sans-serif; letter-spacing:.5px;}
   .plist{list-style:none;}
-  .pitem{padding:15px 26px; cursor:pointer; border-left:3px solid transparent; transition:background .15s, border-color .15s;}
+  .pitem{padding:16px 0; cursor:pointer; border-left:3px solid transparent; text-align:center; transition:background .15s, border-color .15s;}
   .pitem:hover{background:#1e1b14;}
   .pitem.active{background:#221e14; border-left-color:var(--gold);}
-  .pitem .num{font-size:10px; color:var(--gold); letter-spacing:2px;}
-  .pitem .name{font-size:16px; color:var(--ink); margin-top:3px;}
-  .pitem .loc{font-size:11px; color:var(--dim); margin-top:3px; font-family:sans-serif;}
+  .pitem .num{font-size:20px; color:var(--gold);}
 
   /* ── Detail (the only scroll area; scrollbar sits at the far right edge) ── */
   #detail{flex:1; padding:44px 56px; overflow-y:auto; overflow-x:hidden;}
@@ -130,8 +126,6 @@
 </head>
 <body>
   <nav id="sidebar">
-    <h1>Puzzle Guide</h1>
-    <div class="sub">SOLUTIONS &amp; WALKTHROUGH</div>
     <ul class="plist" id="plist"></ul>
   </nav>
   <main id="detail"></main>
@@ -1048,7 +1042,7 @@ let teardown=null;   // cleanup for the previously-built interactive puzzle
 
 PUZZLES.forEach((p,i)=>{
   const li=document.createElement('li'); li.className='pitem';
-  li.innerHTML=`<div class="num">${p.num}</div><div class="name">${p.name}${p.incomplete?' *':''}</div><div class="loc">${p.loc}</div>`;
+  li.innerHTML=`<div class="num">${p.num}</div>`;
   li.onclick=()=>select(i); plist.appendChild(li);
 });
 
@@ -1057,8 +1051,8 @@ function select(i){
   [...plist.children].forEach((el,j)=>el.classList.toggle('active',j===i));
   const p=PUZZLES[i];
   detail.innerHTML=`
-    <div class="pkicker">${p.num} &nbsp;·&nbsp; ${p.loc.toUpperCase()}</div>
     <div class="ptitle">${p.name}</div>
+    <div class="pkicker">${p.loc.toUpperCase()}</div>
     <div class="section"><h2>THE GIVEN</h2>${p.given}</div>
     <div class="section"><h2>THE PROBLEM</h2>${p.problem}</div>
     <div class="section">
