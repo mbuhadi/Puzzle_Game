@@ -471,7 +471,7 @@ canvas.addEventListener('mousedown', e => {
   if (openDropdown !== null) {
     const dd = dropdownRect(openDropdown.nodeId);
     if (cx >= dd.left && cx <= dd.left+dd.w && cy >= dd.top && cy <= dd.top+dd.h) {
-      const row = Math.floor((cy - dd.top - 3) / DD_ROW);
+      const row = Math.floor((cy - dd.top - 4) / DD_ROW);
       if (row >= 0 && row < NAMES.length) {
         nodeNames[openDropdown.nodeId] = NAMES[row];
         checkSolved();
