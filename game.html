@@ -1476,57 +1476,6 @@ const LWIN = { cx: R1-120, cy: R1W, w: 72, h: 22 };
 let livingRoomWindowOpen = false;
 let livingRoomWinTWasDown = false;
 
-// ─── Radio (kitchen) ──────────────────────────────────────────────────────────
-const RADIO_POS = { cx: 80, cy: 810 };
-
-const RADIO_THOUGHTS = [
-  ["Morse code can be sent with sound,", "light, radio signals, or even by", "tapping on a table..."],
-  ["...which is why it has been useful", "in many different situations", "for over 180 years."],
-];
-const RADIO_THOUGHT_INTERVAL = 5000; // ms per bubble
-
-// Morse for "248": ..--- ....- ---..
-// dot=200ms, dash=600ms, intra-gap=200ms, inter-digit-gap=2500ms
-// Total active ≈ 13200ms; cycle = 14000ms active + 6000ms break = 20000ms
-const MORSE_SEGS = (() => {
-  const DOT=200, DASH=600, IGAP=200, CGAP=2500, segs=[];
-  let t = 0;
-  function on(len)  { segs.push([t, t+len]); t += len; }
-  function off(len) { t += len; }
-  // "2" = ..---
-  on(DOT);off(IGAP);on(DOT);off(IGAP);on(DASH);off(IGAP);on(DASH);off(IGAP);on(DASH);off(CGAP);
-  // "4" = ....-
-  on(DOT);off(IGAP);on(DOT);off(IGAP);on(DOT);off(IGAP);on(DOT);off(IGAP);on(DASH);off(CGAP);
-  // "8" = ---..
-  on(DASH);off(IGAP);on(DASH);off(IGAP);on(DASH);off(IGAP);on(DOT);off(IGAP);on(DOT);
-  return segs;
-})();
-const MORSE_ACTIVE = 14000;
-const MORSE_PERIOD = 20000; // 14s active + 6s break
-
-function morseIsOn() {
-  const phase = performance.now() % MORSE_PERIOD;
-  if (phase >= MORSE_ACTIVE) return false;
-  return MORSE_SEGS.some(([s, e]) => phase >= s && phase < e);
-}
-
-function playRadioAudio() {
-  if (!window.speechSynthesis) return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(
-    "Morse code encodes messages as dots and dashes — " +
-    "short and long signals transmittable by sound, light, or touch. " +
-    "Simple and reliable, it remains a vital emergency communication tool."
-  );
-  u.rate = 1.0;
-  speechSynthesis.speak(u);
-}
-
-function radioDist() {
-  const dx = player.x - RADIO_POS.cx, dy = player.y - RADIO_POS.cy;
-  return Math.sqrt(dx*dx + dy*dy);
-}
-
 // ─── TV (living room) ─────────────────────────────────────────────────────────
 const TV_POS = { cx: 600, cy: 230 };
 let tvOpen = false;
@@ -1707,22 +1656,6 @@ function drawLock() {
     ctx.beginPath(); ctx.moveTo(icx-iw/2, icy); ctx.lineTo(icx+iw/2, icy); ctx.stroke();
   }
 
-  function drawRadioIcon(icx, icy) {
-    ctx.fillStyle='#222';
-    ctx.fillRect(icx-28, icy-14, 56, 28);
-    ctx.strokeStyle='#888'; ctx.lineWidth=1.5;
-    ctx.strokeRect(icx-28, icy-14, 56, 28);
-    ctx.strokeStyle='#666'; ctx.lineWidth=1;
-    for (let i=0;i<3;i++){
-      const gx=icx-18+i*8;
-      ctx.beginPath(); ctx.moveTo(gx,icy-7); ctx.lineTo(gx,icy+7); ctx.stroke();
-    }
-    ctx.fillStyle='#aaa';
-    ctx.beginPath(); ctx.arc(icx+20,icy,5,0,Math.PI*2); ctx.fill();
-    ctx.strokeStyle='#888'; ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.moveTo(icx+22,icy-14); ctx.lineTo(icx+32,icy-36); ctx.stroke();
-  }
-
   ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, VIEWPORT, VIEWPORT);
   ctx.save(); ctx.shadowColor='rgba(0,0,0,0.8)'; ctx.shadowBlur=40; ctx.shadowOffsetY=10;
   rrK(lx,ly,lw,lh,16); ctx.fillStyle='#12110f'; ctx.fill(); ctx.restore();
@@ -1739,7 +1672,6 @@ function drawLock() {
 
   // Icons
   drawWindowIcon(cx1, ly + 108);
-  drawRadioIcon(cx2, ly + 108);
 
   // Lock 1 digits
   drawLockDigits(dx0_1, lockDigits1, lock1Solved);
@@ -1852,81 +1784,6 @@ function drawSubRoom() {
       ctx.fillStyle = '#ffe066'; ctx.font = 'bold 15px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('[T]', KWIN.cx, KWIN.cy + KWIN.h + 22);
-    }
-
-    // Radio
-    const rInRange = radioDist() <= INTERACT_RANGE;
-    const rLit = morseIsOn();
-    // Table under radio
-    const TX = RADIO_POS.cx - 46, TY = RADIO_POS.cy + 18, TW = 92, TH = 14;
-    ctx.fillStyle = '#5a3a1a'; ctx.fillRect(TX, TY, TW, TH);
-    ctx.strokeStyle = '#3a2010'; ctx.lineWidth = 1.5; ctx.strokeRect(TX, TY, TW, TH);
-    // Table legs
-    ctx.fillStyle = '#4a3015';
-    ctx.fillRect(TX + 6,  TY + TH, 8, 22);
-    ctx.fillRect(TX + TW - 14, TY + TH, 8, 22);
-    // Body
-    ctx.fillStyle = '#2a2218';
-    ctx.fillRect(RADIO_POS.cx - 36, RADIO_POS.cy - 18, 72, 36);
-    ctx.strokeStyle = '#5a4a2a'; ctx.lineWidth = 1.5;
-    ctx.strokeRect(RADIO_POS.cx - 36, RADIO_POS.cy - 18, 72, 36);
-    // Speaker grille
-    ctx.strokeStyle = '#3a3020'; ctx.lineWidth = 1;
-    for (let i = 0; i < 4; i++) {
-      const gx = RADIO_POS.cx - 26 + i * 8;
-      ctx.beginPath(); ctx.moveTo(gx, RADIO_POS.cy - 10); ctx.lineTo(gx, RADIO_POS.cy + 8); ctx.stroke();
-    }
-    // Morse blink light
-    ctx.shadowColor = rLit ? '#ff3300' : 'transparent';
-    ctx.shadowBlur  = rLit ? 16 : 0;
-    ctx.fillStyle   = rLit ? '#ff3300' : '#2a0500';
-    ctx.beginPath(); ctx.arc(RADIO_POS.cx + 26, RADIO_POS.cy, 6, 0, Math.PI*2); ctx.fill();
-    ctx.shadowBlur  = 0;
-    ctx.strokeStyle = '#5a1a05'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(RADIO_POS.cx + 26, RADIO_POS.cy, 6, 0, Math.PI*2); ctx.stroke();
-    // Antenna
-    ctx.strokeStyle = '#6a5a3a'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(RADIO_POS.cx + 28, RADIO_POS.cy - 18);
-    ctx.lineTo(RADIO_POS.cx + 38, RADIO_POS.cy - 48); ctx.stroke();
-    // Thought bubble — auto-cycles, no interaction needed
-    {
-      const bubbleIdx = Math.floor(performance.now() / RADIO_THOUGHT_INTERVAL) % RADIO_THOUGHTS.length;
-      const lines = RADIO_THOUGHTS[bubbleIdx];
-      const bw = 360, bh = 96, br = 14;
-      const bx = RADIO_POS.cx + 20, by = RADIO_POS.cy - bh - 82;
-
-      function bubblePath() {
-        ctx.beginPath();
-        ctx.moveTo(bx+br, by); ctx.lineTo(bx+bw-br, by); ctx.arcTo(bx+bw,by, bx+bw,by+br, br);
-        ctx.lineTo(bx+bw, by+bh-br); ctx.arcTo(bx+bw,by+bh, bx+bw-br,by+bh, br);
-        ctx.lineTo(bx+br, by+bh); ctx.arcTo(bx,by+bh, bx,by+bh-br, br);
-        ctx.lineTo(bx, by+br); ctx.arcTo(bx,by, bx+br,by, br);
-        ctx.closePath();
-      }
-
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 5;
-      bubblePath(); ctx.fillStyle = '#f5f0e2'; ctx.fill();
-      ctx.restore();
-
-      bubblePath();
-      ctx.strokeStyle = '#8a7a5a'; ctx.lineWidth = 2; ctx.stroke();
-
-      // Thought trail dots
-      [[RADIO_POS.cx + 10, RADIO_POS.cy - 20, 4],
-       [RADIO_POS.cx + 18, RADIO_POS.cy - 42, 6],
-       [RADIO_POS.cx + 26, RADIO_POS.cy - 66, 9]].forEach(([tx, ty, tr]) => {
-        ctx.fillStyle = '#f5f0e2';
-        ctx.beginPath(); ctx.arc(tx, ty, tr, 0, Math.PI*2); ctx.fill();
-        ctx.strokeStyle = '#8a7a5a'; ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.arc(tx, ty, tr, 0, Math.PI*2); ctx.stroke();
-      });
-
-      // Text
-      ctx.fillStyle = '#2a1f0a'; ctx.font = '13px Cinzel, serif';
-      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      lines.forEach((line, i) => ctx.fillText(line, bx + 16, by + 24 + i * 24));
-      ctx.textBaseline = 'alphabetic';
     }
 
     // Window interface
