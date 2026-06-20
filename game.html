@@ -490,6 +490,86 @@ canvas.addEventListener('mousedown', e => {
   }
 });
 
+// ─── Touch controls ───────────────────────────────────────────────────────────
+let touchTarget     = null;   // {x,y} in game coords – where to walk
+let pendingInteract = false;  // fire a T-key interaction on next update frame
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const r  = canvas.getBoundingClientRect();
+  const cx = (touch.clientX - r.left) * (VIEWPORT / r.width);
+  const cy = (touch.clientY - r.top)  * (VIEWPORT / r.height);
+
+  // Forward touch as mousedown so existing UI (tree, lock dials, room6/7 cells) works
+  canvas.dispatchEvent(new MouseEvent('mousedown', {
+    bubbles: true, cancelable: true,
+    clientX: touch.clientX, clientY: touch.clientY
+  }));
+
+  // Overlay panels (canvas-rendered) – any tap closes them
+  if (kitchenWindowOpen || livingRoomWindowOpen || studyPaperOpen || tvOpen || basementNoteOpen) {
+    pendingInteract = true; return;
+  }
+  // Complex HTML-driven panels handled above by mousedown
+  if (interfaceOpen || lockOpen) return;
+
+  // Returns true when the tap (cx,cy) is near game point (ix,iy) and player is in range
+  function tapOnObj(ix, iy, inRange, hitR) {
+    const dx = cx - ix, dy = cy - iy;
+    return inRange && Math.sqrt(dx*dx + dy*dy) <= (hitR || 150);
+  }
+
+  if (currentScene === 'room1') {
+    if (tapOnObj(interactable.x, interactable.y, distToObj() <= INTERACT_RANGE)) {
+      pendingInteract = true; return;
+    }
+  } else if (currentScene === 'house') {
+    for (const door of HOUSE_DOORS) {
+      if (tapOnObj(door.cx, door.cy, houseDoorDist(door) <= HOUSE_INTERACT_RANGE)) {
+        pendingInteract = true; return;
+      }
+    }
+    if (trapdoorOpen) {
+      const _dx = player.x - TRAPDOOR.cx, _dy = player.y - TRAPDOOR.cy;
+      if (tapOnObj(TRAPDOOR.cx, TRAPDOOR.cy, Math.sqrt(_dx*_dx+_dy*_dy) <= HOUSE_INTERACT_RANGE)) {
+        pendingInteract = true; return;
+      }
+    }
+  } else if (currentScene === 'room_left') {
+    if (tapOnObj(KWIN.cx, KWIN.cy, kitchenWinDist() <= INTERACT_RANGE)) {
+      pendingInteract = true; return;
+    }
+  } else if (currentScene === 'room_right') {
+    if (tapOnObj(LWIN.cx,   LWIN.cy,   livingRoomWinDist() <= INTERACT_RANGE) ||
+        tapOnObj(TV_POS.cx, TV_POS.cy, tvDist()            <= INTERACT_RANGE)) {
+      pendingInteract = true; return;
+    }
+  } else if (currentScene === 'room_top') {
+    if (tapOnObj(STUDY_PAPER.cx, STUDY_PAPER.cy, studyPaperDist() <= INTERACT_RANGE)) {
+      pendingInteract = true; return;
+    }
+  } else if (currentScene === 'basement') {
+    if (tapOnObj(BASEMENT_EXIT.cx,    BASEMENT_EXIT.cy,    basementExitDist()   <= HOUSE_INTERACT_RANGE) ||
+        tapOnObj(BASEMENT_NOTE.cx,    BASEMENT_NOTE.cy,    basementNoteDist()   <= INTERACT_RANGE) ||
+        tapOnObj(BASEMENT_R6_DOOR.cx, BASEMENT_R6_DOOR.cy, basementR6DoorDist() <= HOUSE_INTERACT_RANGE)) {
+      pendingInteract = true; return;
+    }
+  } else if (currentScene === 'room6') {
+    if (tapOnObj(R6_EXIT.cx,       R6_EXIT.cy,       r6ExitDist()      <= HOUSE_INTERACT_RANGE) ||
+        tapOnObj(R6_ROOM7_DOOR.cx, R6_ROOM7_DOOR.cy, r6Room7DoorDist() <= HOUSE_INTERACT_RANGE)) {
+      pendingInteract = true; return;
+    }
+  } else if (currentScene === 'room7') {
+    if (tapOnObj(R7_EXIT.cx, R7_EXIT.cy, r7ExitDist() <= HOUSE_INTERACT_RANGE)) {
+      pendingInteract = true; return;
+    }
+  }
+
+  // Default: walk toward the tapped position
+  touchTarget = { x: cx, y: cy };
+}, { passive: false });
+
 // ─── Room 1 helpers ───────────────────────────────────────────────────────────
 function distToObj() {
   const dx = player.x - interactable.x, dy = player.y - interactable.y;
@@ -506,6 +586,11 @@ function updateRoom1() {
     if (keys['ArrowDown']  || keys['s'] || keys['S']) dy += 1;
   }
   if (dx && dy) { dx *= Math.SQRT1_2; dy *= Math.SQRT1_2; }
+  if (!interfaceOpen && dx === 0 && dy === 0 && touchTarget) {
+    const _tdx = touchTarget.x - player.x, _tdy = touchTarget.y - player.y;
+    const _td = Math.sqrt(_tdx*_tdx + _tdy*_tdy);
+    if (_td < 4) touchTarget = null; else { dx = _tdx/_td; dy = _tdy/_td; }
+  }
   // Only the house wall at the top blocks movement — the forecourt is open
   player.x = Math.max(PLAYER_R, Math.min(R1-PLAYER_R, player.x + dx*PLAYER_SPEED));
   player.y = Math.max(R1W+PLAYER_R, Math.min(R1-PLAYER_R, player.y + dy*PLAYER_SPEED));
@@ -516,6 +601,7 @@ function updateRoom1() {
     if (bd < bmin && bd > 0) { player.x += (bdx/bd)*(bmin-bd); player.y += (bdy/bd)*(bmin-bd); }
   }
 
+  if (pendingInteract) { tWasDown = false; pendingInteract = false; }
   const tDown = keys['t'] || keys['T'];
   if (tDown && !tWasDown) {
     if (interfaceOpen) {
@@ -931,6 +1017,11 @@ function updateHouse() {
     if(keys['ArrowDown'] ||keys['s']||keys['S'])dy+=1;
   }
   if(dx&&dy){dx*=Math.SQRT1_2;dy*=Math.SQRT1_2;}
+  if (!lockOpen && dx === 0 && dy === 0 && touchTarget) {
+    const _tdx = touchTarget.x - player.x, _tdy = touchTarget.y - player.y;
+    const _td = Math.sqrt(_tdx*_tdx + _tdy*_tdy);
+    if (_td < 4) touchTarget = null; else { dx = _tdx/_td; dy = _tdy/_td; }
+  }
   const p=houseCollide(player.x+dx*PLAYER_SPEED, player.y+dy*PLAYER_SPEED);
   player.x=p.x; player.y=p.y;
   pulseTime += 0.05;
@@ -953,6 +1044,7 @@ function updateHouse() {
     }
   }
 
+  if (pendingInteract) { houseTWasDown = false; pendingInteract = false; }
   const tDown = keys['t'] || keys['T'];
   if (tDown && !houseTWasDown) {
     if (lockOpen) {
@@ -1720,10 +1812,16 @@ function updateSubRoom() {
     if(keys['ArrowDown'] ||keys['s']||keys['S'])dy+=1;
   }
   if(dx&&dy){dx*=Math.SQRT1_2;dy*=Math.SQRT1_2;}
+  if (dx === 0 && dy === 0 && !kitchenWindowOpen && !livingRoomWindowOpen && !studyPaperOpen && !tvOpen && touchTarget) {
+    const _tdx = touchTarget.x - player.x, _tdy = touchTarget.y - player.y;
+    const _td = Math.sqrt(_tdx*_tdx + _tdy*_tdy);
+    if (_td < 4) touchTarget = null; else { dx = _tdx/_td; dy = _tdy/_td; }
+  }
   player.x=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.x+dx*PLAYER_SPEED));
   player.y=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
   pulseTime += 0.05;
 
+  if (pendingInteract) { subRoomTWasDown = false; pendingInteract = false; }
   const tDown = keys['t'] || keys['T'];
   if (tDown && !subRoomTWasDown) {
     if (currentScene === 'room_left' && kitchenWindowOpen) {
@@ -2247,10 +2345,16 @@ function updateBasement() {
     if(keys['ArrowDown'] ||keys['s']||keys['S'])dy+=1;
   }
   if(dx&&dy){dx*=Math.SQRT1_2;dy*=Math.SQRT1_2;}
+  if (!basementNoteOpen && dx === 0 && dy === 0 && touchTarget) {
+    const _tdx = touchTarget.x - player.x, _tdy = touchTarget.y - player.y;
+    const _td = Math.sqrt(_tdx*_tdx + _tdy*_tdy);
+    if (_td < 4) touchTarget = null; else { dx = _tdx/_td; dy = _tdy/_td; }
+  }
   player.x=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.x+dx*PLAYER_SPEED));
   player.y=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
   pulseTime += 0.05;
 
+  if (pendingInteract) { basementTWasDown = false; pendingInteract = false; }
   const tDown = keys['t']||keys['T'];
   if (tDown && !basementTWasDown) {
     if (basementNoteOpen) {
@@ -2526,10 +2630,16 @@ function updateRoom7() {
   if(keys['ArrowUp']   ||keys['w']||keys['W'])dy-=1;
   if(keys['ArrowDown'] ||keys['s']||keys['S'])dy+=1;
   if(dx&&dy){dx*=Math.SQRT1_2;dy*=Math.SQRT1_2;}
+  if (dx === 0 && dy === 0 && touchTarget) {
+    const _tdx = touchTarget.x - player.x, _tdy = touchTarget.y - player.y;
+    const _td = Math.sqrt(_tdx*_tdx + _tdy*_tdy);
+    if (_td < 4) touchTarget = null; else { dx = _tdx/_td; dy = _tdy/_td; }
+  }
   player.x=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.x+dx*PLAYER_SPEED));
   player.y=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
   pulseTime += 0.05;
   if (r7Wrong && --r7WrongTimer <= 0) { r7Wrong = false; r7Selected = []; }
+  if (pendingInteract) { r7TWasDown = false; pendingInteract = false; }
   const tDown = keys['t']||keys['T'];
   if (tDown && !r7TWasDown && r7ExitDist() <= HOUSE_INTERACT_RANGE) triggerTransition('room6');
   r7TWasDown = tDown;
@@ -2617,12 +2727,18 @@ function updateRoom6() {
   if(keys['ArrowUp']   ||keys['w']||keys['W'])dy-=1;
   if(keys['ArrowDown'] ||keys['s']||keys['S'])dy+=1;
   if(dx&&dy){dx*=Math.SQRT1_2;dy*=Math.SQRT1_2;}
+  if (dx === 0 && dy === 0 && touchTarget) {
+    const _tdx = touchTarget.x - player.x, _tdy = touchTarget.y - player.y;
+    const _td = Math.sqrt(_tdx*_tdx + _tdy*_tdy);
+    if (_td < 4) touchTarget = null; else { dx = _tdx/_td; dy = _tdy/_td; }
+  }
   player.x=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.x+dx*PLAYER_SPEED));
   player.y=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
   pulseTime += 0.05;
 
   if (r6Wrong && --r6WrongTimer <= 0) { r6Wrong = false; r6Input = []; }
 
+  if (pendingInteract) { r6TWasDown = false; pendingInteract = false; }
   const tDown = keys['t']||keys['T'];
   if (tDown && !r6TWasDown) {
     if      (r6ExitDist()      <= HOUSE_INTERACT_RANGE) triggerTransition('basement');
