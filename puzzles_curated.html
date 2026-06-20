@@ -180,7 +180,7 @@ setInterval(morseTick, 50);   // setInterval keeps the blinker ticking even if r
 function drawWindowScene(c,W,H,which,bgImg){
   c.clearRect(0,0,W,H);
   if(bgImg&&(which==='top'||which==='full')){
-    c.drawImage(bgImg,0,0,W,which==='full'?H*0.5:H);
+    try{c.drawImage(bgImg,0,0,W,which==='full'?H*0.5:H);}catch(e){}
     if(which==='full'){
       const sky=c.createLinearGradient(0,H*0.5,0,H); sky.addColorStop(0,'#1a3a5c'); sky.addColorStop(1,'#4a8ab0');
       c.fillStyle=sky; c.fillRect(0,H*0.5,W,H*0.5);
@@ -271,13 +271,15 @@ function buildFamilyTree(){
 
 function buildWindows(){
   sceneIllustration('preview-p2', drawSceneWindow);
-  const desert=new Image(); desert.src='desert_bg.png';
-  const draw=()=>{
-    const k=document.getElementById('kitchenWin'); if(k)drawWindowScene(k.getContext('2d'),k.width,k.height,'top',desert);
+  const redraw=(bgImg)=>{
+    const k=document.getElementById('kitchenWin'); if(k)drawWindowScene(k.getContext('2d'),k.width,k.height,'top',bgImg);
     const l=document.getElementById('livingWin'); if(l)drawWindowScene(l.getContext('2d'),l.width,l.height,'bottom');
-    const f=document.getElementById('combinedWin'); if(f)drawWindowScene(f.getContext('2d'),f.width,f.height,'full',desert);
+    const f=document.getElementById('combinedWin'); if(f)drawWindowScene(f.getContext('2d'),f.width,f.height,'full',bgImg);
   };
-  desert.complete?draw():desert.onload=draw;
+  redraw(null);
+  const desert=new Image();
+  desert.onload=()=>redraw(desert);
+  desert.src='desert_bg.png';
 }
 
 /* ── Courtyard minigame: walk the clock numbers in the game's CLOCK_SEQ order ── */
