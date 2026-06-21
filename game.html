@@ -3035,8 +3035,10 @@ function drawJoystick() {
   // Direction line + knob
   const ddx = ex - cx, ddy = ey - cy, dd = Math.sqrt(ddx*ddx + ddy*ddy);
   if (dd > 0) {
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey); ctx.stroke();
-    ctx.beginPath(); ctx.arc(ex, ey, 18, 0, Math.PI*2); ctx.fill();
+    const cap = Math.min(dd, 120); // cap at 1.5× the 80-unit circle radius
+    const kx = cx + (ddx/dd)*cap, ky = cy + (ddy/dd)*cap;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(kx, ky); ctx.stroke();
+    ctx.beginPath(); ctx.arc(kx, ky, 18, 0, Math.PI*2); ctx.fill();
   }
   // Center dot
   ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI*2); ctx.fill();
