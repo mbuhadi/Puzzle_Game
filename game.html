@@ -79,6 +79,110 @@ function drawPlayer(g) {
     Math.round(player.y + PLAYER_R - PLAYER_SPRITE.height));
 }
 
+// ─── Thought bubble ───────────────────────────────────────────────────────────
+let thoughtBubbleBounds = null;  // screen-space { x, y, r } for click detection
+
+function drawThoughtBubble(sx, sy, iconFn) {
+  const headY = sy + PLAYER_R - PLAYER_SPRITE.height;
+  const bx = sx + 28, by = headY - 30, br = 24;
+  ctx.save();
+  ctx.fillStyle  = 'rgba(255,255,255,0.93)';
+  ctx.strokeStyle = '#c8a84b';
+  ctx.lineWidth  = 1.8;
+  for (const [tx,ty,tr] of [[sx+4,headY+4,3],[sx+13,headY-5,5],[sx+21,headY-17,7]]) {
+    ctx.beginPath(); ctx.arc(tx,ty,tr,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(bx,by,br,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.restore();
+  iconFn(bx, by, br - 5);
+  thoughtBubbleBounds = { x: bx, y: by, r: br + 6 };
+}
+function tbGate(cx,cy,r){
+  ctx.save(); ctx.strokeStyle='#5a4a2a'; ctx.lineWidth=2.2; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(cx-r,cy-r*0.25); ctx.lineTo(cx+r,cy-r*0.25); ctx.stroke();
+  for(let i=0;i<4;i++){
+    const x=cx-r*0.75+i*r*0.5;
+    ctx.beginPath(); ctx.moveTo(x,cy-r*0.9); ctx.lineTo(x,cy+r*0.75); ctx.stroke();
+  }
+  ctx.restore();
+}
+function tbDoor(cx,cy,r){
+  ctx.save();
+  const dw=r*1.1, dh=r*1.7;
+  ctx.fillStyle='#8b6540'; ctx.strokeStyle='#5a3e1e'; ctx.lineWidth=1.8;
+  ctx.beginPath();
+  ctx.moveTo(cx-dw/2,cy+dh/2); ctx.lineTo(cx-dw/2,cy-dh/2+dw/2);
+  ctx.arcTo(cx-dw/2,cy-dh/2, cx,cy-dh/2, dw/2);
+  ctx.arcTo(cx+dw/2,cy-dh/2, cx+dw/2,cy-dh/2+dw/2, dw/2);
+  ctx.lineTo(cx+dw/2,cy+dh/2); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#c8a84b';
+  ctx.beginPath(); ctx.arc(cx+dw/4,cy+dh*0.1,2.5,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+function tbTrapdoor(cx,cy,r){
+  ctx.save();
+  const s=r*1.5;
+  ctx.fillStyle='#5a4020'; ctx.strokeStyle='#8a6a30'; ctx.lineWidth=1.8;
+  ctx.fillRect(cx-s/2,cy-s/5,s,s*0.72); ctx.strokeRect(cx-s/2,cy-s/5,s,s*0.72);
+  ctx.strokeStyle='#c8a84b'; ctx.lineWidth=2.2;
+  ctx.beginPath(); ctx.arc(cx,cy-s/5,s*0.2,Math.PI,0); ctx.stroke();
+  ctx.restore();
+}
+function tbWindow(cx,cy,r){
+  ctx.save();
+  const w=r*1.6, h=r*1.4;
+  ctx.fillStyle='#7ec8e3'; ctx.fillRect(cx-w/2,cy-h/2,w,h);
+  ctx.fillStyle='#d4a96a'; ctx.fillRect(cx-w/2,cy+h*0.1,w,h*0.4);
+  ctx.strokeStyle='#5a3e1e'; ctx.lineWidth=2.2; ctx.strokeRect(cx-w/2,cy-h/2,w,h);
+  ctx.beginPath(); ctx.moveTo(cx,cy-h/2); ctx.lineTo(cx,cy+h/2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx-w/2,cy); ctx.lineTo(cx+w/2,cy); ctx.stroke();
+  ctx.restore();
+}
+function tbTV(cx,cy,r){
+  ctx.save();
+  const tw=r*1.8, th=r*1.3;
+  ctx.fillStyle='#1a1814'; ctx.strokeStyle='#5a5244'; ctx.lineWidth=2;
+  ctx.fillRect(cx-tw/2,cy-th/2,tw,th); ctx.strokeRect(cx-tw/2,cy-th/2,tw,th);
+  ctx.fillStyle='#1a2840'; ctx.fillRect(cx-tw/2+3,cy-th/2+3,tw-6,th-6);
+  ctx.strokeStyle='#4a8aaa'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(cx-tw/4,cy-2); ctx.lineTo(cx+tw/4,cy-2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx-tw/5,cy+4); ctx.lineTo(cx+tw/5,cy+4); ctx.stroke();
+  ctx.restore();
+}
+function tbPaper(cx,cy,r){
+  ctx.save();
+  const pw=r*1.3, ph=r*1.7;
+  ctx.fillStyle='#f0ead8'; ctx.strokeStyle='#8a7060'; ctx.lineWidth=1.8;
+  ctx.fillRect(cx-pw/2,cy-ph/2,pw,ph); ctx.strokeRect(cx-pw/2,cy-ph/2,pw,ph);
+  ctx.strokeStyle='#b0a090'; ctx.lineWidth=1;
+  for(let i=1;i<=3;i++){ const ly=cy-ph/2+ph*i/4.2; ctx.beginPath(); ctx.moveTo(cx-pw/3,ly); ctx.lineTo(cx+pw/3,ly); ctx.stroke(); }
+  ctx.restore();
+}
+function tbNote(cx,cy,r){
+  ctx.save();
+  const pw=r*1.4, ph=r*1.6, fc=r*0.45;
+  ctx.fillStyle='#e8dfa8'; ctx.strokeStyle='#8a7060'; ctx.lineWidth=1.8;
+  ctx.beginPath();
+  ctx.moveTo(cx-pw/2,cy-ph/2); ctx.lineTo(cx+pw/2-fc,cy-ph/2); ctx.lineTo(cx+pw/2,cy-ph/2+fc);
+  ctx.lineTo(cx+pw/2,cy+ph/2); ctx.lineTo(cx-pw/2,cy+ph/2); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#c8b060';
+  ctx.beginPath(); ctx.moveTo(cx+pw/2-fc,cy-ph/2); ctx.lineTo(cx+pw/2,cy-ph/2+fc); ctx.lineTo(cx+pw/2-fc,cy-ph/2+fc); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='#a09070'; ctx.lineWidth=1;
+  for(let i=0;i<3;i++){ const ly=cy-ph/5+i*ph/4.5; ctx.beginPath(); ctx.moveTo(cx-pw/3,ly); ctx.lineTo(cx+pw/3,ly); ctx.stroke(); }
+  ctx.restore();
+}
+function tbDoorExit(cx,cy,r){
+  tbDoor(cx,cy,r);
+  ctx.save(); ctx.fillStyle='rgba(255,224,102,0.88)';
+  ctx.beginPath();
+  ctx.moveTo(cx,cy-r*0.65); ctx.lineTo(cx-r*0.32,cy-r*0.2); ctx.lineTo(cx-r*0.14,cy-r*0.2);
+  ctx.lineTo(cx-r*0.14,cy+r*0.35); ctx.lineTo(cx+r*0.14,cy+r*0.35);
+  ctx.lineTo(cx+r*0.14,cy-r*0.2); ctx.lineTo(cx+r*0.32,cy-r*0.2); ctx.closePath();
+  ctx.fill(); ctx.restore();
+}
+
 const keys = {};
 window.addEventListener('keydown', e => { keys[e.key] = true; });
 window.addEventListener('keyup',   e => { keys[e.key] = false; });
@@ -390,6 +494,14 @@ canvas.addEventListener('mousedown', e => {
   const cx = (e.clientX - r.left) * (VIEWPORT / r.width);
   const cy = (e.clientY - r.top)  * (VIEWPORT / r.height);
 
+  // Thought bubble click → trigger interaction
+  if (thoughtBubbleBounds) {
+    const _dx=cx-thoughtBubbleBounds.x, _dy=cy-thoughtBubbleBounds.y;
+    if (_dx*_dx+_dy*_dy <= thoughtBubbleBounds.r*thoughtBubbleBounds.r) {
+      pendingInteract = true; return;
+    }
+  }
+
   if (currentScene === 'house' && lockOpen) {
     const sc=4, dw=14*sc, dh=22*sc, gap=20;
     const lx=80, lw=740, ly=200, lh=460, arH=28;
@@ -506,6 +618,7 @@ canvas.addEventListener('touchstart', e => {
     bubbles: true, cancelable: true,
     clientX: touch.clientX, clientY: touch.clientY
   }));
+  if (pendingInteract) return; // thought bubble tapped — mousedown already set it
 
   // Overlay panels (canvas-rendered) – any tap closes them
   if (kitchenWindowOpen || livingRoomWindowOpen || studyPaperOpen || tvOpen || basementNoteOpen) {
@@ -648,6 +761,8 @@ function drawRoom1() {
 
   if (!interfaceOpen) {
     drawPlayer(ctx);
+    if (distToObj() <= INTERACT_RANGE) drawThoughtBubble(player.x, player.y, tbGate);
+    else thoughtBubbleBounds = null;
     drawPalmCrowns(ctx, DRIVEWAY_PALMS, drivewayCrowns, 1.6, 0.035, 0.018);
     drawWindGusts(ctx);
   }
@@ -1527,6 +1642,20 @@ function drawHouse() {
   drawPalmCrowns(ctx, PALMS, crownCanvases);
 
   ctx.restore();
+
+  // Thought bubble (screen space — after translate restored)
+  if (!lockOpen) {
+    const sx=player.x-camX, sy=player.y-camY;
+    let bestIcon=null, bestD=Infinity;
+    for (const door of HOUSE_DOORS) {
+      const d=houseDoorDist(door);
+      if (d<=HOUSE_INTERACT_RANGE && d<bestD) { bestD=d; bestIcon=door.id==='gate'?tbGate:tbDoor; }
+    }
+    const _tdx=player.x-TRAPDOOR.cx, _tdy=player.y-TRAPDOOR.cy, _td=Math.sqrt(_tdx*_tdx+_tdy*_tdy);
+    if (trapdoorOpen && _td<=HOUSE_INTERACT_RANGE && _td<bestD) bestIcon=tbTrapdoor;
+    if (bestIcon) drawThoughtBubble(sx,sy,bestIcon); else thoughtBubbleBounds=null;
+  }
+
   if (lockOpen) drawLock();
 }
 
@@ -2221,6 +2350,16 @@ function drawSubRoom() {
 
   if (!kitchenWindowOpen && !livingRoomWindowOpen && !studyPaperOpen) {
     drawPlayer(ctx);
+    // Thought bubble for nearest in-range interactable
+    let _srIcon = null;
+    if (!tvOpen) {
+      if      (currentScene==='room_left'  && kitchenWinDist()<=INTERACT_RANGE)      _srIcon=tbWindow;
+      else if (currentScene==='room_right' && tvDist()<=INTERACT_RANGE)              _srIcon=tbTV;
+      else if (currentScene==='room_right' && livingRoomWinDist()<=INTERACT_RANGE)   _srIcon=tbWindow;
+      else if (currentScene==='room_top'   && studyPaperDist()<=INTERACT_RANGE)      _srIcon=tbPaper;
+    }
+    if (!_srIcon && subRoomDoorDist()<=HOUSE_INTERACT_RANGE) _srIcon=tbDoorExit;
+    if (_srIcon) drawThoughtBubble(player.x,player.y,_srIcon); else thoughtBubbleBounds=null;
   }
 }
 
@@ -2460,7 +2599,14 @@ function drawBasement() {
   }
 
   // Player (hidden while reading the note)
-  if (!basementNoteOpen) drawPlayer(ctx);
+  if (!basementNoteOpen) {
+    drawPlayer(ctx);
+    let _bmIcon=null;
+    if      (basementExitDist()<=HOUSE_INTERACT_RANGE)  _bmIcon=tbDoorExit;
+    else if (basementNoteDist()<=INTERACT_RANGE)         _bmIcon=tbNote;
+    else if (basementR6DoorDist()<=HOUSE_INTERACT_RANGE) _bmIcon=tbDoor;
+    if (_bmIcon) drawThoughtBubble(player.x,player.y,_bmIcon); else thoughtBubbleBounds=null;
+  }
 
   // Note interface — the pinned diagram, enlarged for reading
   if (basementNoteOpen) {
@@ -2717,6 +2863,8 @@ function drawRoom7() {
   ctx.fillText('Puzzle Seven', R1-R1W-14, R1-R1W-14);
 
   drawPlayer(ctx);
+  if (r7ExitDist()<=HOUSE_INTERACT_RANGE) drawThoughtBubble(player.x,player.y,tbDoorExit);
+  else thoughtBubbleBounds=null;
 }
 
 function updateRoom6() {
@@ -2848,6 +2996,12 @@ function drawRoom6() {
   ctx.fillText('Puzzle Six', R1-R1W-14, R1-R1W-14);
 
   drawPlayer(ctx);
+  {
+    let _r6Icon=null;
+    if      (r6ExitDist()<=HOUSE_INTERACT_RANGE)      _r6Icon=tbDoorExit;
+    else if (r6Room7DoorDist()<=HOUSE_INTERACT_RANGE)  _r6Icon=tbDoor;
+    if (_r6Icon) drawThoughtBubble(player.x,player.y,_r6Icon); else thoughtBubbleBounds=null;
+  }
 }
 
 // ─── Main loop ────────────────────────────────────────────────────────────────
