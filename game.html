@@ -1934,8 +1934,11 @@ function drawLock() {
 
 function subRoomDoorDist() {
   const d = SUB_ROOM_DOORS[currentScene];
-  const dx = player.x - d.cx, dy = player.y - d.cy;
-  return Math.sqrt(dx*dx + dy*dy);
+  // Wall doors: use perpendicular-only distance so the player can interact from
+  // anywhere along the wall, not just when aligned with the door's center point.
+  if (currentScene === 'room_left' || currentScene === 'room_right')
+    return Math.abs(player.x - d.cx);
+  return Math.abs(player.y - d.cy);
 }
 
 let subRoomTWasDown = false;
