@@ -2141,7 +2141,7 @@ function drawSubRoom() {
 
     // TV interface overlay
     if (tvOpen) {
-      ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, VIEWPORT, VIEWPORT);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, VIEWPORT, VIEWPORT_H);
       function rrTV(x, y, w, h, r) {
         ctx.beginPath();
         ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
@@ -2151,7 +2151,7 @@ function drawSubRoom() {
         ctx.closePath();
       }
       // TV outer frame
-      const TX=80, TY=60, TW=740, TH=620;
+      const TX=80, TY=60, TW=740, TH=480;
       ctx.save(); ctx.shadowColor='rgba(0,0,0,0.9)'; ctx.shadowBlur=48; ctx.shadowOffsetY=12;
       rrTV(TX,TY,TW,TH,8); ctx.fillStyle='#111008'; ctx.fill(); ctx.restore();
       rrTV(TX,TY,TW,TH,8); ctx.strokeStyle='#2a2818'; ctx.lineWidth=3; ctx.stroke();
@@ -2221,7 +2221,7 @@ function drawSubRoom() {
     }
 
     if (livingRoomWindowOpen) {
-      ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, VIEWPORT, VIEWPORT);
+      ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, VIEWPORT, VIEWPORT_H);
       function rrL(x, y, w, h, r) {
         ctx.beginPath();
         ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
@@ -2286,7 +2286,7 @@ function drawSubRoom() {
 
     // Paper interface
     if (studyPaperOpen) {
-      ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, VIEWPORT, VIEWPORT);
+      ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, VIEWPORT, VIEWPORT_H);
       function rrP(x,y,w,h,r){
         ctx.beginPath();
         ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);
@@ -2295,7 +2295,7 @@ function drawSubRoom() {
         ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);
         ctx.closePath();
       }
-      const IX=140, IY=200, IW=620, IH=420;
+      const IX=140, IY=60, IW=620, IH=420;
 
       // Parchment shadow
       ctx.save(); ctx.shadowColor='rgba(0,0,0,0.6)'; ctx.shadowBlur=32; ctx.shadowOffsetY=8;
@@ -2377,7 +2377,7 @@ const BASEMENT_EXIT = { cx: R1/2, cy: R1W, dw: 72, dh: R1W+12 };
 let basementTWasDown = false;
 
 // A blank note lying on the basement floor — pick it up to read it.
-const BASEMENT_NOTE = { cx: R1/2, cy: R1/2 + 40 };
+const BASEMENT_NOTE = { cx: R1/2, cy: VIEWPORT_H/2 + 40 };
 let basementNoteOpen = false;
 function basementNoteDist() {
   const dx = player.x - BASEMENT_NOTE.cx, dy = player.y - BASEMENT_NOTE.cy;
@@ -2387,11 +2387,11 @@ function basementNoteDist() {
 // ── Circle diagram: chain 1–2–3, then a mutual 3·4·5 cluster.
 //    Drawn on a sheet of paper pinned to the basement's north wall. ──
 const BASEMENT_CIRCLES = [
-  { n:1, cx:215, cy:310, r:55,  stroke:'#a9c7e8' },  // pastel blue
-  { n:2, cx:320, cy:380, r:90,  stroke:'#d8c0a0' },  // light brown
-  { n:3, cx:480, cy:460, r:115, stroke:'#bcd9e6' },  // powder blue
-  { n:4, cx:610, cy:505, r:80,  stroke:'#cfc3a8' },  // pale sand
-  { n:5, cx:585, cy:395, r:70,  stroke:'#c9d8c4' },  // pale sage
+  { n:1, cx:215, cy:207, r:55,  stroke:'#a9c7e8' },  // pastel blue
+  { n:2, cx:320, cy:253, r:90,  stroke:'#d8c0a0' },  // light brown
+  { n:3, cx:480, cy:307, r:115, stroke:'#bcd9e6' },  // powder blue
+  { n:4, cx:610, cy:337, r:80,  stroke:'#cfc3a8' },  // pale sand
+  { n:5, cx:585, cy:263, r:70,  stroke:'#c9d8c4' },  // pale sage
 ];
 // Each overlap region gets its own pastel
 const BASEMENT_LENSES = [
@@ -2406,19 +2406,19 @@ const BASEMENT_TRIPLE = { a:2, b:3, c:4, color:'#f0e6c0' };  // 3∩4∩5 — pa
 let basementBase = null;
 function buildBasementBase() {
   basementBase = document.createElement('canvas');
-  basementBase.width = R1; basementBase.height = R1;
+  basementBase.width = R1; basementBase.height = VIEWPORT_H;
   const g = basementBase.getContext('2d');
 
   // Walls
   g.fillStyle = '#111';
-  g.fillRect(0, 0, R1, R1);
+  g.fillRect(0, 0, R1, VIEWPORT_H);
 
   // Floor — same mosaic grid as the courtyard, in greys and light purples
   const MG = 2;
   const cols = Math.ceil((R1 - R1W*2) / MTILE);
-  const rows = Math.ceil((R1 - R1W*2) / MTILE);
+  const rows = Math.ceil((VIEWPORT_H - R1W*2) / MTILE);
   g.fillStyle = '#76727e';
-  g.fillRect(R1W, R1W, R1-R1W*2, R1-R1W*2);
+  g.fillRect(R1W, R1W, R1-R1W*2, VIEWPORT_H-R1W*2);
   const B_TILE_COLORS = [
     '#b9b6bd','#a8a5ad','#c2bfc7','#9d9aa4','#b1aeb8','#c9c6ce',
     '#cabbdd','#bfaed6','#d4c7e6','#b5a3cf','#ddd2ec','#c4b4da',
@@ -2499,7 +2499,7 @@ function updateBasement() {
     if (_jd > 10) { dx = _jdx/_jd; dy = _jdy/_jd; }
   }
   player.x=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.x+dx*PLAYER_SPEED));
-  player.y=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
+  player.y=Math.max(R1W+PLAYER_R,Math.min(VIEWPORT_H-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
   pulseTime += 0.05;
 
   const _pi = pendingInteract; if (_pi) { basementTWasDown = false; pendingInteract = false; }
@@ -2591,7 +2591,7 @@ function drawBasement() {
   // Label
   ctx.fillStyle='#4a4458'; ctx.font='bold 24px Amiri, serif';
   ctx.textAlign='right'; ctx.textBaseline='alphabetic'; ctx.direction='rtl';
-  ctx.fillText('السرداب', R1 - R1W - 14, R1 - R1W - 14);
+  ctx.fillText('السرداب', R1 - R1W - 14, VIEWPORT_H - R1W - 14);
   ctx.direction='ltr';
 
   // Door to Room 6 (right wall)
@@ -2619,7 +2619,7 @@ function drawBasement() {
 
   // Note interface — the pinned diagram, enlarged for reading
   if (basementNoteOpen) {
-    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, VIEWPORT, VIEWPORT);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, VIEWPORT, VIEWPORT_H);
     function rrN(x,y,w,h,r){
       ctx.beginPath();
       ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);
@@ -2628,7 +2628,7 @@ function drawBasement() {
       ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);
       ctx.closePath();
     }
-    const IX=150, IY=170, IW=600, IH=460;
+    const IX=150, IY=60, IW=600, IH=460;
 
     // Parchment shadow
     ctx.save(); ctx.shadowColor='rgba(0,0,0,0.6)'; ctx.shadowBlur=32; ctx.shadowOffsetY=8;
@@ -2671,7 +2671,7 @@ const R6_CIRCLES = (() => {
       arr.push({
         id: r*cols + c,
         cx: R1/2 - offsetX + c*(CIRCLE_R6*2 + GRID_GAP6),
-        cy: 610   - offsetY + r*(CIRCLE_R6*2 + GRID_GAP6),
+        cy: 400   - offsetY + r*(CIRCLE_R6*2 + GRID_GAP6),
       });
     }
   }
@@ -2695,13 +2695,13 @@ const R6_POEM = [
   'Find the order. Break the seal.',
 ];
 
-const BASEMENT_R6_DOOR = { cx: R1-R1W, cy: R1/2, dw: R1W+12, dh: 72 };
+const BASEMENT_R6_DOOR = { cx: R1-R1W, cy: VIEWPORT_H/2, dw: R1W+12, dh: 72 };
 function basementR6DoorDist() {
   const dx = player.x - BASEMENT_R6_DOOR.cx, dy = player.y - BASEMENT_R6_DOOR.cy;
   return Math.sqrt(dx*dx + dy*dy);
 }
 
-const R6_EXIT = { cx: R1W, cy: R1/2 };
+const R6_EXIT = { cx: R1W, cy: VIEWPORT_H/2 };
 let r6TWasDown = false;
 function r6ExitDist() {
   const dx = player.x - R6_EXIT.cx, dy = player.y - R6_EXIT.cy;
@@ -2733,7 +2733,7 @@ const R7_COLS = 3, R7_ROWS = 3;
 const R7_GRID_W = R7_COLS*(CELL7+GAP7) - GAP7;
 const R7_GRID_H = R7_ROWS*(CELL7+GAP7) - GAP7;
 const R7_START_X = R1/2 - R7_GRID_W/2;
-const R7_START_Y = 590   - R7_GRID_H/2;
+const R7_START_Y = 360   - R7_GRID_H/2;
 const R7_CELLS = (() => {
   const arr = [];
   for (let r = 0; r < R7_ROWS; r++)
@@ -2748,12 +2748,12 @@ let r7Solved   = false;
 let r7Wrong    = false;
 let r7WrongTimer = 0;
 
-const R6_ROOM7_DOOR = { cx: R1-R1W, cy: R1/2 };
+const R6_ROOM7_DOOR = { cx: R1-R1W, cy: VIEWPORT_H/2 };
 function r6Room7DoorDist() {
   const dx = player.x - R6_ROOM7_DOOR.cx, dy = player.y - R6_ROOM7_DOOR.cy;
   return Math.sqrt(dx*dx + dy*dy);
 }
-const R7_EXIT = { cx: R1W, cy: R1/2 };
+const R7_EXIT = { cx: R1W, cy: VIEWPORT_H/2 };
 let r7TWasDown = false;
 function r7ExitDist() {
   const dx = player.x - R7_EXIT.cx, dy = player.y - R7_EXIT.cy;
@@ -2791,7 +2791,7 @@ function updateRoom7() {
     if (_jd > 10) { dx = _jdx/_jd; dy = _jdy/_jd; }
   }
   player.x=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.x+dx*PLAYER_SPEED));
-  player.y=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
+  player.y=Math.max(R1W+PLAYER_R,Math.min(VIEWPORT_H-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
   pulseTime += 0.05;
   if (r7Wrong && --r7WrongTimer <= 0) { r7Wrong = false; r7Selected = []; }
   const _pi = pendingInteract; if (_pi) { r7TWasDown = false; pendingInteract = false; }
@@ -2801,8 +2801,8 @@ function updateRoom7() {
 }
 
 function drawRoom7() {
-  ctx.fillStyle = '#0f110e'; ctx.fillRect(0,0,R1,R1);
-  ctx.fillStyle = '#131510'; ctx.fillRect(R1W,R1W,R1-R1W*2,R1-R1W*2);
+  ctx.fillStyle = '#0f110e'; ctx.fillRect(0,0,R1,VIEWPORT_H);
+  ctx.fillStyle = '#131510'; ctx.fillRect(R1W,R1W,R1-R1W*2,VIEWPORT_H-R1W*2);
 
   ctx.textAlign = 'center';
   ctx.fillStyle = '#c8a84b'; ctx.font = 'bold 26px Cinzel, serif';
@@ -2841,19 +2841,19 @@ function drawRoom7() {
 
   if (r7Wrong) {
     ctx.fillStyle=`rgba(192,40,40,${((r7WrongTimer/60)*0.22).toFixed(3)})`;
-    ctx.fillRect(0,0,R1,R1);
+    ctx.fillRect(0,0,R1,VIEWPORT_H);
   }
 
   if (r7Solved) {
     ctx.save();
-    ctx.fillStyle='rgba(0,0,0,0.52)'; ctx.fillRect(0,0,R1,R1);
+    ctx.fillStyle='rgba(0,0,0,0.52)'; ctx.fillRect(0,0,R1,VIEWPORT_H);
     ctx.shadowColor='rgba(0,0,0,0.8)'; ctx.shadowBlur=28;
-    ctx.fillStyle='#1a1608'; ctx.fillRect(R1/2-230,R1/2-44,460,88);
+    ctx.fillStyle='#1a1608'; ctx.fillRect(R1/2-230,VIEWPORT_H/2-44,460,88);
     ctx.shadowBlur=0;
-    ctx.strokeStyle='#c8a84b'; ctx.lineWidth=2; ctx.strokeRect(R1/2-230,R1/2-44,460,88);
+    ctx.strokeStyle='#c8a84b'; ctx.lineWidth=2; ctx.strokeRect(R1/2-230,VIEWPORT_H/2-44,460,88);
     ctx.fillStyle='#c8a84b'; ctx.font='bold 30px Cinzel, serif';
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText('Puzzle Solved!', R1/2, R1/2);
+    ctx.fillText('Puzzle Solved!', R1/2, VIEWPORT_H/2);
     ctx.textBaseline='alphabetic';
     ctx.restore();
   }
@@ -2869,7 +2869,7 @@ function drawRoom7() {
 
   ctx.fillStyle='#3a3828'; ctx.font='bold 18px Cinzel, serif';
   ctx.textAlign='right'; ctx.textBaseline='alphabetic';
-  ctx.fillText('Puzzle Seven', R1-R1W-14, R1-R1W-14);
+  ctx.fillText('Puzzle Seven', R1-R1W-14, VIEWPORT_H-R1W-14);
 
   drawPlayer(ctx);
   if (r7ExitDist()<=HOUSE_INTERACT_RANGE) drawThoughtBubble(player.x,player.y,tbDoorExit);
@@ -2890,7 +2890,7 @@ function updateRoom6() {
     if (_jd > 10) { dx = _jdx/_jd; dy = _jdy/_jd; }
   }
   player.x=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.x+dx*PLAYER_SPEED));
-  player.y=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
+  player.y=Math.max(R1W+PLAYER_R,Math.min(VIEWPORT_H-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
   pulseTime += 0.05;
 
   if (r6Wrong && --r6WrongTimer <= 0) { r6Wrong = false; r6Input = []; }
@@ -2906,8 +2906,8 @@ function updateRoom6() {
 
 function drawRoom6() {
   // Floor & walls
-  ctx.fillStyle = '#0e0c18'; ctx.fillRect(0,0,R1,R1);
-  ctx.fillStyle = '#130f20'; ctx.fillRect(R1W,R1W,R1-R1W*2,R1-R1W*2);
+  ctx.fillStyle = '#0e0c18'; ctx.fillRect(0,0,R1,VIEWPORT_H);
+  ctx.fillStyle = '#130f20'; ctx.fillRect(R1W,R1W,R1-R1W*2,VIEWPORT_H-R1W*2);
 
   // Poem
   ctx.textAlign = 'center';
@@ -2915,12 +2915,12 @@ function drawRoom6() {
     const isTitle = i === 0;
     ctx.fillStyle = isTitle ? '#c8a84b' : '#7a708e';
     ctx.font      = isTitle ? 'bold 26px Cinzel, serif' : '17px Cinzel, serif';
-    ctx.fillText(line, R1/2, 65 + i*34);
+    ctx.fillText(line, R1/2, 50 + i*26);
   });
 
   // Divider
   ctx.strokeStyle='#2a2240'; ctx.lineWidth=1;
-  ctx.beginPath(); ctx.moveTo(R1W+40,348); ctx.lineTo(R1-R1W-40,348); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(R1W+40,264); ctx.lineTo(R1-R1W-40,264); ctx.stroke();
 
   // Circles
   const p6 = 0.5+0.5*Math.sin(pulseTime);
@@ -2961,20 +2961,20 @@ function drawRoom6() {
   // Wrong flash overlay
   if (r6Wrong) {
     ctx.fillStyle=`rgba(192,40,40,${((r6WrongTimer/60)*0.22).toFixed(3)})`;
-    ctx.fillRect(0,0,R1,R1);
+    ctx.fillRect(0,0,R1,VIEWPORT_H);
   }
 
   // Solved banner
   if (r6Solved) {
     ctx.save();
-    ctx.fillStyle='rgba(0,0,0,0.52)'; ctx.fillRect(0,0,R1,R1);
+    ctx.fillStyle='rgba(0,0,0,0.52)'; ctx.fillRect(0,0,R1,VIEWPORT_H);
     ctx.shadowColor='rgba(0,0,0,0.8)'; ctx.shadowBlur=28;
-    ctx.fillStyle='#1a1608'; ctx.fillRect(R1/2-230,R1/2-44,460,88);
+    ctx.fillStyle='#1a1608'; ctx.fillRect(R1/2-230,VIEWPORT_H/2-44,460,88);
     ctx.shadowBlur=0;
-    ctx.strokeStyle='#c8a84b'; ctx.lineWidth=2; ctx.strokeRect(R1/2-230,R1/2-44,460,88);
+    ctx.strokeStyle='#c8a84b'; ctx.lineWidth=2; ctx.strokeRect(R1/2-230,VIEWPORT_H/2-44,460,88);
     ctx.fillStyle='#c8a84b'; ctx.font='bold 30px Cinzel, serif';
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText('Puzzle Solved!', R1/2, R1/2);
+    ctx.fillText('Puzzle Solved!', R1/2, VIEWPORT_H/2);
     ctx.textBaseline='alphabetic';
     ctx.restore();
   }
@@ -3002,7 +3002,7 @@ function drawRoom6() {
   // Room label
   ctx.fillStyle='#3e3858'; ctx.font='bold 18px Cinzel, serif';
   ctx.textAlign='right'; ctx.textBaseline='alphabetic';
-  ctx.fillText('Puzzle Six', R1-R1W-14, R1-R1W-14);
+  ctx.fillText('Puzzle Six', R1-R1W-14, VIEWPORT_H-R1W-14);
 
   drawPlayer(ctx);
   {
@@ -3048,7 +3048,7 @@ function drawJoystick() {
 }
 
 function draw() {
-  ctx.clearRect(0,0,VIEWPORT,VIEWPORT);
+  ctx.clearRect(0,0,VIEWPORT,VIEWPORT_H);
   if      (currentScene==='room1')    drawRoom1();
   else if (currentScene==='house')    drawHouse();
   else if (currentScene==='basement') drawBasement();
@@ -3056,7 +3056,7 @@ function draw() {
   else if (currentScene==='room7')    drawRoom7();
   else                                drawSubRoom();
   drawJoystick();
-  if (fadeAlpha>0){ctx.fillStyle=`rgba(0,0,0,${fadeAlpha})`;ctx.fillRect(0,0,VIEWPORT,VIEWPORT);}
+  if (fadeAlpha>0){ctx.fillStyle=`rgba(0,0,0,${fadeAlpha})`;ctx.fillRect(0,0,VIEWPORT,VIEWPORT_H);}
 }
 function loop(){update();draw();requestAnimationFrame(loop);}
 loop();
