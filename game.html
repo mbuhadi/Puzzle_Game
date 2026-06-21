@@ -8,14 +8,15 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
+    position: fixed;
+    inset: 0;
     background: #1a1a1a;
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100dvh;
     overflow: hidden;
   }
-  canvas { display: block; cursor: default; width: min(100vw, calc(100dvh * 1.5)); height: min(100dvh, calc(100vw / 1.5)); }
+  canvas { display: block; cursor: default; }
 </style>
 </head>
 <body>
@@ -28,6 +29,14 @@ const VIEWPORT = 900;
 const VIEWPORT_H = 600;
 canvas.width  = VIEWPORT;
 canvas.height = VIEWPORT_H;
+
+function resizeGame() {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  canvas.style.width  = Math.min(vw, vh * 1.5) + 'px';
+  canvas.style.height = Math.min(vh, vw / 1.5) + 'px';
+}
+window.addEventListener('resize', resizeGame);
+resizeGame();
 
 const PLAYER_R     = 9;
 const PLAYER_SPEED = 2.4;
