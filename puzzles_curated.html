@@ -67,6 +67,7 @@
     .window-card canvas{width:100% !important; height:auto !important;}
     .shape-item{padding:8px;}
     .shape-item svg{width:100%; height:auto;}
+    .shapes-grid{grid-template-columns:repeat(2,1fr);}
   }
   .ptitle{font-size:32px; color:var(--gold); margin-bottom:4px;}
   .pkicker{font-size:12px; color:var(--dim); letter-spacing:3px; margin-bottom:26px; font-family:sans-serif;}
@@ -577,9 +578,13 @@ function buildCylinderLock(){
   let combination=[];
   let rotation=0; // continuous rotation in degrees
 
+  const dialSize=Math.min(400,detail.clientWidth-36);
+  const dialRadius=140*dialSize/400;
+
   // Display screen for chosen shapes
   const displayPanel=document.createElement('div');
-  displayPanel.style.cssText='display:flex; gap:8px; width:306px; padding:12px; background:#1a1814; border:4px solid #5a5244; border-radius:12px; justify-content:flex-start; margin:0 auto; min-height:60px;';
+  const dispW=Math.min(306,dialSize);
+  displayPanel.style.cssText=`display:flex; gap:8px; width:${dispW}px; padding:12px; background:#1a1814; border:4px solid #5a5244; border-radius:12px; justify-content:flex-start; margin:0 auto; min-height:60px;`;
 
   function updateDisplay(){
     displayPanel.innerHTML='';
@@ -595,131 +600,71 @@ function buildCylinderLock(){
   lockDiv.appendChild(displayPanel);
 
   const dialContainer=document.createElement('div');
-  dialContainer.style.cssText='position:relative; width:400px; height:400px; margin:0 auto; background:#1a1814; border:8px solid #5a5244; border-radius:20px; cursor:grab; user-select:none; box-sizing:border-box;';
+  dialContainer.style.cssText=`position:relative; width:${dialSize}px; height:${dialSize}px; margin:0 auto; background:#1a1814; border:8px solid #5a5244; border-radius:20px; cursor:grab; user-select:none; box-sizing:border-box;`;
   dialContainer.title='Click and drag to rotate';
 
   function redrawDial(){
     dialContainer.innerHTML='';
+    const cx=dialSize/2, cy=dialSize/2, r=dialRadius;
+    const sSize=80*dialSize/400;
 
-    // Draw shapes in circle - using scrambled order
-    const centerX=200;
-    const centerY=200;
-    const radius=140;
     for(let i=0;i<5;i++){
-      const baseAngle=i*72;
-      const angle=(baseAngle+rotation)*Math.PI/180-Math.PI/2;
-      const x=centerX+radius*Math.cos(angle);
-      const y=centerY+radius*Math.sin(angle);
-
+      const angle=(i*72+rotation)*Math.PI/180-Math.PI/2;
+      const x=cx+r*Math.cos(angle), y=cy+r*Math.sin(angle);
       const shapeDiv=document.createElement('div');
-      shapeDiv.style.cssText=`position:absolute; left:${x}px; top:${y}px; transform:translate(-50%,-50%); width:80px; height:80px;`;
-
-      // Use scrambled shape order
-      const shapeIdx=shapeOrder[i];
-      shapeDiv.innerHTML=`<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:100%;">${SHAPE_SVGS[shapeIdx]}</svg>`;
-
+      shapeDiv.style.cssText=`position:absolute; left:${x}px; top:${y}px; transform:translate(-50%,-50%); width:${sSize}px; height:${sSize}px;`;
+      shapeDiv.innerHTML=`<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:100%;">${SHAPE_SVGS[shapeOrder[i]]}</svg>`;
       dialContainer.appendChild(shapeDiv);
     }
 
-    // Draw highlight circle around top (selected) shape
+    const hSize=100*dialSize/400;
     const highlightCircle=document.createElement('div');
-    highlightCircle.style.cssText=`position:absolute; left:${centerX}px; top:${centerY-140}px; transform:translate(-50%,-50%); width:100px; height:100px; border:3px solid #ffe066; border-radius:50%; box-shadow:0 0 15px rgba(255,224,102,0.6);`;
+    highlightCircle.style.cssText=`position:absolute; left:${cx}px; top:${cy-r}px; transform:translate(-50%,-50%); width:${hSize}px; height:${hSize}px; border:3px solid #ffe066; border-radius:50%; box-shadow:0 0 15px rgba(255,224,102,0.6);`;
     dialContainer.appendChild(highlightCircle);
 
-    // Draw center circle
+    const cSize=30*dialSize/400;
     const center=document.createElement('div');
-    center.style.cssText=`position:absolute; left:${centerX}px; top:${centerY}px; transform:translate(-50%,-50%); width:30px; height:30px; background:#5a5244; border-radius:50%;`;
+    center.style.cssText=`position:absolute; left:${cx}px; top:${cy}px; transform:translate(-50%,-50%); width:${cSize}px; height:${cSize}px; background:#5a5244; border-radius:50%;`;
     dialContainer.appendChild(center);
 
-    // CW / CCW curved arrow hints
-    const ccwHint=document.createElement('div');
-    ccwHint.style.cssText='position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:36px;color:#ffe066;opacity:0.55;pointer-events:none;user-select:none;line-height:1;';
-    ccwHint.textContent='↺';
-    dialContainer.appendChild(ccwHint);
-    const cwHint=document.createElement('div');
-    cwHint.style.cssText='position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:36px;color:#ffe066;opacity:0.55;pointer-events:none;user-select:none;line-height:1;';
-    cwHint.textContent='↻';
-    dialContainer.appendChild(cwHint);
-
-    // Calculate which shape is at the top based on rotation, then map to actual shape index
-    const positionAtTop=((-Math.round(rotation/72))%5+5)%5;
-    currentPos=shapeOrder[positionAtTop];
+    currentPos=shapeOrder[((-Math.round(rotation/72))%5+5)%5];
   }
 
   redrawDial();
 
   let isDragging=false;
-  let dragStartAngle=0;
+  let dragStartX=0;
   let dragStartRotation=0;
+  const degPerPx=360/(2*Math.PI*dialRadius);
 
   dialContainer.onmousedown=(e)=>{
-    isDragging=true;
-    const rect=dialContainer.getBoundingClientRect();
-    const centerX=rect.left+rect.width/2;
-    const centerY=rect.top+rect.height/2;
-    const x=e.clientX-centerX;
-    const y=e.clientY-centerY;
-    dragStartAngle=Math.atan2(y,x);
-    dragStartRotation=rotation;
+    isDragging=true; dragStartX=e.clientX; dragStartRotation=rotation;
   };
-
   document.onmousemove=(e)=>{
     if(!isDragging)return;
-    const rect=dialContainer.getBoundingClientRect();
-    const centerX=rect.left+rect.width/2;
-    const centerY=rect.top+rect.height/2;
-    const x=e.clientX-centerX;
-    const y=e.clientY-centerY;
-    const currentAngle=Math.atan2(y,x);
-    const angleDiff=-(dragStartAngle-currentAngle)*180/Math.PI;
-    rotation=dragStartRotation+angleDiff;
+    rotation=dragStartRotation+(e.clientX-dragStartX)*degPerPx;
     redrawDial();
   };
-
   document.onmouseup=()=>{
-    if(isDragging){
-      isDragging=false;
-      const snappedRotation=Math.round(rotation/72)*72;
-      rotation=snappedRotation;
-      redrawDial();
-    }
+    if(!isDragging)return;
+    isDragging=false; rotation=Math.round(rotation/72)*72; redrawDial();
   };
 
   dialContainer.addEventListener('touchstart',(e)=>{
-    e.preventDefault();
-    isDragging=true;
-    const t=e.touches[0];
-    const rect=dialContainer.getBoundingClientRect();
-    dragStartAngle=Math.atan2(t.clientY-(rect.top+rect.height/2),t.clientX-(rect.left+rect.width/2));
-    dragStartRotation=rotation;
+    e.preventDefault(); isDragging=true;
+    dragStartX=e.touches[0].clientX; dragStartRotation=rotation;
   },{passive:false});
   dialContainer.addEventListener('touchmove',(e)=>{
-    if(!isDragging)return;
-    e.preventDefault();
-    const t=e.touches[0];
-    const rect=dialContainer.getBoundingClientRect();
-    const cur=Math.atan2(t.clientY-(rect.top+rect.height/2),t.clientX-(rect.left+rect.width/2));
-    rotation=dragStartRotation-(dragStartAngle-cur)*180/Math.PI;
+    if(!isDragging)return; e.preventDefault();
+    rotation=dragStartRotation+(e.touches[0].clientX-dragStartX)*degPerPx;
     redrawDial();
   },{passive:false});
   dialContainer.addEventListener('touchend',()=>{
     if(!isDragging)return;
-    isDragging=false;
-    rotation=Math.round(rotation/72)*72;
-    redrawDial();
+    isDragging=false; rotation=Math.round(rotation/72)*72; redrawDial();
   });
 
   lockDiv.appendChild(dialContainer);
-
-  if(window.innerWidth<=640){
-    const dialAvail=detail.clientWidth-36;
-    const dialSc=Math.min(1,dialAvail/400);
-    if(dialSc<1){
-      dialContainer.style.transform='scale('+dialSc+')';
-      dialContainer.style.transformOrigin='top center';
-      dialContainer.style.marginBottom=((dialSc-1)*400)+'px';
-    }
-  }
 
   const rotateRow=document.createElement('div');
   rotateRow.style.cssText='display:flex;gap:16px;justify-content:center;margin:10px 0 4px;';
