@@ -60,14 +60,6 @@
     }
     #sidebar.open{left:0;}
     #detail{padding:64px 18px 32px;}
-    .tree-layout{flex-direction:column;}
-    .tree-clues{min-width:0;}
-    .windows-wrap{flex-direction:column;}
-    .window-card{width:100%; max-width:300px;}
-    .window-card canvas{width:100% !important; height:auto !important;}
-    .shape-item{padding:8px;}
-    .shape-item svg{width:100%; height:auto;}
-    .shapes-grid{grid-template-columns:repeat(2,1fr);}
   }
   .ptitle{font-size:32px; color:var(--gold); margin-bottom:4px;}
   .pkicker{font-size:12px; color:var(--dim); letter-spacing:3px; margin-bottom:26px; font-family:sans-serif;}
@@ -158,6 +150,18 @@
   .scene-preview{margin:0 0 22px;}
   .scene-preview canvas{display:block; max-width:100%; border-radius:8px; border:1px solid var(--line);}
   .scene-label{font-size:10px; color:var(--dim); font-family:sans-serif; letter-spacing:2px; margin-top:6px;}
+
+  /* ── Mobile overrides (must come after base rules) ── */
+  @media(max-width:640px){
+    .tree-layout{flex-direction:column;}
+    .tree-clues{min-width:0;}
+    .windows-wrap{flex-direction:column;}
+    .window-card{width:100%; max-width:300px;}
+    .window-card canvas{width:100% !important; height:auto !important;}
+    .shapes-grid{grid-template-columns:repeat(2,1fr); gap:12px;}
+    .shape-item{padding:8px;}
+    .shape-item svg{width:100%; height:auto;}
+  }
 </style>
 </head>
 <body>
@@ -600,7 +604,7 @@ function buildCylinderLock(){
   lockDiv.appendChild(displayPanel);
 
   const dialContainer=document.createElement('div');
-  dialContainer.style.cssText=`position:relative; width:${dialSize}px; height:${dialSize}px; margin:0 auto; background:#1a1814; border:8px solid #5a5244; border-radius:20px; cursor:grab; user-select:none; box-sizing:border-box;`;
+  dialContainer.style.cssText=`position:relative; width:${dialSize}px; height:${dialSize}px; margin:0 auto; background:#1a1814; border:8px solid #5a5244; border-radius:20px; cursor:grab; user-select:none; box-sizing:border-box; touch-action:none;`;
   dialContainer.title='Click and drag to rotate';
 
   function redrawDial(){
@@ -633,35 +637,35 @@ function buildCylinderLock(){
   redrawDial();
 
   let isDragging=false;
-  let dragStartX=0;
+  let dragStartAngle=0;
   let dragStartRotation=0;
-  const degPerPx=360/(2*Math.PI*dialRadius);
 
-  dialContainer.onmousedown=(e)=>{
-    isDragging=true; dragStartX=e.clientX; dragStartRotation=rotation;
-  };
-  document.onmousemove=(e)=>{
-    if(!isDragging)return;
-    rotation=dragStartRotation+(e.clientX-dragStartX)*degPerPx;
-    redrawDial();
-  };
-  document.onmouseup=()=>{
-    if(!isDragging)return;
-    isDragging=false; rotation=Math.round(rotation/72)*72; redrawDial();
-  };
+  function getAngle(e){
+    const rect=dialContainer.getBoundingClientRect();
+    return Math.atan2(e.clientY-(rect.top+rect.height/2), e.clientX-(rect.left+rect.width/2));
+  }
 
-  dialContainer.addEventListener('touchstart',(e)=>{
-    e.preventDefault(); isDragging=true;
-    dragStartX=e.touches[0].clientX; dragStartRotation=rotation;
-  },{passive:false});
-  dialContainer.addEventListener('touchmove',(e)=>{
-    if(!isDragging)return; e.preventDefault();
-    rotation=dragStartRotation+(e.touches[0].clientX-dragStartX)*degPerPx;
-    redrawDial();
-  },{passive:false});
-  dialContainer.addEventListener('touchend',()=>{
+  dialContainer.addEventListener('pointerdown',(e)=>{
+    isDragging=true;
+    dialContainer.setPointerCapture(e.pointerId);
+    dialContainer.style.cursor='grabbing';
+    dragStartAngle=getAngle(e);
+    dragStartRotation=rotation;
+  });
+  dialContainer.addEventListener('pointermove',(e)=>{
     if(!isDragging)return;
-    isDragging=false; rotation=Math.round(rotation/72)*72; redrawDial();
+    rotation=dragStartRotation+(getAngle(e)-dragStartAngle)*180/Math.PI;
+    redrawDial();
+  });
+  dialContainer.addEventListener('pointerup',()=>{
+    if(!isDragging)return;
+    isDragging=false;
+    dialContainer.style.cursor='grab';
+    rotation=Math.round(rotation/72)*72;
+    redrawDial();
+  });
+  dialContainer.addEventListener('pointercancel',()=>{
+    isDragging=false; dialContainer.style.cursor='grab';
   });
 
   lockDiv.appendChild(dialContainer);
