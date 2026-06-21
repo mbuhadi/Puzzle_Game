@@ -95,12 +95,13 @@ let thoughtBubbleBounds = null;  // screen-space { x, y, r } for click detection
 
 function drawThoughtBubble(sx, sy, iconFn) {
   const headY = sy + PLAYER_R - PLAYER_SPRITE.height;
-  const bx = sx + 28, by = headY - 30, br = 24;
+  const dir = (sx > VIEWPORT - 100) ? -1 : 1;
+  const bx = sx + dir*28, by = headY - 30, br = 24;
   ctx.save();
   ctx.fillStyle  = 'rgba(255,255,255,0.93)';
   ctx.strokeStyle = '#c8a84b';
   ctx.lineWidth  = 1.8;
-  for (const [tx,ty,tr] of [[sx+4,headY+4,3],[sx+13,headY-5,5],[sx+21,headY-17,7]]) {
+  for (const [tx,ty,tr] of [[sx+dir*4,headY+4,3],[sx+dir*13,headY-5,5],[sx+dir*21,headY-17,7]]) {
     ctx.beginPath(); ctx.arc(tx,ty,tr,0,Math.PI*2); ctx.fill(); ctx.stroke();
   }
   ctx.beginPath(); ctx.arc(bx,by,br,0,Math.PI*2); ctx.fill(); ctx.stroke();
@@ -601,7 +602,7 @@ canvas.addEventListener('mousedown', e => {
 
   for (const n of NODES) {
     if (n.fixed) continue;
-    if (Math.abs(cx - n.cx) <= BOX_W/2 && Math.abs(cy - n.cy) <= BOX_H/2) {
+    if (Math.abs(cx - n.cx) <= BOX_W/2 + 12 && Math.abs(cy - n.cy) <= BOX_H/2 + 12) {
       openDropdown = { nodeId: n.id };
       return;
     }
