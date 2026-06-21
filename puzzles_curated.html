@@ -1437,37 +1437,34 @@ select(0);
   const nav=document.getElementById('sidebar');
   const overlay=document.getElementById('menuOverlay');
 
+  function openSidebar(){
+    nav.classList.add('open');
+    overlay.classList.add('open');
+    btn.style.display='none';
+  }
+
   function closeSidebar(){
     nav.classList.remove('open');
     overlay.classList.remove('open');
+    btn.style.display='';
   }
 
   btn.addEventListener('click',()=>{
-    const opening=!nav.classList.contains('open');
-    nav.classList.toggle('open');
-    overlay.classList.toggle('open');
-    btn.textContent='☰';
+    openSidebar();
   });
 
-  overlay.addEventListener('click',()=>{
-    closeSidebar();
-    btn.textContent='☰';
-  });
+  overlay.addEventListener('click',()=>{ closeSidebar(); });
 
   // Close sidebar when a puzzle item is picked
-  document.getElementById('plist').addEventListener('click',()=>{
-    closeSidebar();
-    btn.textContent='☰';
-  });
+  document.getElementById('plist').addEventListener('click',()=>{ closeSidebar(); });
 
   // Open menu when tapping the left edge of the screen (mobile only)
   document.addEventListener('click',(e)=>{
-    if(getComputedStyle(btn).display==='none') return; // desktop — sidebar always visible
+    if(getComputedStyle(btn).display==='none') return; // desktop — sidebar always visible, or menu open
     if(nav.classList.contains('open')) return;         // already open
     if(e.clientX>60) return;                           // not left edge
     if(btn.contains(e.target)||nav.contains(e.target)||overlay.contains(e.target)) return;
-    nav.classList.add('open');
-    overlay.classList.add('open');
+    openSidebar();
   });
 })();
 </script>
