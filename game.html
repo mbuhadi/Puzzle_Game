@@ -598,7 +598,7 @@ canvas.addEventListener('mousedown', e => {
 });
 
 // ─── Touch controls ───────────────────────────────────────────────────────────
-let touchTarget     = null;   // {x,y} in game coords – where to walk
+let joystick        = null;   // {cx,cy,ex,ey} in canvas coords while finger is down
 let pendingInteract = false;  // fire a T-key interaction on next update frame
 
 canvas.addEventListener('touchstart', e => {
@@ -674,9 +674,21 @@ canvas.addEventListener('touchstart', e => {
     }
   }
 
-  // Default: walk toward the tapped position
-  touchTarget = { x: cx, y: cy };
+  // Default: start joystick at the tapped position
+  joystick = { cx, cy, ex: cx, ey: cy };
 }, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (!joystick) return;
+  const touch = e.touches[0];
+  const r = canvas.getBoundingClientRect();
+  joystick.ex = (touch.clientX - r.left) * (VIEWPORT / r.width);
+  joystick.ey = (touch.clientY - r.top)  * (VIEWPORT / r.height);
+}, { passive: false });
+
+canvas.addEventListener('touchend',    () => { joystick = null; }, { passive: false });
+canvas.addEventListener('touchcancel', () => { joystick = null; }, { passive: false });
 
 // ─── Room 1 helpers ───────────────────────────────────────────────────────────
 function distToObj() {
@@ -694,10 +706,10 @@ function updateRoom1() {
     if (keys['ArrowDown']  || keys['s'] || keys['S']) dy += 1;
   }
   if (dx && dy) { dx *= Math.SQRT1_2; dy *= Math.SQRT1_2; }
-  if (!interfaceOpen && dx === 0 && dy === 0 && touchTarget) {
-    const _tdx = touchTarget.x - player.x, _tdy = touchTarget.y - player.y;
-    const _td = Math.sqrt(_tdx*_tdx + _tdy*_tdy);
-    if (_td < 4) touchTarget = null; else { dx = _tdx/_td; dy = _tdy/_td; }
+  if (!interfaceOpen && dx === 0 && dy === 0 && joystick) {
+    const _jdx = joystick.ex - joystick.cx, _jdy = joystick.ey - joystick.cy;
+    const _jd = Math.sqrt(_jdx*_jdx + _jdy*_jdy);
+    if (_jd > 10) { dx = _jdx/_jd; dy = _jdy/_jd; }
   }
   // Only the house wall at the top blocks movement — the forecourt is open
   player.x = Math.max(PLAYER_R, Math.min(R1-PLAYER_R, player.x + dx*PLAYER_SPEED));
@@ -1127,10 +1139,10 @@ function updateHouse() {
     if(keys['ArrowDown'] ||keys['s']||keys['S'])dy+=1;
   }
   if(dx&&dy){dx*=Math.SQRT1_2;dy*=Math.SQRT1_2;}
-  if (!lockOpen && dx === 0 && dy === 0 && touchTarget) {
-    const _tdx = touchTarget.x - player.x, _tdy = touchTarget.y - player.y;
-    const _td = Math.sqrt(_tdx*_tdx + _tdy*_tdy);
-    if (_td < 4) touchTarget = null; else { dx = _tdx/_td; dy = _tdy/_td; }
+  if (!lockOpen && dx === 0 && dy === 0 && joystick) {
+    const _jdx = joystick.ex - joystick.cx, _jdy = joystick.ey - joystick.cy;
+    const _jd = Math.sqrt(_jdx*_jdx + _jdy*_jdy);
+    if (_jd > 10) { dx = _jdx/_jd; dy = _jdy/_jd; }
   }
   const p=houseCollide(player.x+dx*PLAYER_SPEED, player.y+dy*PLAYER_SPEED);
   player.x=p.x; player.y=p.y;
@@ -1936,10 +1948,10 @@ function updateSubRoom() {
     if(keys['ArrowDown'] ||keys['s']||keys['S'])dy+=1;
   }
   if(dx&&dy){dx*=Math.SQRT1_2;dy*=Math.SQRT1_2;}
-  if (dx === 0 && dy === 0 && !kitchenWindowOpen && !livingRoomWindowOpen && !studyPaperOpen && !tvOpen && touchTarget) {
-    const _tdx = touchTarget.x - player.x, _tdy = touchTarget.y - player.y;
-    const _td = Math.sqrt(_tdx*_tdx + _tdy*_tdy);
-    if (_td < 4) touchTarget = null; else { dx = _tdx/_td; dy = _tdy/_td; }
+  if (dx === 0 && dy === 0 && !kitchenWindowOpen && !livingRoomWindowOpen && !studyPaperOpen && !tvOpen && joystick) {
+    const _jdx = joystick.ex - joystick.cx, _jdy = joystick.ey - joystick.cy;
+    const _jd = Math.sqrt(_jdx*_jdx + _jdy*_jdy);
+    if (_jd > 10) { dx = _jdx/_jd; dy = _jdy/_jd; }
   }
   player.x=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.x+dx*PLAYER_SPEED));
   player.y=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
@@ -2479,10 +2491,10 @@ function updateBasement() {
     if(keys['ArrowDown'] ||keys['s']||keys['S'])dy+=1;
   }
   if(dx&&dy){dx*=Math.SQRT1_2;dy*=Math.SQRT1_2;}
-  if (!basementNoteOpen && dx === 0 && dy === 0 && touchTarget) {
-    const _tdx = touchTarget.x - player.x, _tdy = touchTarget.y - player.y;
-    const _td = Math.sqrt(_tdx*_tdx + _tdy*_tdy);
-    if (_td < 4) touchTarget = null; else { dx = _tdx/_td; dy = _tdy/_td; }
+  if (!basementNoteOpen && dx === 0 && dy === 0 && joystick) {
+    const _jdx = joystick.ex - joystick.cx, _jdy = joystick.ey - joystick.cy;
+    const _jd = Math.sqrt(_jdx*_jdx + _jdy*_jdy);
+    if (_jd > 10) { dx = _jdx/_jd; dy = _jdy/_jd; }
   }
   player.x=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.x+dx*PLAYER_SPEED));
   player.y=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
@@ -2771,10 +2783,10 @@ function updateRoom7() {
   if(keys['ArrowUp']   ||keys['w']||keys['W'])dy-=1;
   if(keys['ArrowDown'] ||keys['s']||keys['S'])dy+=1;
   if(dx&&dy){dx*=Math.SQRT1_2;dy*=Math.SQRT1_2;}
-  if (dx === 0 && dy === 0 && touchTarget) {
-    const _tdx = touchTarget.x - player.x, _tdy = touchTarget.y - player.y;
-    const _td = Math.sqrt(_tdx*_tdx + _tdy*_tdy);
-    if (_td < 4) touchTarget = null; else { dx = _tdx/_td; dy = _tdy/_td; }
+  if (dx === 0 && dy === 0 && joystick) {
+    const _jdx = joystick.ex - joystick.cx, _jdy = joystick.ey - joystick.cy;
+    const _jd = Math.sqrt(_jdx*_jdx + _jdy*_jdy);
+    if (_jd > 10) { dx = _jdx/_jd; dy = _jdy/_jd; }
   }
   player.x=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.x+dx*PLAYER_SPEED));
   player.y=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
@@ -2870,10 +2882,10 @@ function updateRoom6() {
   if(keys['ArrowUp']   ||keys['w']||keys['W'])dy-=1;
   if(keys['ArrowDown'] ||keys['s']||keys['S'])dy+=1;
   if(dx&&dy){dx*=Math.SQRT1_2;dy*=Math.SQRT1_2;}
-  if (dx === 0 && dy === 0 && touchTarget) {
-    const _tdx = touchTarget.x - player.x, _tdy = touchTarget.y - player.y;
-    const _td = Math.sqrt(_tdx*_tdx + _tdy*_tdy);
-    if (_td < 4) touchTarget = null; else { dx = _tdx/_td; dy = _tdy/_td; }
+  if (dx === 0 && dy === 0 && joystick) {
+    const _jdx = joystick.ex - joystick.cx, _jdy = joystick.ey - joystick.cy;
+    const _jd = Math.sqrt(_jdx*_jdx + _jdy*_jdy);
+    if (_jd > 10) { dx = _jdx/_jd; dy = _jdy/_jd; }
   }
   player.x=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.x+dx*PLAYER_SPEED));
   player.y=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
@@ -3009,6 +3021,28 @@ function update() {
   else                                updateSubRoom();
   updateFade();
 }
+function drawJoystick() {
+  if (!joystick) return;
+  const { cx, cy, ex, ey } = joystick;
+  ctx.save();
+  ctx.globalAlpha = 0.22;
+  ctx.strokeStyle = '#ffffff';
+  ctx.fillStyle   = '#ffffff';
+  ctx.lineWidth   = 3;
+  ctx.lineCap     = 'round';
+  // Outer circle
+  ctx.beginPath(); ctx.arc(cx, cy, 80, 0, Math.PI*2); ctx.stroke();
+  // Direction line + knob
+  const ddx = ex - cx, ddy = ey - cy, dd = Math.sqrt(ddx*ddx + ddy*ddy);
+  if (dd > 0) {
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.beginPath(); ctx.arc(ex, ey, 18, 0, Math.PI*2); ctx.fill();
+  }
+  // Center dot
+  ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
 function draw() {
   ctx.clearRect(0,0,VIEWPORT,VIEWPORT);
   if      (currentScene==='room1')    drawRoom1();
@@ -3017,6 +3051,7 @@ function draw() {
   else if (currentScene==='room6')    drawRoom6();
   else if (currentScene==='room7')    drawRoom7();
   else                                drawSubRoom();
+  drawJoystick();
   if (fadeAlpha>0){ctx.fillStyle=`rgba(0,0,0,${fadeAlpha})`;ctx.fillRect(0,0,VIEWPORT,VIEWPORT);}
 }
 function loop(){update();draw();requestAnimationFrame(loop);}
