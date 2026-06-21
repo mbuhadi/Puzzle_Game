@@ -1424,7 +1424,7 @@ select(0);
     const opening=!nav.classList.contains('open');
     nav.classList.toggle('open');
     overlay.classList.toggle('open');
-    btn.textContent=opening?'✕':'☰';
+    btn.textContent='☰';
   });
 
   overlay.addEventListener('click',()=>{
@@ -1446,7 +1446,6 @@ select(0);
     if(btn.contains(e.target)||nav.contains(e.target)||overlay.contains(e.target)) return;
     nav.classList.add('open');
     overlay.classList.add('open');
-    btn.textContent='✕';
   });
 })();
 </script>
