@@ -655,6 +655,7 @@ canvas.addEventListener('touchstart', e => {
     const _camX = Math.max(0, Math.min(HW-VIEWPORT,   player.x - VIEWPORT/2));
     const _camY = Math.max(0, Math.min(HH-VIEWPORT_H, player.y - VIEWPORT_H/2));
     for (const door of HOUSE_DOORS) {
+      if (door.id === 'gate') continue;
       if (tapOnObj(door.cx - _camX, door.cy - _camY, houseDoorDist(door) <= HOUSE_INTERACT_RANGE)) {
         pendingInteract = true; return;
       }
@@ -666,16 +667,22 @@ canvas.addEventListener('touchstart', e => {
       }
     }
   } else if (currentScene === 'room_left') {
-    if (tapOnObj(KWIN.cx, KWIN.cy, kitchenWinDist() <= INTERACT_RANGE)) {
+    const _srdL = SUB_ROOM_DOORS.room_left;
+    if (tapOnObj(_srdL.cx, _srdL.cy, subRoomDoorDist() <= HOUSE_INTERACT_RANGE) ||
+        tapOnObj(KWIN.cx, KWIN.cy, kitchenWinDist() <= INTERACT_RANGE)) {
       pendingInteract = true; return;
     }
   } else if (currentScene === 'room_right') {
-    if (tapOnObj(LWIN.cx,   LWIN.cy,   livingRoomWinDist() <= INTERACT_RANGE) ||
+    const _srdR = SUB_ROOM_DOORS.room_right;
+    if (tapOnObj(_srdR.cx, _srdR.cy, subRoomDoorDist() <= HOUSE_INTERACT_RANGE) ||
+        tapOnObj(LWIN.cx,   LWIN.cy,   livingRoomWinDist() <= INTERACT_RANGE) ||
         tapOnObj(TV_POS.cx, TV_POS.cy, tvDist()            <= INTERACT_RANGE)) {
       pendingInteract = true; return;
     }
   } else if (currentScene === 'room_top') {
-    if (tapOnObj(STUDY_PAPER.cx, STUDY_PAPER.cy, studyPaperDist() <= INTERACT_RANGE)) {
+    const _srdT = SUB_ROOM_DOORS.room_top;
+    if (tapOnObj(_srdT.cx, _srdT.cy, subRoomDoorDist() <= HOUSE_INTERACT_RANGE) ||
+        tapOnObj(STUDY_PAPER.cx, STUDY_PAPER.cy, studyPaperDist() <= INTERACT_RANGE)) {
       pendingInteract = true; return;
     }
   } else if (currentScene === 'basement') {
@@ -1199,6 +1206,7 @@ function updateHouse() {
         triggerTransition('basement');
       } else {
         for (const door of HOUSE_DOORS) {
+          if (door.id === 'gate') continue;
           if (houseDoorDist(door) <= HOUSE_INTERACT_RANGE) {
             if (door.id === 'top' && !studyUnlocked) lockOpen = true;
             else triggerTransition(door.toScene);
@@ -1624,18 +1632,9 @@ function drawHouse() {
   // Doors
   const pulse = 0.5 + 0.5*Math.sin(pulseTime);
   HOUSE_DOORS.forEach(door => {
+    if (door.id === 'gate') return;  // gate is not interactable from inside the courtyard
     const inRange = houseDoorDist(door) <= HOUSE_INTERACT_RANGE;
-    if (door.id === 'gate') {
-      // The gate itself is prerendered into the base; just glow when close
-      if (inRange) {
-        ctx.save();
-        ctx.shadowColor = '#ffe066';
-        ctx.shadowBlur  = 18 + pulse*14;
-        ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2.5;
-        ctx.strokeRect(HOUSE_GATE.cx - GATE.w/2 - 25, HOUSE_GATE.top - 8, GATE.w + 50, GATE.h + 16);
-        ctx.restore();
-      }
-    } else if (door.id === 'top') {
+    if (door.id === 'top') {
       // Study door drawn upright, hanging from the top wall into the courtyard
       drawPanelDoor(ctx, door.cx, door.cy + 18, 37, 72, inRange ? 18 + pulse*14 : 6);
     } else {
@@ -1655,7 +1654,7 @@ function drawHouse() {
       if (door.id === 'left')  lx = door.cx + door.dw/2 + 24;
       if (door.id === 'right') lx = door.cx - door.dw/2 - 24;
       if (door.id === 'top')   ly = door.cy + 71;
-      if (door.id === 'gate')  { lx = door.cx + GATE.w/2 + 48; ly = HOUSE_GATE.top + GATE.h/2 + 5; }
+
       ctx.strokeStyle = '#2a2418'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
       ctx.strokeText('[T]', lx, ly);
       ctx.fillStyle = '#ffe066';
@@ -1677,8 +1676,9 @@ function drawHouse() {
     const sx=player.x-camX, sy=player.y-camY;
     let bestIcon=null, bestD=Infinity;
     for (const door of HOUSE_DOORS) {
+      if (door.id === 'gate') continue;
       const d=houseDoorDist(door);
-      if (d<=HOUSE_INTERACT_RANGE && d<bestD) { bestD=d; bestIcon=door.id==='gate'?tbGate:tbDoor; }
+      if (d<=HOUSE_INTERACT_RANGE && d<bestD) { bestD=d; bestIcon=tbDoor; }
     }
     const _tdx=player.x-TRAPDOOR.cx, _tdy=player.y-TRAPDOOR.cy, _td=Math.sqrt(_tdx*_tdx+_tdy*_tdy);
     if (trapdoorOpen && _td<=HOUSE_INTERACT_RANGE && _td<bestD) bestIcon=tbTrapdoor;
@@ -2380,7 +2380,7 @@ function drawSubRoom() {
     ctx.fillText('[T]', lx, ly);
   }
 
-  if (!kitchenWindowOpen && !livingRoomWindowOpen && !studyPaperOpen) {
+  if (!kitchenWindowOpen && !livingRoomWindowOpen && !studyPaperOpen && !tvOpen) {
     drawPlayer(ctx);
     // Thought bubble for nearest in-range interactable
     let _srIcon = null;
