@@ -396,20 +396,15 @@ const DESC_X = TREE_R + 12;
 
 const BOX_W = 76, BOX_H = 36;
 
-// Level y positions (canvas absolute)
+// Tree grows upward — root at bottom, grandkids at top (mirrors curated guide)
 const LY = [
-  PY + TITLE_H + 80,   // root      ≈ 150
-  PY + TITLE_H + 268,  // sons      ≈ 338
-  PY + TITLE_H + 508,  // grandkids ≈ 578
+  800,   // root  (bottom)
+  570,   // sons  (middle)
+  265,   // grandkids of sons 1 & 3
+  145,   // grandkids of son 2 (staggered higher, matching curated layout)
 ];
 
-// Level-2 x centres — 6 nodes with 20px margin each side from panel edges
-// Available width: TREE_R - PX - 40 = 515px. Spacing = 87.
-// First centre: PX + 20 + 38 = 68
-// 68, 155, 242, 329, 416, 503
-// Left group  (4–6): 68, 155, 242  → midpoint 155 → son1
-// Middle group(7–8): 329, 416      → midpoint 372 → son2
-// Right group ( 9 ): 503           → son3
+// x centres remain the same as before
 const NODES = [
   { id:0, cx:285, cy:LY[0], fixed:false },  // root
   { id:1, cx:155, cy:LY[1], fixed:false },  // left son
@@ -418,8 +413,8 @@ const NODES = [
   { id:4, cx:68,  cy:LY[2], fixed:false },  // left son child 1
   { id:5, cx:155, cy:LY[2], fixed:false },  // left son child 2
   { id:6, cx:242, cy:LY[2], fixed:false },  // left son child 3
-  { id:7, cx:329, cy:LY[2]+80, fixed:false },  // middle son child 1
-  { id:8, cx:416, cy:LY[2]+80, fixed:false },  // middle son child 2
+  { id:7, cx:329, cy:LY[3], fixed:false },  // middle son child 1 (higher tier)
+  { id:8, cx:416, cy:LY[3], fixed:false },  // middle son child 2 (higher tier)
   { id:9, cx:503, cy:LY[2], fixed:true  },  // right son child — عبدالعزيز
 ];
 
@@ -838,15 +833,15 @@ function drawRoom1() {
   });
   ctx.restore();
 
-  // Tree edges — soft curves
-  ctx.strokeStyle = '#3a3630';
-  ctx.lineWidth = 2;
+  // Tree edges — soft upward curves (parent at bottom, child above)
+  ctx.strokeStyle = '#1dbdad';
+  ctx.lineWidth = 2.5;
   EDGES.forEach(([pid, cid]) => {
     const p = NODES[pid], c = NODES[cid];
-    const midY = (p.cy + BOX_H/2 + c.cy - BOX_H/2) / 2;
+    const midY = (p.cy - BOX_H/2 + c.cy + BOX_H/2) / 2;
     ctx.beginPath();
-    ctx.moveTo(p.cx, p.cy + BOX_H/2);
-    ctx.bezierCurveTo(p.cx, midY, c.cx, midY, c.cx, c.cy - BOX_H/2);
+    ctx.moveTo(p.cx, p.cy - BOX_H/2);
+    ctx.bezierCurveTo(p.cx, midY, c.cx, midY, c.cx, c.cy + BOX_H/2);
     ctx.stroke();
   });
 
