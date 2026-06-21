@@ -651,14 +651,17 @@ canvas.addEventListener('touchstart', e => {
       pendingInteract = true; return;
     }
   } else if (currentScene === 'house') {
+    // Door/trapdoor positions are in world space; convert to screen space before hit-testing.
+    const _camX = Math.max(0, Math.min(HW-VIEWPORT,   player.x - VIEWPORT/2));
+    const _camY = Math.max(0, Math.min(HH-VIEWPORT_H, player.y - VIEWPORT_H/2));
     for (const door of HOUSE_DOORS) {
-      if (tapOnObj(door.cx, door.cy, houseDoorDist(door) <= HOUSE_INTERACT_RANGE)) {
+      if (tapOnObj(door.cx - _camX, door.cy - _camY, houseDoorDist(door) <= HOUSE_INTERACT_RANGE)) {
         pendingInteract = true; return;
       }
     }
     if (trapdoorOpen) {
       const _dx = player.x - TRAPDOOR.cx, _dy = player.y - TRAPDOOR.cy;
-      if (tapOnObj(TRAPDOOR.cx, TRAPDOOR.cy, Math.sqrt(_dx*_dx+_dy*_dy) <= HOUSE_INTERACT_RANGE)) {
+      if (tapOnObj(TRAPDOOR.cx - _camX, TRAPDOOR.cy - _camY, Math.sqrt(_dx*_dx+_dy*_dy) <= HOUSE_INTERACT_RANGE)) {
         pendingInteract = true; return;
       }
     }
