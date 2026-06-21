@@ -501,6 +501,12 @@ canvas.addEventListener('mousedown', e => {
   const cx = (e.clientX - r.left) * (VIEWPORT / r.width);
   const cy = (e.clientY - r.top)  * (VIEWPORT_H / r.height);
 
+  // Any open overlay means the thought bubble is hidden — clear stale bounds so
+  // it can't intercept taps inside overlays and accidentally close them.
+  if (interfaceOpen || lockOpen || kitchenWindowOpen || livingRoomWindowOpen || studyPaperOpen || tvOpen || basementNoteOpen) {
+    thoughtBubbleBounds = null;
+  }
+
   // Thought bubble click → trigger interaction
   if (thoughtBubbleBounds) {
     const _dx=cx-thoughtBubbleBounds.x, _dy=cy-thoughtBubbleBounds.y;
@@ -787,6 +793,7 @@ function drawRoom1() {
   }
 
   if (!interfaceOpen) return;
+  thoughtBubbleBounds = null;
 
   ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, VIEWPORT, VIEWPORT_H);
 
