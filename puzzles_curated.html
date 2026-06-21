@@ -60,6 +60,11 @@
     }
     #sidebar.open{left:0;}
     #detail{padding:64px 18px 32px;}
+    .tree-layout{flex-direction:column;}
+    .tree-clues{min-width:0;}
+    .windows-wrap{flex-direction:column;}
+    .window-card{width:100%; max-width:300px;}
+    .window-card canvas{width:100% !important; height:auto !important;}
   }
   .ptitle{font-size:32px; color:var(--gold); margin-bottom:4px;}
   .pkicker{font-size:12px; color:var(--dim); letter-spacing:3px; margin-bottom:26px; font-family:sans-serif;}
@@ -276,6 +281,13 @@ function buildFamilyTree(){
   });
   stage.appendChild(banner);
   document.addEventListener('click',closeDD);
+  if(window.innerWidth<=640){
+    const avail=detail.clientWidth-36;
+    const sc=Math.min(1,avail/565);
+    stage.style.transform='scale('+sc+')';
+    stage.style.transformOrigin='top left';
+    stage.style.marginBottom=((sc-1)*515)+'px';
+  }
 }
 
 function buildWindows(){
@@ -696,6 +708,16 @@ function buildCylinderLock(){
   });
 
   lockDiv.appendChild(dialContainer);
+
+  if(window.innerWidth<=640){
+    const dialAvail=detail.clientWidth-36;
+    const dialSc=Math.min(1,dialAvail/400);
+    if(dialSc<1){
+      dialContainer.style.transform='scale('+dialSc+')';
+      dialContainer.style.transformOrigin='top center';
+      dialContainer.style.marginBottom=((dialSc-1)*400)+'px';
+    }
+  }
 
   const rotateRow=document.createElement('div');
   rotateRow.style.cssText='display:flex;gap:16px;justify-content:center;margin:10px 0 4px;';
