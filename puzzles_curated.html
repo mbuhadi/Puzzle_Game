@@ -617,6 +617,16 @@ function buildCylinderLock(){
     center.style.cssText=`position:absolute; left:${centerX}px; top:${centerY}px; transform:translate(-50%,-50%); width:30px; height:30px; background:#5a5244; border-radius:50%;`;
     dialContainer.appendChild(center);
 
+    // CW / CCW curved arrow hints
+    const ccwHint=document.createElement('div');
+    ccwHint.style.cssText='position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:36px;color:#ffe066;opacity:0.55;pointer-events:none;user-select:none;line-height:1;';
+    ccwHint.textContent='↺';
+    dialContainer.appendChild(ccwHint);
+    const cwHint=document.createElement('div');
+    cwHint.style.cssText='position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:36px;color:#ffe066;opacity:0.55;pointer-events:none;user-select:none;line-height:1;';
+    cwHint.textContent='↻';
+    dialContainer.appendChild(cwHint);
+
     // Calculate which shape is at the top based on rotation, then map to actual shape index
     const positionAtTop=((-Math.round(rotation/72))%5+5)%5;
     currentPos=shapeOrder[positionAtTop];
@@ -661,7 +671,49 @@ function buildCylinderLock(){
     }
   };
 
+  dialContainer.addEventListener('touchstart',(e)=>{
+    e.preventDefault();
+    isDragging=true;
+    const t=e.touches[0];
+    const rect=dialContainer.getBoundingClientRect();
+    dragStartAngle=Math.atan2(t.clientY-(rect.top+rect.height/2),t.clientX-(rect.left+rect.width/2));
+    dragStartRotation=rotation;
+  },{passive:false});
+  dialContainer.addEventListener('touchmove',(e)=>{
+    if(!isDragging)return;
+    e.preventDefault();
+    const t=e.touches[0];
+    const rect=dialContainer.getBoundingClientRect();
+    const cur=Math.atan2(t.clientY-(rect.top+rect.height/2),t.clientX-(rect.left+rect.width/2));
+    rotation=dragStartRotation-(dragStartAngle-cur)*180/Math.PI;
+    redrawDial();
+  },{passive:false});
+  dialContainer.addEventListener('touchend',()=>{
+    if(!isDragging)return;
+    isDragging=false;
+    rotation=Math.round(rotation/72)*72;
+    redrawDial();
+  });
+
   lockDiv.appendChild(dialContainer);
+
+  const rotateRow=document.createElement('div');
+  rotateRow.style.cssText='display:flex;gap:16px;justify-content:center;margin:10px 0 4px;';
+  const ccwBtn=document.createElement('button');
+  ccwBtn.className='reveal-btn';
+  ccwBtn.style.cssText='font-size:22px;padding:8px 22px;min-width:64px;';
+  ccwBtn.title='Rotate counter-clockwise';
+  ccwBtn.textContent='↺';
+  ccwBtn.onclick=()=>{ rotation-=72; redrawDial(); };
+  const cwBtn=document.createElement('button');
+  cwBtn.className='reveal-btn';
+  cwBtn.style.cssText='font-size:22px;padding:8px 22px;min-width:64px;';
+  cwBtn.title='Rotate clockwise';
+  cwBtn.textContent='↻';
+  cwBtn.onclick=()=>{ rotation+=72; redrawDial(); };
+  rotateRow.appendChild(ccwBtn);
+  rotateRow.appendChild(cwBtn);
+  lockDiv.appendChild(rotateRow);
 
   const combinationDisplay=document.createElement('div');
   combinationDisplay.style.cssText='font-family:monospace; font-size:13px; color:var(--gold); min-height:20px; text-align:center;';
