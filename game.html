@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Puzzle Game</title>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -14,7 +15,7 @@
     height: 100vh;
     overflow: hidden;
   }
-  canvas { display: block; cursor: default; }
+  canvas { display: block; cursor: default; width: min(100vw, calc(100vh * 1.5)); height: min(100vh, calc(100vw / 1.5)); }
 </style>
 </head>
 <body>
@@ -24,8 +25,9 @@ const canvas = document.getElementById('canvas');
 const ctx    = canvas.getContext('2d');
 
 const VIEWPORT = 900;
+const VIEWPORT_H = 600;
 canvas.width  = VIEWPORT;
-canvas.height = VIEWPORT;
+canvas.height = VIEWPORT_H;
 
 const PLAYER_R     = 9;
 const PLAYER_SPEED = 2.4;
@@ -191,7 +193,7 @@ let mouseX = 0, mouseY = 0;
 canvas.addEventListener('mousemove', e => {
   const r = canvas.getBoundingClientRect();
   mouseX = (e.clientX - r.left) * (VIEWPORT / r.width);
-  mouseY = (e.clientY - r.top)  * (VIEWPORT / r.height);
+  mouseY = (e.clientY - r.top)  * (VIEWPORT_H / r.height);
 });
 
 // ─── Scene management ─────────────────────────────────────────────────────────
@@ -216,18 +218,18 @@ function updateFade() {
       else                                 { player.x = 500;                    player.y = 870; }
     }
     else if (currentScene === 'room1')      { player.x = R1/2; player.y = 170; }
-    else if (currentScene === 'room_left')  { player.x = R1-R1W-PLAYER_R-20; player.y = R1/2; }
-    else if (currentScene === 'room_right') { player.x = R1W+PLAYER_R+20;    player.y = R1/2; }
-    else if (currentScene === 'room_top')   { player.x = R1/2; player.y = R1-R1W-PLAYER_R-20; }
+    else if (currentScene === 'room_left')  { player.x = R1-R1W-PLAYER_R-20; player.y = VIEWPORT_H/2; }
+    else if (currentScene === 'room_right') { player.x = R1W+PLAYER_R+20;    player.y = VIEWPORT_H/2; }
+    else if (currentScene === 'room_top')   { player.x = R1/2; player.y = VIEWPORT_H-R1W-PLAYER_R-20; }
     else if (currentScene === 'basement')   {
-      if (fromScene === 'room6') { player.x = R1-R1W-PLAYER_R-20; player.y = R1/2; }
-      else                       { player.x = R1/2; player.y = R1-R1W-PLAYER_R-20; }
+      if (fromScene === 'room6') { player.x = R1-R1W-PLAYER_R-20; player.y = VIEWPORT_H/2; }
+      else                       { player.x = R1/2; player.y = VIEWPORT_H-R1W-PLAYER_R-20; }
     }
     else if (currentScene === 'room6')      {
-      if (fromScene === 'room7') { player.x = R1-R1W-PLAYER_R-20; player.y = R1/2; }
-      else                       { player.x = R1W+PLAYER_R+20; player.y = R1/2; }
+      if (fromScene === 'room7') { player.x = R1-R1W-PLAYER_R-20; player.y = VIEWPORT_H/2; }
+      else                       { player.x = R1W+PLAYER_R+20; player.y = VIEWPORT_H/2; }
     }
-    else if (currentScene === 'room7')      { player.x = R1W+PLAYER_R+20; player.y = R1/2; }
+    else if (currentScene === 'room7')      { player.x = R1W+PLAYER_R+20; player.y = VIEWPORT_H/2; }
     fadeDir = -1;
   }
   if (fadeDir === -1 && fadeAlpha <= 0) fadeDir = 0;
@@ -235,7 +237,7 @@ function updateFade() {
 
 // ─── Room 1 ───────────────────────────────────────────────────────────────────
 const R1 = 900, R1W = 30;
-player.x = R1 / 2; player.y = R1 / 2;
+player.x = R1 / 2; player.y = VIEWPORT_H / 2;
 
 const INTERACT_RANGE = 100;
 // The interactable is the house gate itself, centered on the top wall
@@ -308,15 +310,15 @@ function drawIronGate(c, gx, top) {
 
 function buildDrivewayCaches() {
   drivewayBase = document.createElement('canvas');
-  drivewayBase.width = R1; drivewayBase.height = R1;
+  drivewayBase.width = R1; drivewayBase.height = VIEWPORT_H;
   const c = drivewayBase.getContext('2d');
 
   // Paved ground: warm interlock tiles
   c.fillStyle = '#a89878';
-  c.fillRect(0, 0, R1, R1);
+  c.fillRect(0, 0, R1, VIEWPORT_H);
   const DTILE = 60, DG = 2;
   const D_COLORS = ['#cfc0a2','#c8b894','#d4c6a8','#c2b28e','#cbbc9e','#d8cab0'];
-  for (let r = 0; r < Math.ceil(R1/DTILE); r++) {
+  for (let r = 0; r < Math.ceil(VIEWPORT_H/DTILE); r++) {
     for (let cc = 0; cc < Math.ceil(R1/DTILE); cc++) {
       const h = ((r*1237 + cc*5791) ^ (r*31 + cc*97)) % D_COLORS.length;
       c.fillStyle = D_COLORS[Math.abs(h)];
@@ -341,10 +343,10 @@ function buildDrivewayCaches() {
 // Each gust is a precomputed polyline blown left-to-right with a wobbly
 // heading and one full loop-the-loop curl partway along.
 const WIND_GUSTS = [
-  { x0:  60, y0: 330, base: -0.10, curl: 0.50, len: 330, delay: 0.0 },
-  { x0: 470, y0: 560, base: -0.18, curl: 0.58, len: 300, delay: 2.3 },
-  { x0: 130, y0: 740, base: -0.05, curl: 0.42, len: 360, delay: 4.6 },
-  { x0: 510, y0: 250, base:  0.12, curl: 0.62, len: 280, delay: 6.4 },
+  { x0:  60, y0: 220, base: -0.10, curl: 0.50, len: 330, delay: 0.0 },
+  { x0: 470, y0: 373, base: -0.18, curl: 0.58, len: 300, delay: 2.3 },
+  { x0: 130, y0: 493, base: -0.05, curl: 0.42, len: 360, delay: 4.6 },
+  { x0: 510, y0: 167, base:  0.12, curl: 0.62, len: 280, delay: 6.4 },
 ].map(d => {
   const N = 110, pts = [];
   let x = d.x0, y = d.y0;
@@ -387,8 +389,8 @@ function drawWindGusts(g) {
 }
 
 // ─── Puzzle One — Family Tree ──────────────────────────────────────────────────
-const PX = 10, PY = 10, PW = 880, PH = 880;
-const TITLE_H = 60;
+const PX = 10, PY = 10, PW = 880, PH = 580;
+const TITLE_H = 50;
 
 // Tree: left ~63%; description: right ~37%
 const TREE_R = PX + 555;   // canvas x = 565
@@ -398,10 +400,10 @@ const BOX_W = 76, BOX_H = 36;
 
 // Tree grows upward — root at bottom, grandkids at top (mirrors curated guide)
 const LY = [
-  800,   // root  (bottom)
-  570,   // sons  (middle)
-  265,   // grandkids of sons 1 & 3
-  145,   // grandkids of son 2 (staggered higher, matching curated layout)
+  530,   // root  (bottom)
+  375,   // sons  (middle)
+  175,   // grandkids of sons 1 & 3
+  95,    // grandkids of son 2 (staggered higher, matching curated layout)
 ];
 
 // x centres remain the same as before
@@ -487,7 +489,7 @@ function dropdownRect(nodeId) {
 canvas.addEventListener('mousedown', e => {
   const r  = canvas.getBoundingClientRect();
   const cx = (e.clientX - r.left) * (VIEWPORT / r.width);
-  const cy = (e.clientY - r.top)  * (VIEWPORT / r.height);
+  const cy = (e.clientY - r.top)  * (VIEWPORT_H / r.height);
 
   // Thought bubble click → trigger interaction
   if (thoughtBubbleBounds) {
@@ -499,7 +501,7 @@ canvas.addEventListener('mousedown', e => {
 
   if (currentScene === 'house' && lockOpen) {
     const sc=4, dw=14*sc, dh=22*sc, gap=20;
-    const lx=80, lw=740, ly=200, lh=460, arH=28;
+    const lx=80, lw=740, ly=80, lh=460, arH=28;
     // Dev Skip
     const skipBtnX=lx+16, skipBtnY=ly+lh-42, skipBtnW=110, skipBtnH=28;
     if (cx>=skipBtnX && cx<=skipBtnX+skipBtnW && cy>=skipBtnY && cy<=skipBtnY+skipBtnH) {
@@ -606,7 +608,7 @@ canvas.addEventListener('touchstart', e => {
   const touch = e.touches[0];
   const r  = canvas.getBoundingClientRect();
   const cx = (touch.clientX - r.left) * (VIEWPORT / r.width);
-  const cy = (touch.clientY - r.top)  * (VIEWPORT / r.height);
+  const cy = (touch.clientY - r.top)  * (VIEWPORT_H / r.height);
 
   // Forward touch as mousedown so existing UI (tree, lock dials, room6/7 cells) works
   canvas.dispatchEvent(new MouseEvent('mousedown', {
@@ -684,7 +686,7 @@ canvas.addEventListener('touchmove', e => {
   const touch = e.touches[0];
   const r = canvas.getBoundingClientRect();
   joystick.ex = (touch.clientX - r.left) * (VIEWPORT / r.width);
-  joystick.ey = (touch.clientY - r.top)  * (VIEWPORT / r.height);
+  joystick.ey = (touch.clientY - r.top)  * (VIEWPORT_H / r.height);
 }, { passive: false });
 
 canvas.addEventListener('touchend',    () => { joystick = null; }, { passive: false });
@@ -713,7 +715,7 @@ function updateRoom1() {
   }
   // Only the house wall at the top blocks movement — the forecourt is open
   player.x = Math.max(PLAYER_R, Math.min(R1-PLAYER_R, player.x + dx*PLAYER_SPEED));
-  player.y = Math.max(R1W+PLAYER_R, Math.min(R1-PLAYER_R, player.y + dy*PLAYER_SPEED));
+  player.y = Math.max(R1W+PLAYER_R, Math.min(VIEWPORT_H-PLAYER_R, player.y + dy*PLAYER_SPEED));
   // Keep the player out of the palm planters
   for (const P of DRIVEWAY_PALMS) {
     const bdx = player.x - P.cx, bdy = player.y - P.cy;
@@ -776,7 +778,7 @@ function drawRoom1() {
 
   if (!interfaceOpen) return;
 
-  ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, VIEWPORT, VIEWPORT);
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, VIEWPORT, VIEWPORT_H);
 
   // ── Rounded rect helper ──
   function rr(x, y, w, h, r) {
@@ -1476,7 +1478,7 @@ function buildCourtyardCaches() {
 
 function drawHouse() {
   const camX=Math.max(0,Math.min(HW-VIEWPORT,player.x-VIEWPORT/2));
-  const camY=Math.max(0,Math.min(HH-VIEWPORT,player.y-VIEWPORT/2));
+  const camY=Math.max(0,Math.min(HH-VIEWPORT_H,player.y-VIEWPORT_H/2));
   ctx.save(); ctx.translate(-camX,-camY);
 
   // ── Static base: floor, walls, pool rim, planters, trunks (prerendered) ──
@@ -1675,13 +1677,13 @@ const SUB_ROOM_STYLE = {
 
 // Door on the wall that connects back to the courtyard
 const SUB_ROOM_DOORS = {
-  room_left:  { cx: R1-R1W,  cy: R1/2,   dw: R1W+12, dh: 72 },
-  room_right: { cx: R1W,     cy: R1/2,   dw: R1W+12, dh: 72 },
-  room_top:   { cx: R1/2,    cy: R1-R1W, dw: 72, dh: R1W+12 },
+  room_left:  { cx: R1-R1W,  cy: VIEWPORT_H/2,   dw: R1W+12, dh: 72 },
+  room_right: { cx: R1W,     cy: VIEWPORT_H/2,   dw: R1W+12, dh: 72 },
+  room_top:   { cx: R1/2,    cy: VIEWPORT_H-R1W, dw: 72, dh: R1W+12 },
 };
 
 // ─── Study paper ──────────────────────────────────────────────────────────────
-const STUDY_PAPER = { cx: R1/2, cy: R1/2 + 60 };
+const STUDY_PAPER = { cx: R1/2, cy: VIEWPORT_H/2 + 60 };
 let studyPaperOpen = false;
 
 function studyPaperDist() {
@@ -1824,7 +1826,7 @@ function drawSegDigit(digit, x, y, scale) {
 }
 
 function drawLock() {
-  const lx=80, ly=200, lw=740, lh=460;
+  const lx=80, ly=80, lw=740, lh=460;
   const sc=4, dw=14*sc, dh=22*sc, gap=20;
   const totalW = 3*dw + 2*gap;
   const dy0 = ly + 200;
@@ -1884,7 +1886,7 @@ function drawLock() {
     ctx.beginPath(); ctx.moveTo(icx-iw/2, icy); ctx.lineTo(icx+iw/2, icy); ctx.stroke();
   }
 
-  ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, VIEWPORT, VIEWPORT);
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, VIEWPORT, VIEWPORT_H);
   ctx.save(); ctx.shadowColor='rgba(0,0,0,0.8)'; ctx.shadowBlur=40; ctx.shadowOffsetY=10;
   rrK(lx,ly,lw,lh,16); ctx.fillStyle='#12110f'; ctx.fill(); ctx.restore();
   rrK(lx,ly,lw,lh,16); ctx.strokeStyle='#c8a84b'; ctx.lineWidth=2; ctx.stroke();
@@ -1954,7 +1956,7 @@ function updateSubRoom() {
     if (_jd > 10) { dx = _jdx/_jd; dy = _jdy/_jd; }
   }
   player.x=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.x+dx*PLAYER_SPEED));
-  player.y=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
+  player.y=Math.max(R1W+PLAYER_R,Math.min(VIEWPORT_H-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
   pulseTime += 0.05;
 
   const _pi = pendingInteract; if (_pi) { subRoomTWasDown = false; pendingInteract = false; }
@@ -1985,12 +1987,12 @@ function updateSubRoom() {
 
 function drawSubRoom() {
   const s = SUB_ROOM_STYLE[currentScene];
-  ctx.fillStyle = s.wall;  ctx.fillRect(0, 0, R1, R1);
-  ctx.fillStyle = s.floor; ctx.fillRect(R1W, R1W, R1-R1W*2, R1-R1W*2);
+  ctx.fillStyle = s.wall;  ctx.fillRect(0, 0, R1, VIEWPORT_H);
+  ctx.fillStyle = s.floor; ctx.fillRect(R1W, R1W, R1-R1W*2, VIEWPORT_H-R1W*2);
 
   ctx.fillStyle = '#c8a84b'; ctx.font = '19px Amiri, serif';
   ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic'; ctx.direction = 'rtl';
-  ctx.fillText(s.label, R1 - R1W - 14, R1 - R1W - 14);
+  ctx.fillText(s.label, R1 - R1W - 14, VIEWPORT_H - R1W - 14);
   ctx.direction = 'ltr'; ctx.textBaseline = 'alphabetic';
 
   // Kitchen window (room_left only)
@@ -2022,7 +2024,7 @@ function drawSubRoom() {
 
     // Window interface
     if (kitchenWindowOpen) {
-      ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, VIEWPORT, VIEWPORT);
+      ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, VIEWPORT, VIEWPORT_H);
       function rrW(x, y, w, h, r) {
         ctx.beginPath();
         ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
