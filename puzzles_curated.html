@@ -1437,6 +1437,17 @@ select(0);
     closeSidebar();
     btn.textContent='☰';
   });
+
+  // Open menu when tapping the left edge of the screen (mobile only)
+  document.addEventListener('click',(e)=>{
+    if(getComputedStyle(btn).display==='none') return; // desktop — sidebar always visible
+    if(nav.classList.contains('open')) return;         // already open
+    if(e.clientX>60) return;                           // not left edge
+    if(btn.contains(e.target)||nav.contains(e.target)||overlay.contains(e.target)) return;
+    nav.classList.add('open');
+    overlay.classList.add('open');
+    btn.textContent='✕';
+  });
 })();
 </script>
 </body>
