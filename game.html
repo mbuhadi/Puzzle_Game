@@ -1433,9 +1433,9 @@ function buildCourtyardCaches() {
     c.fillStyle = '#e8e4de';
     c.fillRect(HWAL, HWAL, HW-HWAL*2, HH-HWAL*2);
     const TILE_COLORS = [
-      '#b8bcbe','#b0b5b8','#a8adb0','#a0a6a9','#b4b9bc',
-      '#9ca2a5','#d0cecc','#cccac8','#c8c5c2','#c3c0bc',
-      '#ceccc9','#d4d2d0',
+      '#9fb8d0','#8aaac4','#7a9db9','#6d90ae','#95b2cc',
+      '#608aa4','#e8d8b8','#e0cca8','#d8c098','#cfb488',
+      '#dcc9a0','#eaded8',
     ];
     for (let r = 0; r < MRows; r++) {
       for (let cc = 0; cc < MCols; cc++) {
@@ -1490,36 +1490,6 @@ function drawHouse() {
   if (!courtyardBase) buildCourtyardCaches();
   ctx.drawImage(courtyardBase, 0, 0);
 
-  // Clock numbers on mosaic tiles
-  {
-    const glowRadius = CLOCK_HIT_R; // glows exactly when the number registers
-    const arabicNums = ['١٢','١','٢','٣','٤','٥','٦','٧','٨','٩','١٠','١١'];
-    ctx.save();
-    ctx.font = 'bold 22px Amiri, serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    for (let i = 0; i < 12; i++) {
-      const { x: nx, y: ny } = CLOCK_SNAP[i];
-      const dx = player.x - nx, dy = player.y - ny;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      const colorRadius = 60;
-      const ct = Math.max(0, 1 - dist / colorRadius);
-      const cr = Math.round(60 + 90 * ct);
-      const cg = Math.round(38 + 52 * ct);
-      const cb = Math.round(5  + 15 * ct);
-      if (dist < glowRadius) {
-        const t = Math.pow(1 - dist / glowRadius, 10);
-        ctx.shadowColor = '#ffe8a0';
-        ctx.shadowBlur = 10 * t;
-        ctx.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${0.80 + 0.18 * t})`;
-      } else {
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = `rgba(${cr}, ${cg}, ${cb}, 0.80)`;
-      }
-      ctx.fillText(arabicNums[i], nx, ny);
-    }
-    ctx.restore();
-  }
 
   if (!trapdoorOpen) {
     // Prerendered water gradient + camel mosaic
