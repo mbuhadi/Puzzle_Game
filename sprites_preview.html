@@ -2,156 +2,414 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Sprite Preview — SNES Aladdin × Undertale</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sprites & Components</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #100c1e; color: #e8d8a0; font-family: monospace; padding: 24px; }
-  h1 { color: #f0c030; margin-bottom: 4px; letter-spacing: 2px; }
-  .subtitle { color: #6b30a0; margin-bottom: 32px; font-size: 13px; }
-  .section { margin-bottom: 40px; }
-  h2 { color: #1a9c8e; font-size: 14px; letter-spacing: 1px; border-bottom: 1px solid #3a2868; padding-bottom: 6px; margin-bottom: 16px; }
-  .row { display: flex; align-items: flex-end; gap: 32px; flex-wrap: wrap; }
-  .item { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-  .item label { font-size: 11px; color: #8878b8; }
-  canvas { image-rendering: pixelated; }
-  .tile-row { display: flex; gap: 4px; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #100c1e;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 8px;
+  min-height: 100vh;
+}
+a.back {
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  color: #f0c030;
+  text-decoration: none;
+  letter-spacing: 1px;
+  margin-bottom: 14px;
+  align-self: flex-start;
+  padding-left: 8px;
+}
+canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  max-width: 100%;
+}
 </style>
 </head>
 <body>
-<h1>GAME SPRITES</h1>
-<p class="subtitle">SNES Aladdin × Undertale — top-down aesthetic</p>
-
-<div class="section" id="sprites-section">
-  <h2>CHARACTERS</h2>
-  <div class="row" id="char-row"></div>
-</div>
-
-<div class="section" id="props-section">
-  <h2>PROPS</h2>
-  <div class="row" id="prop-row"></div>
-</div>
-
-<div class="section">
-  <h2>FLOOR TILES (40×40, shown at 2×)</h2>
-  <div class="row" id="floor-row"></div>
-</div>
-
-<div class="section">
-  <h2>WALL TILES (40×40, shown at 2×)</h2>
-  <div class="row" id="wall-row"></div>
-</div>
-
-<div class="section">
-  <h2>SAMPLE ROOM LAYOUTS</h2>
-  <div class="row" id="room-row"></div>
-</div>
-
-<script src="sprites.js"></script>
+<a class="back" href="index.html">← Back</a>
+<canvas id="c"></canvas>
 <script>
-const { player, merchant, guard, genie, lamp, chest, door } = window.GAME_SPRITES;
-const { drawSandTile, drawPalaceTile, drawDungeonTile,
-        drawDesertWall, drawPalaceWall, drawDungeonWall,
-        fillWithTiles, PALETTE } = window.GAME_TILES;
-
-// ── Scale up a sprite canvas for preview ─────────────────────────────────────
-function scaleUp(src, scale = 4) {
+// ── Sprite builder ────────────────────────────────────────────────────────────
+function makeSprite(rows, pal, px) {
+  const W = rows[0].length, H = rows.length;
   const cv = document.createElement('canvas');
-  cv.width  = src.width  * scale;
-  cv.height = src.height * scale;
+  cv.width = W * px; cv.height = H * px;
   const g = cv.getContext('2d');
-  g.imageSmoothingEnabled = false;
-  g.drawImage(src, 0, 0, cv.width, cv.height);
+  rows.forEach((row, r) => {
+    for (let c = 0; c < row.length; c++) {
+      const col = pal[row[c]];
+      if (col) { g.fillStyle = col; g.fillRect(c*px, r*px, px, px); }
+    }
+  });
   return cv;
 }
 
-function addItem(parentId, canvas, labelText) {
-  const wrap = document.createElement('div');
-  wrap.className = 'item';
-  wrap.appendChild(canvas);
-  const lbl = document.createElement('label');
-  lbl.textContent = labelText;
-  wrap.appendChild(lbl);
-  document.getElementById(parentId).appendChild(wrap);
+// ── Player — red fez, teal vest, purple pants (13×16) ────────────────────────
+const SPR_PLAYER = makeSprite([
+  '....FFFFF....',
+  '...FFFFFFF...',
+  '..FFFFFFFGF..',
+  '..SSSSSSSSS..',
+  '.SSSSSSSSSSS.',
+  '.SSeSSSSSeSS.',
+  '.SSSmSSSSSSS.',
+  '..GGGGGGGGG..',
+  '.VTTTGBGTTTV.',
+  '.VTTPPPPPTV..',
+  'PPPPPPPPPPPP.',
+  'PPPPPPPPPPPP.',
+  '.PPbPPPPPbPP.',
+  '..bbbb..bbbb.',
+  '..bBbb..bBbb.',
+  '.............',
+], {
+  F:'#c0211a', G:'#f0c030', S:'#e8b88a', e:'#0d0d1e', m:'#c9935f',
+  V:'#1a9c8e', T:'#e8d8a0', B:'#f0c030', P:'#6b30a0', b:'#4a2c10',
+}, 2);
+
+// ── Merchant — cream turban, white beard, red robe (13×16) ───────────────────
+const SPR_MERCHANT = makeSprite([
+  '....TTTTT....',
+  '...TTTTTTT...',
+  '..TTTTTTTTT..',
+  '.GTTTTTTTTTG.',
+  '.SSSSSSSSSSS.',
+  '.sSeSSSSesSs.',
+  '.SSSSdSSSSSS.',
+  '.SSwSSSSSwSS.',
+  '..WWWWWWWWW..',
+  '.WWWWWWWWWWW.',
+  '.WVRRRRRRRVW.',
+  '.VVRRRRRRRVV.',
+  '.VVRRRRRRRV..',
+  '..VRRRRRRV...',
+  '...VVVVVVV...',
+  '.............',
+], {
+  T:'#e8d8c0', G:'#f0c030', S:'#c98858', s:'#a06838', e:'#0d0d1e',
+  d:'#a06838', W:'#f0ece0', R:'#c83820', V:'#e87820',
+}, 2);
+
+// ── Guard — dark helm, silver chest plate, gold badge (13×16) ────────────────
+const SPR_GUARD = makeSprite([
+  '....HHHHHH...',
+  '...HHHHHHHH..',
+  '..HHhHHHHhHH.',
+  '..HSSSSSSSh..',
+  '.hSSeSSSeSh..',
+  '.hSSSSSSSSh..',
+  '..hSSSSSSh...',
+  '..AAAAAAAAA..',
+  '.AAAAAAAAAA..',
+  '.AaAAGAAAAa..',
+  '.AaAAAAAAAA..',
+  'AAAAAAAAAAAAA',
+  '.AAAAAaAAAAA.',
+  '..LLLLaLLLL..',
+  '..lLll..lLll.',
+  '.............',
+], {
+  H:'#2a2040', h:'#1a1030', S:'#e8b88a', e:'#0d0d1e',
+  A:'#8898c0', a:'#5060a0', G:'#f0c030', L:'#3d1a60', l:'#2a1040',
+}, 2);
+
+// ── Genie — blue wisp body, giant expressive eyes (13×16) ────────────────────
+const SPR_GENIE = makeSprite([
+  '..gGGGGGGGG..',
+  '.gGGGGGGGGGg.',
+  '.GGGeGGGGGGG.',
+  '.GGGGGGGGGGg.',
+  '.GGGEGGGEGGg.',
+  '.GGGEGGGEGGg.',
+  '.GGGgGGGGGGg.',
+  '.GGGoooooGGg.',
+  '..GGGoGGoGG..',
+  '..gGGGGGGGg..',
+  '...GGGGGGG...',
+  '..GGGgGGGG...',
+  '.GGGGgGGGGG..',
+  '..GGgggGGG...',
+  '...GgggGG....',
+  '....gggg.....',
+], {
+  G:'#1870c0', g:'#0d4888', e:'#f0c030', E:'#f0f0f8', o:'#0d0d1e',
+}, 2);
+
+// ── Lamp (10×8) ───────────────────────────────────────────────────────────────
+const SPR_LAMP = makeSprite([
+  '....GG....',
+  '...GGGG...',
+  '..GGggGG..',
+  '.GGggggGG.',
+  'GGGggggGGG',
+  '.GGGggGGG.',
+  '..GGGGGGG.',
+  '...lllll..',
+], { G:'#f0c030', g:'#b88a18', l:'#c88010' }, 2);
+
+// ── Chest (12×8) ─────────────────────────────────────────────────────────────
+const SPR_CHEST = makeSprite([
+  '.BBBBBBBBBB.',
+  'BBBBbBBbBBBB',
+  'BBBGGGGGGbBB',
+  'BBGgggggGGBB',
+  'BBGgGGGgGGBB',
+  'BBBGGGGGGbBB',
+  'BBBBBBBBBBB.',
+  '............',
+], { B:'#4a2c10', b:'#2c1808', G:'#f0c030', g:'#b88a18' }, 2);
+
+// ── Door (17×20) ─────────────────────────────────────────────────────────────
+const SPR_DOOR = makeSprite([
+  '....GGGGGGGGG....',
+  '...GGGgGGGgGGG...',
+  '..GGGGGGGGGGGGg..',
+  '.GGGTTTTTTTTTGGg.',
+  '.GTTTTTTTTTTTTGg.',
+  '.GTTtTTTTTTtTTGg.',
+  '.GTTTTtTTtTTTTGg.',
+  '.GTTtTTTTTTtTTGg.',
+  '.GTTTTtTTtTTTTGg.',
+  '.GTTtTTTTTTtTTGg.',
+  '.GTTTTTTTTTTTTGg.',
+  '.GTTTTkkkTTTTTGg.',
+  '.GTTTTkkkTTTTTGg.',
+  '.GTTTTTTTTTTTTGg.',
+  '.GTTTTTTTTTTTTGg.',
+  '.GTTTTTTTTTTTTGg.',
+  '.GGGGGGGGGGGGGGg.',
+  '..GGGgGGGgGGGGg..',
+  '.................',
+  '.................',
+], { G:'#f0c030', g:'#b88a18', T:'#1a9c8e', t:'#0d5c55', k:'#2c1808' }, 2);
+
+// ── Tile drawing (all paint into a 40×40 region at x,y) ──────────────────────
+function tileSand(g, x, y) {
+  g.fillStyle = '#dfc07a'; g.fillRect(x, y, 40, 40);
+  g.strokeStyle = '#c8a050'; g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(x, y+20); g.lineTo(x+40, y+20);
+  g.moveTo(x+20, y); g.lineTo(x+20, y+40);
+  g.stroke();
+  g.fillStyle = '#9a7030';
+  [[2,2],[36,2],[2,36],[36,36]].forEach(([dx,dy]) => g.fillRect(x+dx, y+dy, 2, 2));
+}
+function tilePalace(g, x, y, v) {
+  g.fillStyle = v ? '#f0e6c8' : '#e8d8a0'; g.fillRect(x, y, 40, 40);
+  g.strokeStyle = '#c8a050'; g.lineWidth = 1.5;
+  g.strokeRect(x+2, y+2, 36, 36);
+  g.fillStyle = v ? '#c8a050' : '#1a9c8e';
+  g.beginPath();
+  g.moveTo(x+20, y+6); g.lineTo(x+34, y+20);
+  g.lineTo(x+20, y+34); g.lineTo(x+6, y+20);
+  g.closePath(); g.fill();
+}
+function tileDungeon(g, x, y) {
+  g.fillStyle = '#1e1830'; g.fillRect(x, y, 40, 40);
+  g.strokeStyle = '#100c1e'; g.lineWidth = 1;
+  g.strokeRect(x+1, y+1, 38, 38);
+  g.strokeStyle = '#3a2868'; g.lineWidth = 0.5;
+  g.beginPath();
+  g.moveTo(x+3, y+3); g.lineTo(x+37, y+3);
+  g.moveTo(x+3, y+3); g.lineTo(x+3, y+37);
+  g.stroke();
+}
+function wallDesert(g, x, y) {
+  g.fillStyle = '#c8a050'; g.fillRect(x, y, 40, 40);
+  g.strokeStyle = '#9a7030'; g.lineWidth = 1;
+  for (let r = 0; r < 3; r++) {
+    const oy = y + 4 + r * 12, off = (r % 2) * 20;
+    for (let c = -1; c < 3; c++) g.strokeRect(x + off + c*20 + 1, oy + 1, 18, 10);
+  }
+}
+function wallPalace(g, x, y) {
+  g.fillStyle = '#0d5c55'; g.fillRect(x, y, 40, 40);
+  g.fillStyle = '#f0c030';
+  g.fillRect(x, y, 40, 3); g.fillRect(x, y+37, 40, 3);
+  g.strokeStyle = '#b88a18'; g.lineWidth = 1;
+  for (let i = 0; i <= 2; i++) {
+    g.beginPath(); g.moveTo(x + i*20, y+3); g.lineTo(x + i*20, y+37); g.stroke();
+  }
+}
+function wallDungeon(g, x, y) {
+  g.fillStyle = '#2a2040'; g.fillRect(x, y, 40, 40);
+  g.strokeStyle = '#5a5068'; g.lineWidth = 0.8;
+  for (let r = 0; r < 3; r++) {
+    const oy = y + r*13;
+    g.beginPath(); g.moveTo(x, oy+10); g.lineTo(x+40, oy+10); g.stroke();
+    const jx = x + (r%2 === 0 ? 20 : 10);
+    g.beginPath(); g.moveTo(jx, oy); g.lineTo(jx, oy+10); g.stroke();
+  }
+  g.strokeStyle = '#3a2868'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(x+8, y+5); g.lineTo(x+15, y+20); g.lineTo(x+10, y+35); g.stroke();
 }
 
-// Characters (shown at 6×)
-[[player,'Player\n(Aladdin)'],[merchant,'Merchant'],[guard,'Guard'],[genie,'Genie']]
-  .forEach(([spr, name]) => addItem('char-row', scaleUp(spr, 6), name));
+// ── Render to a single canvas ─────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const CW = 900, CH = 1060;
+canvas.width = CW; canvas.height = CH;
 
-// Props (shown at 5×)
-[[lamp,'Lamp'],[chest,'Chest'],[door,'Door']]
-  .forEach(([spr, name]) => addItem('prop-row', scaleUp(spr, 5), name));
+// Fit canvas width to viewport
+const vw = Math.min(window.innerWidth - 16, CW);
+canvas.style.width  = vw + 'px';
+canvas.style.height = Math.round(CH * vw / CW) + 'px';
 
-// Floor tiles
-[
-  ['Sand floor',    (g,x,y) => drawSandTile(g,x,y)],
-  ['Palace tile A', (g,x,y) => drawPalaceTile(g,x,y,0)],
-  ['Palace tile B', (g,x,y) => drawPalaceTile(g,x,y,1)],
-  ['Dungeon stone', (g,x,y) => drawDungeonTile(g,x,y)],
-].forEach(([name, fn]) => {
-  const cv = document.createElement('canvas');
-  cv.width = 80; cv.height = 80;
-  const g = cv.getContext('2d');
-  fn(g, 0, 0);  // draw single tile at 2× via scale canvas
-  const scaled = document.createElement('canvas');
-  scaled.width = 160; scaled.height = 160;
-  const sg = scaled.getContext('2d');
-  sg.imageSmoothingEnabled = false;
-  sg.drawImage(cv, 0, 0, 160, 160);
-  addItem('floor-row', scaled, name);
-});
+const ctx = canvas.getContext('2d');
+ctx.fillStyle = '#100c1e';
+ctx.fillRect(0, 0, CW, CH);
 
-// Wall tiles
-[
-  ['Desert wall',  drawDesertWall],
-  ['Palace wall',  drawPalaceWall],
-  ['Dungeon wall', drawDungeonWall],
-].forEach(([name, fn]) => {
-  const cv = document.createElement('canvas');
-  cv.width = 40; cv.height = 40;
-  fn(cv.getContext('2d'), 0, 0);
-  const scaled = document.createElement('canvas');
-  scaled.width = 160; scaled.height = 160;
-  const sg = scaled.getContext('2d');
-  sg.imageSmoothingEnabled = false;
-  sg.drawImage(cv, 0, 0, 160, 160);
-  addItem('wall-row', scaled, name);
-});
-
-// ── Sample room layouts ───────────────────────────────────────────────────────
-function makeRoom(label, wallFn, floorFn, accent) {
-  const W = 280, H = 200;
-  const cv = document.createElement('canvas');
-  cv.width = W; cv.height = H;
-  const g = cv.getContext('2d');
-
-  // walls (border)
-  fillWithTiles(g, 0, 0, W, H, wallFn);
-  // floor (inner)
-  const WALL = 40;
-  fillWithTiles(g, WALL, WALL, W - WALL*2, H - WALL*2, floorFn);
-
-  // place a sprite in the room centre
-  g.imageSmoothingEnabled = false;
-  const spr = player;
-  g.drawImage(spr,
-    W/2 - spr.width/2,
-    H/2 - spr.height/2 + 10);
-
-  // accent glow around sprite (Undertale feel)
-  g.strokeStyle = accent;
-  g.lineWidth = 1;
-  g.strokeRect(W/2 - 14, H/2 - 4, 28, 28);
-
-  addItem('room-row', cv, label);
+// Divider line
+function divider(y) {
+  ctx.strokeStyle = '#1e1830';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(24, y); ctx.lineTo(CW-24, y); ctx.stroke();
 }
 
-makeRoom('Desert Bazaar',
-  drawDesertWall, drawSandTile, PALETTE.GOLD);
-makeRoom('Golden Palace',
-  drawPalaceWall, drawPalaceTile, PALETTE.TEAL);
-makeRoom('Dungeon',
-  drawDungeonWall, drawDungeonTile, PALETTE.DUNGEON_TRIM);
+// Section heading
+function heading(text, y) {
+  ctx.font = 'bold 12px monospace';
+  ctx.fillStyle = '#1a9c8e';
+  ctx.textAlign = 'left';
+  ctx.fillText(text, 24, y);
+}
+
+// Label centred below something
+function lbl(text, cx, y) {
+  ctx.font = '11px monospace';
+  ctx.fillStyle = '#8878b8';
+  ctx.textAlign = 'center';
+  ctx.fillText(text, cx, y);
+}
+
+// Draw a sprite canvas scaled up onto ctx
+function blit(spr, cx, cy, scale) {
+  const dw = spr.width * scale, dh = spr.height * scale;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(spr, cx - dw/2, cy, dw, dh);
+}
+
+// Draw a 40×40 tile scaled up
+function blitTile(fn, cx, cy, scale, ...args) {
+  const T = 40;
+  ctx.save();
+  ctx.translate(cx - T*scale/2, cy);
+  ctx.scale(scale, scale);
+  fn(ctx, 0, 0, ...args);
+  ctx.restore();
+}
+
+// ── Title ─────────────────────────────────────────────────────────────────────
+ctx.font = 'bold 22px monospace';
+ctx.fillStyle = '#f0c030';
+ctx.textAlign = 'left';
+ctx.fillText('SPRITES & COMPONENTS', 24, 42);
+ctx.font = '12px monospace';
+ctx.fillStyle = '#6b30a0';
+ctx.fillText('SNES Aladdin × Undertale — top-down pixel art', 24, 62);
+
+// ── CHARACTERS ────────────────────────────────────────────────────────────────
+divider(76); heading('CHARACTERS', 96);
+
+const CHAR_SCALE = 5;
+const chars = [
+  [SPR_PLAYER,   'Player'],
+  [SPR_MERCHANT, 'Merchant'],
+  [SPR_GUARD,    'Guard'],
+  [SPR_GENIE,    'Genie'],
+];
+const CHAR_Y = 110;
+chars.forEach(([spr, name], i) => {
+  const cx = 112 + i * 226;
+  blit(spr, cx, CHAR_Y, CHAR_SCALE);
+  lbl(name, cx, CHAR_Y + spr.height * CHAR_SCALE + 14);
+});
+
+// ── PROPS ─────────────────────────────────────────────────────────────────────
+divider(310); heading('PROPS', 330);
+
+const PROP_SCALE = 5;
+const PROP_Y = 345;
+[[SPR_LAMP, 'Lamp', 150], [SPR_CHEST, 'Chest', 450], [SPR_DOOR, 'Door', 750]]
+  .forEach(([spr, name, cx]) => {
+    blit(spr, cx, PROP_Y, PROP_SCALE);
+    lbl(name, cx, PROP_Y + spr.height * PROP_SCALE + 14);
+  });
+
+// ── FLOOR TILES ───────────────────────────────────────────────────────────────
+divider(510); heading('FLOOR TILES', 530);
+
+const TILE_SCALE = 3;
+const FLOOR_Y = 545;
+[
+  [(g,x,y) => tileSand(g,x,y),     'Sand'],
+  [(g,x,y) => tilePalace(g,x,y,0), 'Palace A'],
+  [(g,x,y) => tilePalace(g,x,y,1), 'Palace B'],
+  [(g,x,y) => tileDungeon(g,x,y),  'Dungeon'],
+].forEach(([fn, name], i) => {
+  const cx = 112 + i * 226;
+  blitTile(fn, cx, FLOOR_Y, TILE_SCALE);
+  lbl(name, cx, FLOOR_Y + 40 * TILE_SCALE + 14);
+});
+
+// ── WALL TILES ────────────────────────────────────────────────────────────────
+divider(700); heading('WALL TILES', 720);
+
+const WALL_Y = 735;
+[
+  [(g,x,y) => wallDesert(g,x,y),  'Desert wall'],
+  [(g,x,y) => wallPalace(g,x,y),  'Palace wall'],
+  [(g,x,y) => wallDungeon(g,x,y), 'Dungeon wall'],
+].forEach(([fn, name], i) => {
+  const cx = 150 + i * 300;
+  blitTile(fn, cx, WALL_Y, TILE_SCALE);
+  lbl(name, cx, WALL_Y + 40 * TILE_SCALE + 14);
+});
+
+// ── ROOM SAMPLES ──────────────────────────────────────────────────────────────
+divider(880); heading('ROOM SAMPLES', 900);
+
+const RW = 240, RH = 140, BORDER = 40;
+const ROOM_Y = 916;
+
+function drawRoom(wallFn, floorFn, rx, ry) {
+  // tile walls edge-to-edge
+  for (let y = 0; y < RH; y += 40)
+    for (let x = 0; x < RW; x += 40)
+      wallFn(ctx, rx + x, ry + y);
+  // tile interior
+  for (let y = 0; y < RH - BORDER*2; y += 40)
+    for (let x = 0; x < RW - BORDER*2; x += 40)
+      floorFn(ctx, rx + BORDER + x, ry + BORDER + y);
+  // player centred
+  const spr = SPR_PLAYER, sc = 3;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(spr,
+    rx + RW/2 - spr.width*sc/2,
+    ry + RH/2 - spr.height*sc/2 + 10,
+    spr.width*sc, spr.height*sc);
+}
+
+const rooms = [
+  [wallDesert,  tileSand,    'Desert Bazaar', '#f0c030'],
+  [wallPalace,  tilePalace,  'Golden Palace', '#1a9c8e'],
+  [wallDungeon, tileDungeon, 'Dungeon',       '#3a2868'],
+];
+rooms.forEach(([wFn, fFn, name, accent], i) => {
+  const rx = 30 + i * 295;
+  drawRoom(wFn, fFn, rx, ROOM_Y);
+  // accent border
+  ctx.strokeStyle = accent; ctx.lineWidth = 2;
+  ctx.strokeRect(rx, ROOM_Y, RW, RH);
+  lbl(name, rx + RW/2, ROOM_Y + RH + 16);
+});
 </script>
 </body>
 </html>
