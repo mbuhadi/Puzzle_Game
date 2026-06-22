@@ -1065,7 +1065,7 @@ function drawCamelMosaic(c, rgb, aBase, aVar) {
 }
 
 // Mosaic tile grid & clock-number tile positions
-const MTILE = 28;
+const MTILE = 21;
 const CLOCK_TILES = new Set();
 const CLOCK_SNAP = [];
 for (let _i = 0; _i < 12; _i++) {
@@ -1433,9 +1433,9 @@ function buildCourtyardCaches() {
     c.fillStyle = '#e8e4de';
     c.fillRect(HWAL, HWAL, HW-HWAL*2, HH-HWAL*2);
     const TILE_COLORS = [
-      '#b5c2cb','#aab9c3','#a0b1bc','#98aab6','#b0bfc8',
-      '#93a6b2','#d5d0c8','#d1cbc2','#ccc5bb','#c7c0b5',
-      '#d3cdc5','#d9d4cc',
+      '#b8bcbe','#b0b5b8','#a8adb0','#a0a6a9','#b4b9bc',
+      '#9ca2a5','#d0cecc','#cccac8','#c8c5c2','#c3c0bc',
+      '#ceccc9','#d4d2d0',
     ];
     for (let r = 0; r < MRows; r++) {
       for (let cc = 0; cc < MCols; cc++) {
