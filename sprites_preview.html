@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sprite Preview — SNES Aladdin × Undertale</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #100c1e; color: #e8d8a0; font-family: monospace; padding: 24px; }
+  h1 { color: #f0c030; margin-bottom: 4px; letter-spacing: 2px; }
+  .subtitle { color: #6b30a0; margin-bottom: 32px; font-size: 13px; }
+  .section { margin-bottom: 40px; }
+  h2 { color: #1a9c8e; font-size: 14px; letter-spacing: 1px; border-bottom: 1px solid #3a2868; padding-bottom: 6px; margin-bottom: 16px; }
+  .row { display: flex; align-items: flex-end; gap: 32px; flex-wrap: wrap; }
+  .item { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .item label { font-size: 11px; color: #8878b8; }
+  canvas { image-rendering: pixelated; }
+  .tile-row { display: flex; gap: 4px; }
+</style>
+</head>
+<body>
+<h1>GAME SPRITES</h1>
+<p class="subtitle">SNES Aladdin × Undertale — top-down aesthetic</p>
+
+<div class="section" id="sprites-section">
+  <h2>CHARACTERS</h2>
+  <div class="row" id="char-row"></div>
+</div>
+
+<div class="section" id="props-section">
+  <h2>PROPS</h2>
+  <div class="row" id="prop-row"></div>
+</div>
+
+<div class="section">
+  <h2>FLOOR TILES (40×40, shown at 2×)</h2>
+  <div class="row" id="floor-row"></div>
+</div>
+
+<div class="section">
+  <h2>WALL TILES (40×40, shown at 2×)</h2>
+  <div class="row" id="wall-row"></div>
+</div>
+
+<div class="section">
+  <h2>SAMPLE ROOM LAYOUTS</h2>
+  <div class="row" id="room-row"></div>
+</div>
+
+<script src="sprites.js"></script>
+<script>
+const { player, merchant, guard, genie, lamp, chest, door } = window.GAME_SPRITES;
+const { drawSandTile, drawPalaceTile, drawDungeonTile,
+        drawDesertWall, drawPalaceWall, drawDungeonWall,
+        fillWithTiles, PALETTE } = window.GAME_TILES;
+
+// ── Scale up a sprite canvas for preview ─────────────────────────────────────
+function scaleUp(src, scale = 4) {
+  const cv = document.createElement('canvas');
+  cv.width  = src.width  * scale;
+  cv.height = src.height * scale;
+  const g = cv.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.drawImage(src, 0, 0, cv.width, cv.height);
+  return cv;
+}
+
+function addItem(parentId, canvas, labelText) {
+  const wrap = document.createElement('div');
+  wrap.className = 'item';
+  wrap.appendChild(canvas);
+  const lbl = document.createElement('label');
+  lbl.textContent = labelText;
+  wrap.appendChild(lbl);
+  document.getElementById(parentId).appendChild(wrap);
+}
+
+// Characters (shown at 6×)
+[[player,'Player\n(Aladdin)'],[merchant,'Merchant'],[guard,'Guard'],[genie,'Genie']]
+  .forEach(([spr, name]) => addItem('char-row', scaleUp(spr, 6), name));
+
+// Props (shown at 5×)
+[[lamp,'Lamp'],[chest,'Chest'],[door,'Door']]
+  .forEach(([spr, name]) => addItem('prop-row', scaleUp(spr, 5), name));
+
+// Floor tiles
+[
+  ['Sand floor',    (g,x,y) => drawSandTile(g,x,y)],
+  ['Palace tile A', (g,x,y) => drawPalaceTile(g,x,y,0)],
+  ['Palace tile B', (g,x,y) => drawPalaceTile(g,x,y,1)],
+  ['Dungeon stone', (g,x,y) => drawDungeonTile(g,x,y)],
+].forEach(([name, fn]) => {
+  const cv = document.createElement('canvas');
+  cv.width = 80; cv.height = 80;
+  const g = cv.getContext('2d');
+  fn(g, 0, 0);  // draw single tile at 2× via scale canvas
+  const scaled = document.createElement('canvas');
+  scaled.width = 160; scaled.height = 160;
+  const sg = scaled.getContext('2d');
+  sg.imageSmoothingEnabled = false;
+  sg.drawImage(cv, 0, 0, 160, 160);
+  addItem('floor-row', scaled, name);
+});
+
+// Wall tiles
+[
+  ['Desert wall',  drawDesertWall],
+  ['Palace wall',  drawPalaceWall],
+  ['Dungeon wall', drawDungeonWall],
+].forEach(([name, fn]) => {
+  const cv = document.createElement('canvas');
+  cv.width = 40; cv.height = 40;
+  fn(cv.getContext('2d'), 0, 0);
+  const scaled = document.createElement('canvas');
+  scaled.width = 160; scaled.height = 160;
+  const sg = scaled.getContext('2d');
+  sg.imageSmoothingEnabled = false;
+  sg.drawImage(cv, 0, 0, 160, 160);
+  addItem('wall-row', scaled, name);
+});
+
+// ── Sample room layouts ───────────────────────────────────────────────────────
+function makeRoom(label, wallFn, floorFn, accent) {
+  const W = 280, H = 200;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+
+  // walls (border)
+  fillWithTiles(g, 0, 0, W, H, wallFn);
+  // floor (inner)
+  const WALL = 40;
+  fillWithTiles(g, WALL, WALL, W - WALL*2, H - WALL*2, floorFn);
+
+  // place a sprite in the room centre
+  g.imageSmoothingEnabled = false;
+  const spr = player;
+  g.drawImage(spr,
+    W/2 - spr.width/2,
+    H/2 - spr.height/2 + 10);
+
+  // accent glow around sprite (Undertale feel)
+  g.strokeStyle = accent;
+  g.lineWidth = 1;
+  g.strokeRect(W/2 - 14, H/2 - 4, 28, 28);
+
+  addItem('room-row', cv, label);
+}
+
+makeRoom('Desert Bazaar',
+  drawDesertWall, drawSandTile, PALETTE.GOLD);
+makeRoom('Golden Palace',
+  drawPalaceWall, drawPalaceTile, PALETTE.TEAL);
+makeRoom('Dungeon',
+  drawDungeonWall, drawDungeonTile, PALETTE.DUNGEON_TRIM);
+</script>
+</body>
+</html>
