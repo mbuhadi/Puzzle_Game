@@ -267,6 +267,7 @@ function updateFade() {
       else                       { player.x = R1W+PLAYER_R+20; player.y = VIEWPORT_H/2; }
     }
     else if (currentScene === 'room7')      { player.x = R1W+PLAYER_R+20; player.y = VIEWPORT_H/2; }
+    interactCooldown = 90; // ~1.5 s — prevents re-trigger on arrival
     fadeDir = -1;
   }
   if (fadeDir === -1 && fadeAlpha <= 0) fadeDir = 0;
@@ -283,6 +284,7 @@ const interactable = { x: R1/2, y: 60, activated: false };
 let pulseTime     = 0;
 let tWasDown      = false;
 let interfaceOpen = false;
+let interactCooldown = 0; // frames to suppress proximity re-trigger after a transition
 
 // ── Driveway scenery ──
 // An open forecourt: palms in the top corners and the house gate on the top wall
@@ -647,73 +649,17 @@ canvas.addEventListener('touchstart', e => {
   const cx = (touch.clientX - r.left) * (VIEWPORT / r.width);
   const cy = (touch.clientY - r.top)  * (VIEWPORT_H / r.height);
 
-  // Forward touch as mousedown so existing UI (tree, lock dials, room6/7 cells) works
+  // Forward touch as mousedown so in-panel UI (tree nodes, lock dials, room6/7 cells) works
   canvas.dispatchEvent(new MouseEvent('mousedown', {
     bubbles: true, cancelable: true,
     clientX: touch.clientX, clientY: touch.clientY
   }));
-  if (pendingInteract) return; // thought bubble tapped — mousedown already set it
 
-  // Overlay panels (canvas-rendered) – any tap closes them
-  if (kitchenWindowOpen || livingRoomWindowOpen || studyPaperOpen || tvOpen || basementNoteOpen) {
-    pendingInteract = true; return;
-  }
-  // Complex HTML-driven panels handled above by mousedown
-  if (interfaceOpen || lockOpen) return;
+  // If a full-screen panel is open, taps are consumed by the panel (mousedown above handles it)
+  if (interfaceOpen || lockOpen || kitchenWindowOpen || livingRoomWindowOpen ||
+      studyPaperOpen || tvOpen || basementNoteOpen) return;
 
-  // Returns true when the tap (cx,cy) is near game point (ix,iy) and player is in range
-  function tapOnObj(ix, iy, inRange, hitR) {
-    const dx = cx - ix, dy = cy - iy;
-    return inRange && Math.sqrt(dx*dx + dy*dy) <= (hitR || 150);
-  }
-
-  if (currentScene === 'room1') {
-    if (tapOnObj(interactable.x, interactable.y, distToObj() <= INTERACT_RANGE)) {
-      pendingInteract = true; return;
-    }
-  } else if (currentScene === 'house') {
-    for (const door of HOUSE_DOORS) {
-      if (tapOnObj(door.cx, door.cy, houseDoorDist(door) <= HOUSE_INTERACT_RANGE)) {
-        pendingInteract = true; return;
-      }
-    }
-    if (trapdoorOpen) {
-      const _dx = player.x - TRAPDOOR.cx, _dy = player.y - TRAPDOOR.cy;
-      if (tapOnObj(TRAPDOOR.cx, TRAPDOOR.cy, Math.sqrt(_dx*_dx+_dy*_dy) <= HOUSE_INTERACT_RANGE)) {
-        pendingInteract = true; return;
-      }
-    }
-  } else if (currentScene === 'room_left') {
-    if (tapOnObj(KWIN.cx, KWIN.cy, kitchenWinDist() <= INTERACT_RANGE)) {
-      pendingInteract = true; return;
-    }
-  } else if (currentScene === 'room_right') {
-    if (tapOnObj(LWIN.cx,   LWIN.cy,   livingRoomWinDist() <= INTERACT_RANGE) ||
-        tapOnObj(TV_POS.cx, TV_POS.cy, tvDist()            <= INTERACT_RANGE)) {
-      pendingInteract = true; return;
-    }
-  } else if (currentScene === 'room_top') {
-    if (tapOnObj(STUDY_PAPER.cx, STUDY_PAPER.cy, studyPaperDist() <= INTERACT_RANGE)) {
-      pendingInteract = true; return;
-    }
-  } else if (currentScene === 'basement') {
-    if (tapOnObj(BASEMENT_EXIT.cx,    BASEMENT_EXIT.cy,    basementExitDist()   <= HOUSE_INTERACT_RANGE) ||
-        tapOnObj(BASEMENT_NOTE.cx,    BASEMENT_NOTE.cy,    basementNoteDist()   <= INTERACT_RANGE) ||
-        tapOnObj(BASEMENT_R6_DOOR.cx, BASEMENT_R6_DOOR.cy, basementR6DoorDist() <= HOUSE_INTERACT_RANGE)) {
-      pendingInteract = true; return;
-    }
-  } else if (currentScene === 'room6') {
-    if (tapOnObj(R6_EXIT.cx,       R6_EXIT.cy,       r6ExitDist()      <= HOUSE_INTERACT_RANGE) ||
-        tapOnObj(R6_ROOM7_DOOR.cx, R6_ROOM7_DOOR.cy, r6Room7DoorDist() <= HOUSE_INTERACT_RANGE)) {
-      pendingInteract = true; return;
-    }
-  } else if (currentScene === 'room7') {
-    if (tapOnObj(R7_EXIT.cx, R7_EXIT.cy, r7ExitDist() <= HOUSE_INTERACT_RANGE)) {
-      pendingInteract = true; return;
-    }
-  }
-
-  // Default: start joystick at the tapped position
+  // Otherwise start the joystick for movement
   joystick = { cx, cy, ex: cx, ey: cy };
 }, { passive: false });
 
@@ -738,14 +684,12 @@ function distToObj() {
 function updateRoom1() {
   if (fadeDir !== 0) return;
   let dx = 0, dy = 0;
-  if (!interfaceOpen) {
-    if (keys['ArrowLeft']  || keys['a'] || keys['A']) dx -= 1;
-    if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 1;
-    if (keys['ArrowUp']    || keys['w'] || keys['W']) dy -= 1;
-    if (keys['ArrowDown']  || keys['s'] || keys['S']) dy += 1;
-  }
+  if (keys['ArrowLeft']  || keys['a'] || keys['A']) dx -= 1;
+  if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 1;
+  if (keys['ArrowUp']    || keys['w'] || keys['W']) dy -= 1;
+  if (keys['ArrowDown']  || keys['s'] || keys['S']) dy += 1;
   if (dx && dy) { dx *= Math.SQRT1_2; dy *= Math.SQRT1_2; }
-  if (!interfaceOpen && dx === 0 && dy === 0 && joystick) {
+  if (dx === 0 && dy === 0 && joystick) {
     const _jdx = joystick.ex - joystick.cx, _jdy = joystick.ey - joystick.cy;
     const _jd = Math.sqrt(_jdx*_jdx + _jdy*_jdy);
     if (_jd > 10) { dx = _jdx/_jd; dy = _jdy/_jd; }
@@ -759,24 +703,21 @@ function updateRoom1() {
     const bd = Math.sqrt(bdx*bdx + bdy*bdy), bmin = PALM_BASE_R + PLAYER_R;
     if (bd < bmin && bd > 0) { player.x += (bdx/bd)*(bmin-bd); player.y += (bdy/bd)*(bmin-bd); }
   }
+  pendingInteract = false;
 
-  const _pi = pendingInteract; if (_pi) { tWasDown = false; pendingInteract = false; }
-  const tDown = keys['t'] || keys['T'] || _pi;
-  if (tDown && !tWasDown) {
-    if (interfaceOpen) {
-      interfaceOpen = false;
-      openDropdown  = null;
-      if (puzzleSolved) triggerTransition('house');
-    } else if (distToObj() <= INTERACT_RANGE) {
-      if (puzzleSolved) {
-        triggerTransition('house');   // gate already unlocked — walk through
-      } else {
-        interfaceOpen = true;
-        interactable.activated = true;
-      }
+  // Proximity auto-open / auto-close
+  const inRange = distToObj() <= INTERACT_RANGE;
+  if (inRange && interactCooldown === 0) {
+    if (puzzleSolved) {
+      triggerTransition('house');
+    } else if (!interfaceOpen) {
+      interfaceOpen = true;
+      interactable.activated = true;
     }
+  } else if (!inRange && interfaceOpen) {
+    interfaceOpen = false;
+    openDropdown  = null;
   }
-  tWasDown = tDown;
   pulseTime += 0.05;
 }
 
@@ -793,16 +734,11 @@ function drawRoom1() {
     ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2.5;
     ctx.strokeRect(GATE.cx - GATE.w/2 - 25, GATE.top - 8, GATE.w + 50, GATE.h + 16);
     ctx.restore();
-    ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center';
-    ctx.strokeStyle = '#2a2418'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
-    ctx.strokeText('[T]', GATE.cx + GATE.w/2 + 48, GATE.top + GATE.h/2 + 5);
-    ctx.fillStyle = '#ffe066';
-    ctx.fillText('[T]', GATE.cx + GATE.w/2 + 48, GATE.top + GATE.h/2 + 5);
   }
   if (!interfaceOpen && distToObj() > INTERACT_RANGE) {
     ctx.fillStyle = '#777'; ctx.font = '13px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Walk up to the gate and press T', R1/2, GATE.top + GATE.h + 60);
+    ctx.fillText('Walk up to the gate', R1/2, GATE.top + GATE.h + 60);
   }
 
   if (!interfaceOpen) {
@@ -1193,7 +1129,7 @@ function updateHouse() {
   if (autoWalkFrames > 0) {
     // Auto-walk away from wall after returning from a sub-room
     dx = autoWalkDX; dy = autoWalkDY; autoWalkFrames--;
-  } else if (!lockOpen) {
+  } else {
     if(keys['ArrowLeft'] ||keys['a']||keys['A'])dx-=1;
     if(keys['ArrowRight']||keys['d']||keys['D'])dx+=1;
     if(keys['ArrowUp']   ||keys['w']||keys['W'])dy-=1;
@@ -1204,6 +1140,10 @@ function updateHouse() {
       const _jd = Math.sqrt(_jdx*_jdx + _jdy*_jdy);
       if (_jd > 10) { dx = _jdx/_jd; dy = _jdy/_jd; }
     }
+  }
+  // Auto-dismiss lock popup when player walks away from the top wall opening
+  if (lockOpen && (player.y > HWAL + 70 || Math.abs(player.x - 500) > DOOR_HALF + 30)) {
+    lockOpen = false;
   }
 
   // Threshold detection — walk through room openings (requires direction toward wall)
@@ -1239,24 +1179,17 @@ function updateHouse() {
     }
   }
 
-  const _pi = pendingInteract; if (_pi) { houseTWasDown = false; pendingInteract = false; }
-  const tDown = keys['t'] || keys['T'] || _pi;
-  if (tDown && !houseTWasDown) {
-    if (lockOpen) {
-      lockOpen = false;
-    } else if (trapdoorOpen) {
-      const tdx = player.x - TRAPDOOR.cx, tdy = player.y - TRAPDOOR.cy;
-      if (Math.sqrt(tdx*tdx+tdy*tdy) <= HOUSE_INTERACT_RANGE) triggerTransition('basement');
-      else {
-        const gate = HOUSE_DOORS.find(d => d.id === 'gate');
-        if (gate && houseDoorDist(gate) <= HOUSE_INTERACT_RANGE) triggerTransition('room1');
-      }
-    } else {
-      const gate = HOUSE_DOORS.find(d => d.id === 'gate');
-      if (gate && houseDoorDist(gate) <= HOUSE_INTERACT_RANGE) triggerTransition('room1');
+  pendingInteract = false;
+  // Proximity auto-trigger (guarded by cooldown and autoWalk)
+  if (interactCooldown === 0 && autoWalkFrames === 0 && !lockOpen) {
+    const gate = HOUSE_DOORS.find(d => d.id === 'gate');
+    const tdx = player.x - TRAPDOOR.cx, tdy = player.y - TRAPDOOR.cy;
+    if (trapdoorOpen && Math.sqrt(tdx*tdx+tdy*tdy) <= HOUSE_INTERACT_RANGE) {
+      triggerTransition('basement');
+    } else if (gate && houseDoorDist(gate) <= HOUSE_INTERACT_RANGE) {
+      triggerTransition('room1');
     }
   }
-  houseTWasDown = tDown;
 }
 
 // ── Paneled door: light frame, vermillion slab, six recessed panels, knob ──
@@ -1651,11 +1584,6 @@ function drawHouse() {
       ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2.5;
       ctx.strokeRect(HOUSE_GATE.cx - GATE.w/2 - 25, HOUSE_GATE.top - 8, GATE.w + 50, GATE.h + 16);
       ctx.restore();
-      ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center';
-      const lx = gate.cx + GATE.w/2 + 48, ly = HOUSE_GATE.top + GATE.h/2 + 5;
-      ctx.strokeStyle = '#2a2418'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
-      ctx.strokeText('[T]', lx, ly);
-      ctx.fillStyle = '#ffe066'; ctx.fillText('[T]', lx, ly);
     }
   }
   // Study lock (floating on top wall when room is still locked)
@@ -1952,7 +1880,7 @@ function drawLock() {
   ctx.fillText('DEV SKIP', skipBtnX + skipBtnW/2, skipBtnY + 19);
 
   ctx.fillStyle='#4a4438'; ctx.font='15px Cinzel, serif'; ctx.textAlign='center';
-  ctx.fillText('Press [T] to close', lx+lw/2, ly+lh-16);
+  ctx.fillText('Walk away to close', lx+lw/2, ly+lh-16);
 }
 
 function subRoomDoorDist() {
@@ -1972,7 +1900,7 @@ function updateSubRoom() {
   if (autoWalkFrames > 0) {
     // Auto-walk into room after crossing threshold
     dx = autoWalkDX; dy = autoWalkDY; autoWalkFrames--;
-  } else if (!kitchenWindowOpen && !livingRoomWindowOpen && !studyPaperOpen && !tvOpen) {
+  } else {
     if(keys['ArrowLeft'] ||keys['a']||keys['A'])dx-=1;
     if(keys['ArrowRight']||keys['d']||keys['D'])dx+=1;
     if(keys['ArrowUp']   ||keys['w']||keys['W'])dy-=1;
@@ -1985,7 +1913,7 @@ function updateSubRoom() {
     }
   }
 
-  // Threshold exit — walk through the opening back to courtyard
+  // Threshold exit — walk through the opening back to courtyard (only when no overlay open)
   const noUI = !kitchenWindowOpen && !livingRoomWindowOpen && !studyPaperOpen && !tvOpen;
   if (noUI && autoWalkFrames === 0) {
     const rawX = player.x + dx*PLAYER_SPEED, rawY = player.y + dy*PLAYER_SPEED;
@@ -1998,28 +1926,21 @@ function updateSubRoom() {
   player.y=Math.max(R1W+PLAYER_R,Math.min(VIEWPORT_H-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
   pulseTime += 0.05;
 
-  const _pi = pendingInteract; if (_pi) { subRoomTWasDown = false; pendingInteract = false; }
-  const tDown = keys['t'] || keys['T'] || _pi;
-  if (tDown && !subRoomTWasDown) {
-    if (currentScene === 'room_left' && kitchenWindowOpen) {
-      kitchenWindowOpen = false;
-    } else if (currentScene === 'room_left' && kitchenWinDist() <= INTERACT_RANGE) {
-      kitchenWindowOpen = true;
-    } else if (currentScene === 'room_right' && tvOpen) {
-      tvOpen = false;
-    } else if (currentScene === 'room_right' && livingRoomWindowOpen) {
-      livingRoomWindowOpen = false;
-    } else if (currentScene === 'room_right' && livingRoomWinDist() <= INTERACT_RANGE) {
-      livingRoomWindowOpen = true;
-    } else if (currentScene === 'room_right' && tvDist() <= INTERACT_RANGE) {
-      tvOpen = true;
-    } else if (currentScene === 'room_top' && studyPaperOpen) {
-      studyPaperOpen = false;
-    } else if (currentScene === 'room_top' && studyPaperDist() <= INTERACT_RANGE) {
-      studyPaperOpen = true;
-    }
+  pendingInteract = false;
+  // Proximity auto-open / auto-close for each sub-room interactable
+  if (currentScene === 'room_left') {
+    if (kitchenWinDist() <= INTERACT_RANGE) { if (!kitchenWindowOpen) kitchenWindowOpen = true; }
+    else                                     { kitchenWindowOpen = false; }
   }
-  subRoomTWasDown = tDown;
+  if (currentScene === 'room_right') {
+    if      (tvDist() <= INTERACT_RANGE)            { if (!tvOpen) tvOpen = true; livingRoomWindowOpen = false; }
+    else if (livingRoomWinDist() <= INTERACT_RANGE) { if (!livingRoomWindowOpen) livingRoomWindowOpen = true; tvOpen = false; }
+    else                                            { tvOpen = false; livingRoomWindowOpen = false; }
+  }
+  if (currentScene === 'room_top') {
+    if (studyPaperDist() <= INTERACT_RANGE) { if (!studyPaperOpen) studyPaperOpen = true; }
+    else                                    { studyPaperOpen = false; }
+  }
 }
 
 function drawSubRoom() {
@@ -2117,7 +2038,7 @@ function drawSubRoom() {
       ctx.fillStyle='#7ab8d0'; ctx.font='bold 20px Cinzel, serif'; ctx.textAlign='center';
       ctx.fillText('Kitchen Window', WX+WW/2, WY+WH+28);
       ctx.fillStyle='#4a5a6a'; ctx.font='15px Cinzel, serif';
-      ctx.fillText('Press [T] to close', WX+WW/2, WY+WH+50);
+      ctx.fillText('Walk away to close', WX+WW/2, WY+WH+50);
     }
   }
 
@@ -2256,7 +2177,7 @@ function drawSubRoom() {
       ctx.strokeStyle='#1a4a22'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(TSX+30,TSY+TSH-32); ctx.lineTo(TSX+TSW-30,TSY+TSH-32); ctx.stroke();
       ctx.fillStyle='#2a6a3a'; ctx.font='14px monospace'; ctx.textAlign='center';
-      ctx.fillText('Press [T] to close', TSX+TSW/2, TSY+TSH-12);
+      ctx.fillText('Walk away to close', TSX+TSW/2, TSY+TSH-12);
       ctx.restore();
       // Power LED row
       ctx.fillStyle='#00cc44';
@@ -2300,7 +2221,7 @@ function drawSubRoom() {
       ctx.fillStyle='#7ab8d0'; ctx.font='bold 20px Cinzel, serif'; ctx.textAlign='center';
       ctx.fillText('Living Room Window', WX+WW/2, WY+WH+28);
       ctx.fillStyle='#4a5a6a'; ctx.font='15px Cinzel, serif';
-      ctx.fillText('Press [T] to close', WX+WW/2, WY+WH+50);
+      ctx.fillText('Walk away to close', WX+WW/2, WY+WH+50);
     }
   }
 
@@ -2378,7 +2299,7 @@ function drawSubRoom() {
       // Exit hint
       ctx.fillStyle = '#8a7a5a'; ctx.font = '14px Cinzel, serif';
       ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
-      ctx.fillText('Press [T] to close', IX+IW-16, IY+IH-14);
+      ctx.fillText('Walk away to close', IX+IW-16, IY+IH-14);
     }
   }
 
@@ -2510,14 +2431,12 @@ function basementExitDist() {
 function updateBasement() {
   if (fadeDir !== 0) return;
   let dx=0, dy=0;
-  if (!basementNoteOpen) {
-    if(keys['ArrowLeft'] ||keys['a']||keys['A'])dx-=1;
-    if(keys['ArrowRight']||keys['d']||keys['D'])dx+=1;
-    if(keys['ArrowUp']   ||keys['w']||keys['W'])dy-=1;
-    if(keys['ArrowDown'] ||keys['s']||keys['S'])dy+=1;
-  }
+  if(keys['ArrowLeft'] ||keys['a']||keys['A'])dx-=1;
+  if(keys['ArrowRight']||keys['d']||keys['D'])dx+=1;
+  if(keys['ArrowUp']   ||keys['w']||keys['W'])dy-=1;
+  if(keys['ArrowDown'] ||keys['s']||keys['S'])dy+=1;
   if(dx&&dy){dx*=Math.SQRT1_2;dy*=Math.SQRT1_2;}
-  if (!basementNoteOpen && dx === 0 && dy === 0 && joystick) {
+  if (dx === 0 && dy === 0 && joystick) {
     const _jdx = joystick.ex - joystick.cx, _jdy = joystick.ey - joystick.cy;
     const _jd = Math.sqrt(_jdx*_jdx + _jdy*_jdy);
     if (_jd > 10) { dx = _jdx/_jd; dy = _jdy/_jd; }
@@ -2525,21 +2444,16 @@ function updateBasement() {
   player.x=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.x+dx*PLAYER_SPEED));
   player.y=Math.max(R1W+PLAYER_R,Math.min(VIEWPORT_H-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
   pulseTime += 0.05;
+  pendingInteract = false;
 
-  const _pi = pendingInteract; if (_pi) { basementTWasDown = false; pendingInteract = false; }
-  const tDown = keys['t']||keys['T']||_pi;
-  if (tDown && !basementTWasDown) {
-    if (basementNoteOpen) {
-      basementNoteOpen = false;
-    } else if (basementNoteDist() <= INTERACT_RANGE) {
-      basementNoteOpen = true;
-    } else if (basementExitDist() <= HOUSE_INTERACT_RANGE) {
-      triggerTransition('house');
-    } else if (basementR6DoorDist() <= HOUSE_INTERACT_RANGE) {
-      triggerTransition('room6');
-    }
+  // Proximity auto-open note / auto-close when far; auto-trigger transitions
+  if (basementNoteDist() <= INTERACT_RANGE) { if (!basementNoteOpen) basementNoteOpen = true; }
+  else                                       { basementNoteOpen = false; }
+
+  if (interactCooldown === 0 && !basementNoteOpen) {
+    if      (basementExitDist()   <= HOUSE_INTERACT_RANGE) triggerTransition('house');
+    else if (basementR6DoorDist() <= HOUSE_INTERACT_RANGE) triggerTransition('room6');
   }
-  basementTWasDown = tDown;
 }
 
 function drawBasement() {
@@ -2677,7 +2591,7 @@ function drawBasement() {
     // Exit hint
     ctx.fillStyle='#8a7a5a'; ctx.font='14px Cinzel, serif';
     ctx.textAlign='right'; ctx.textBaseline='alphabetic';
-    ctx.fillText('Press [T] to close', IX+IW-16, IY+IH-14);
+    ctx.fillText('Walk away to close', IX+IW-16, IY+IH-14);
   }
 }
 
@@ -2818,10 +2732,8 @@ function updateRoom7() {
   player.y=Math.max(R1W+PLAYER_R,Math.min(VIEWPORT_H-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
   pulseTime += 0.05;
   if (r7Wrong && --r7WrongTimer <= 0) { r7Wrong = false; r7Selected = []; }
-  const _pi = pendingInteract; if (_pi) { r7TWasDown = false; pendingInteract = false; }
-  const tDown = keys['t']||keys['T']||_pi;
-  if (tDown && !r7TWasDown && r7ExitDist() <= HOUSE_INTERACT_RANGE) triggerTransition('room6');
-  r7TWasDown = tDown;
+  pendingInteract = false;
+  if (interactCooldown === 0 && r7ExitDist() <= HOUSE_INTERACT_RANGE) triggerTransition('room6');
 }
 
 function drawRoom7() {
@@ -2919,13 +2831,11 @@ function updateRoom6() {
 
   if (r6Wrong && --r6WrongTimer <= 0) { r6Wrong = false; r6Input = []; }
 
-  const _pi = pendingInteract; if (_pi) { r6TWasDown = false; pendingInteract = false; }
-  const tDown = keys['t']||keys['T']||_pi;
-  if (tDown && !r6TWasDown) {
+  pendingInteract = false;
+  if (interactCooldown === 0) {
     if      (r6ExitDist()      <= HOUSE_INTERACT_RANGE) triggerTransition('basement');
     else if (r6Room7DoorDist() <= HOUSE_INTERACT_RANGE) triggerTransition('room7');
   }
-  r6TWasDown = tDown;
 }
 
 function drawRoom6() {
@@ -3046,6 +2956,7 @@ function update() {
   else if (currentScene==='room7')    updateRoom7();
   else                                updateSubRoom();
   updateFade();
+  if (interactCooldown > 0) interactCooldown--;
   // Decay camera pan offset toward zero (room entry animation)
   roomPanX *= 0.78; roomPanY *= 0.78;
   if (Math.abs(roomPanX) < 0.5) roomPanX = 0;
