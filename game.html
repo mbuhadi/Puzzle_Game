@@ -38,6 +38,10 @@ function resizeGame() {
 window.addEventListener('resize', resizeGame);
 resizeGame();
 
+// Load tree background
+let treeImage = new Image();
+treeImage.src = 'tree_bg.png';
+
 const PLAYER_R     = 11;   // 9 × 1.2
 const PLAYER_SPEED = 3.6;  // 2.4 × 1.5
 const player = { x: 0, y: 0 };
@@ -1521,6 +1525,11 @@ function drawHouse() {
   const camX=Math.max(0,Math.min(HW-VIEWPORT,player.x-VIEWPORT/2));
   const camY=Math.max(0,Math.min(HH-VIEWPORT_H,player.y-VIEWPORT_H/2));
   ctx.save(); ctx.translate(-camX,-camY);
+
+  // ── Tree background ──
+  if (treeImage.complete && treeImage.width > 0) {
+    ctx.drawImage(treeImage, 0, 0, HW, HH);
+  }
 
   // ── Static base: floor, walls, pool rim, planters, trunks (prerendered) ──
   if (!courtyardBase) buildCourtyardCaches();
