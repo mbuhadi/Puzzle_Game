@@ -180,7 +180,7 @@ function fillHSeg(c,x,y,w,h){const b=h/2;c.beginPath();c.moveTo(x+b,y);c.lineTo(
 function fillVSeg(c,x,y,w,h){const b=w/2;c.beginPath();c.moveTo(x+b,y);c.lineTo(x+w,y+b);c.lineTo(x+w,y+h-b);c.lineTo(x+b,y+h);c.lineTo(x,y+h-b);c.lineTo(x,y+b);c.closePath();c.fill();}
 function draw613TopHalf(c,x,y,scale){
   const t=2.5*scale,dw=14*scale,mh=11*scale,sp=4*scale,g=0.6*scale;
-  const D=[{a:1,b:0,f:1,g:0},{a:0,b:1,f:0,g:0},{a:1,b:1,f:0,g:1}];
+  const D=[{a:1,b:0,f:1,g:0},{a:0,b:1,f:0,g:0},{a:0,b:1,f:0,g:1}];
   D.forEach((s,i)=>{const ox=x+i*(dw+sp);
     if(s.a)fillHSeg(c,ox+t+g,y,dw-2*(t+g),t);
     if(s.f)fillVSeg(c,ox,y+t+g,t,mh-2*t-g);
