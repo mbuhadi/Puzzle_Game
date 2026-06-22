@@ -1450,13 +1450,6 @@ function buildCourtyardCaches() {
         c.fillRect(tx, ty, tw, th);
       }
     }
-    // 2×2 grid of black cells filling the BLACK_GRID footprint (old 3×3 space)
-    const gap = 4;
-    const cw = (BLACK_GRID.w - gap) / 2, ch = (BLACK_GRID.h - gap) / 2;
-    c.fillStyle = '#000';
-    for (let i = 0; i < 2; i++)
-      for (let j = 0; j < 2; j++)
-        c.fillRect(BLACK_GRID.x + i*(cw+gap), BLACK_GRID.y + j*(ch+gap), cw, ch);
   }
   c.fillStyle='#5a3e1e';
   c.fillRect(0,0,HW,HWAL); c.fillRect(0,HH-HWAL,HW,HWAL);
