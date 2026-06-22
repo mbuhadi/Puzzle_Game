@@ -563,10 +563,10 @@ canvas.addEventListener('mousedown', e => {
         if (!r6Input.includes(c.id)) {
           r6Input.push(c.id);
           const len = r6Input.length;
-          if (r6Input[len-1] !== R6_CORRECT[len-1]) {
-            r6Wrong = true; r6WrongTimer = 60;
-          } else if (len === R6_CORRECT.length) {
-            r6Solved = true;
+          if (len === R6_CORRECT.length) {
+            const isCorrect = r6Input.every((v, i) => v === R6_CORRECT[i]);
+            if (isCorrect) { r6Solved = true; }
+            else { r6Wrong = true; r6WrongTimer = 60; }
           }
         }
         return;
