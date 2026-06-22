@@ -838,36 +838,36 @@ function drawRoom1() {
   ctx.shadowBlur  = 32;
   ctx.shadowOffsetY = 8;
   rr(PX, PY, PW, PH, 16);
-  ctx.fillStyle = '#12110f';
+  ctx.fillStyle = '#f8f6f0';
   ctx.fill();
   ctx.restore();
 
   // Panel border
   rr(PX, PY, PW, PH, 16);
-  ctx.strokeStyle = '#c8a84b';
+  ctx.strokeStyle = '#d8d0c0';
   ctx.lineWidth = 2;
   ctx.stroke();
 
   // Title bar background
   ctx.save();
   rr(PX, PY, PW, TITLE_H, 16);
-  ctx.fillStyle = '#1e1b14';
+  ctx.fillStyle = '#ece8e0';
   ctx.fill();
   ctx.restore();
 
   // Title bar bottom divider
-  ctx.strokeStyle = '#2e2a1e';
+  ctx.strokeStyle = '#d8d0c0';
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(PX+16, PY+TITLE_H); ctx.lineTo(PX+PW-16, PY+TITLE_H); ctx.stroke();
 
   // Title text
-  ctx.fillStyle = '#e8dfc8';
+  ctx.fillStyle = '#3a2a1a';
   ctx.font = 'bold 26px Cinzel, serif';
   ctx.textAlign = 'center';
   ctx.fillText('Puzzle One', PX+PW/2, PY+TITLE_H-14);
 
   // Vertical divider
-  ctx.strokeStyle = '#2a2618';
+  ctx.strokeStyle = '#d0c8b8';
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(TREE_R, PY+TITLE_H+10); ctx.lineTo(TREE_R, PY+PH-10); ctx.stroke();
 
@@ -878,10 +878,30 @@ function drawRoom1() {
   ctx.direction = 'rtl'; ctx.textAlign = 'right';
   DESC_LINES.forEach((line, i) => {
     const isHeader = i === 0;
-    ctx.fillStyle = isHeader ? '#c8a84b' : '#b0a888';
+    ctx.fillStyle = isHeader ? '#8a6820' : '#504030';
     ctx.font      = isHeader ? 'bold 21px Amiri, serif' : '19px Amiri, serif';
     ctx.fillText(line, descRight, PY + TITLE_H + 34 + i * descLineH);
   });
+  ctx.restore();
+
+  // Tree background image at 30% opacity (clipped to tree area)
+  if (treeImage.complete && treeImage.width > 0) {
+    ctx.save();
+    rr(PX, PY+TITLE_H, TREE_R-PX, PH-TITLE_H, 0);
+    ctx.clip();
+    ctx.globalAlpha = 0.3;
+    ctx.drawImage(treeImage, PX, PY+TITLE_H, TREE_R-PX, PH-TITLE_H);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  // "شجرة العائلة" label in tree area
+  ctx.save();
+  ctx.direction = 'rtl'; ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(58,42,26,0.7)';
+  ctx.font = '22px Amiri, serif';
+  ctx.fillText('شجرة العائلة', TREE_R-14, PY+TITLE_H+12);
+  ctx.textBaseline = 'alphabetic';
   ctx.restore();
 
   // Tree edges — soft upward curves (parent at bottom, child above)
@@ -902,32 +922,31 @@ function drawRoom1() {
     const name   = nodeNames[n.id];
     const hw = BOX_W/2, hh = BOX_H/2;
 
-    // Box shadow
+    // Box fill
     ctx.save();
-    ctx.shadowColor  = 'rgba(0,0,0,0.5)';
-    ctx.shadowBlur   = 8;
-    ctx.shadowOffsetY = 3;
+    ctx.shadowColor  = 'rgba(0,0,0,0.18)';
+    ctx.shadowBlur   = 6;
+    ctx.shadowOffsetY = 2;
     rr(n.cx-hw, n.cy-hh, BOX_W, BOX_H, 8);
-    ctx.fillStyle = n.fixed ? '#1e1800'
-                  : isOpen  ? '#242010'
-                  : name    ? '#1c1a14'
-                  :           '#161410';
+    ctx.fillStyle = n.fixed ? '#e8e8e8'
+                  : name    ? '#c8dde8'
+                  :           '#dce8f0';
     ctx.fill();
     ctx.restore();
 
     // Box border
     rr(n.cx-hw, n.cy-hh, BOX_W, BOX_H, 8);
-    ctx.strokeStyle = n.fixed ? '#c8a84b'
-                    : isOpen  ? '#c8a84b'
-                    : name    ? '#4a4438'
-                    :           '#302e28';
+    ctx.strokeStyle = n.fixed ? '#aaaaaa'
+                    : isOpen  ? '#5db87a'
+                    : name    ? '#6898b0'
+                    :           '#9bbccc';
     ctx.lineWidth = n.fixed ? 2 : 1.5;
     ctx.stroke();
 
     // Label
     ctx.save();
     ctx.direction = 'rtl'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = n.fixed ? '#c8a84b' : (name ? '#e8dfc8' : '#4a4438');
+    ctx.fillStyle = n.fixed ? '#888888' : (name ? '#2a5f78' : '#6898b0');
     ctx.font      = name ? 'bold 17px Amiri, serif' : '17px Amiri, serif';
     ctx.fillText(name ?? '—', n.cx, n.cy);
     ctx.textBaseline = 'alphabetic';
@@ -939,15 +958,15 @@ function drawRoom1() {
     const dd = dropdownRect(openDropdown.nodeId);
 
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.6)';
-    ctx.shadowBlur  = 16;
+    ctx.shadowColor = 'rgba(0,0,0,0.18)';
+    ctx.shadowBlur  = 20;
     rr(dd.left, dd.top, dd.w, dd.h, 10);
-    ctx.fillStyle = '#16140f';
+    ctx.fillStyle = '#ffffff';
     ctx.fill();
     ctx.restore();
 
     rr(dd.left, dd.top, dd.w, dd.h, 10);
-    ctx.strokeStyle = '#c8a84b';
+    ctx.strokeStyle = '#5db87a';
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
@@ -957,12 +976,12 @@ function drawRoom1() {
                        mouseY >= rowY     && mouseY <= rowY+DD_ROW;
       if (hovering) {
         rr(dd.left+4, rowY+2, dd.w-8, DD_ROW-4, 6);
-        ctx.fillStyle = '#2a2410';
+        ctx.fillStyle = '#fffaee';
         ctx.fill();
       }
       ctx.save();
       ctx.direction = 'rtl'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-      ctx.fillStyle = hovering ? '#c8a84b' : '#a09878';
+      ctx.fillStyle = hovering ? '#8a6820' : '#504030';
       ctx.font      = '18px Amiri, serif';
       ctx.fillText(name, dd.left + dd.w - 12, rowY + DD_ROW/2);
       ctx.textBaseline = 'alphabetic';
@@ -973,10 +992,10 @@ function drawRoom1() {
   // Solved banner
   if (puzzleSolved) {
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.7)';
+    ctx.shadowColor = 'rgba(0,0,0,0.18)';
     ctx.shadowBlur  = 20;
     rr(PX+80, PY+PH/2-40, PW-160, 76, 12);
-    ctx.fillStyle = '#1a1608';
+    ctx.fillStyle = '#fffcf0';
     ctx.fill();
     ctx.restore();
 
@@ -985,7 +1004,7 @@ function drawRoom1() {
 
     ctx.save();
     ctx.direction = 'rtl'; ctx.textAlign = 'center';
-    ctx.fillStyle = '#c8a84b'; ctx.font = 'bold 24px Amiri, serif';
+    ctx.fillStyle = '#8a6820'; ctx.font = 'bold 24px Amiri, serif';
     ctx.fillText('تم حل الأحجية!', PX+PW/2, PY+PH/2+10);
     ctx.restore();
   }
