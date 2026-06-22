@@ -217,6 +217,27 @@ let pendingScene = null;
 let fromScene = null;
 function triggerTransition(toScene) { fromScene = currentScene; pendingScene = toScene; fadeDir = 1; }
 
+// ── Threshold-based room entry (no T-key, no fade) ────────────────────────────
+let autoWalkFrames = 0, autoWalkDX = 0, autoWalkDY = 0;
+let roomPanX = 0, roomPanY = 0;
+const DOOR_HALF = 36; // half of the 72-unit door opening
+
+function enterSubRoom(scene) {
+  fromScene = 'house'; currentScene = scene;
+  if (scene === 'room_left')  { player.x = R1-R1W-PLAYER_R-2; player.y = VIEWPORT_H/2; autoWalkDX=-1; autoWalkDY=0; roomPanX= 80; roomPanY=  0; }
+  if (scene === 'room_right') { player.x = R1W+PLAYER_R+2;    player.y = VIEWPORT_H/2; autoWalkDX= 1; autoWalkDY=0; roomPanX=-80; roomPanY=  0; }
+  if (scene === 'room_top')   { player.x = R1/2; player.y = VIEWPORT_H-R1W-PLAYER_R-2; autoWalkDX= 0; autoWalkDY=-1; roomPanX=  0; roomPanY= 80; }
+  autoWalkFrames = 35;
+}
+
+function exitToCourtyard() {
+  const sc = currentScene; fromScene = sc; currentScene = 'house';
+  if (sc === 'room_left')  { player.x = HWAL+PLAYER_R+2; player.y = 500; autoWalkDX= 1; autoWalkDY=0; }
+  if (sc === 'room_right') { player.x = HW-HWAL-PLAYER_R-2; player.y = 500; autoWalkDX=-1; autoWalkDY=0; }
+  if (sc === 'room_top')   { player.x = 500; player.y = HWAL+PLAYER_R+2; autoWalkDX=0; autoWalkDY= 1; }
+  autoWalkFrames = 35; roomPanX = 0; roomPanY = 0;
+}
+
 function updateFade() {
   if (fadeDir === 0) return;
   fadeAlpha = Math.max(0, Math.min(1, fadeAlpha + fadeDir * 0.045));
@@ -1146,18 +1167,34 @@ function houseDoorDist(door) {
 function updateHouse() {
   if (fadeDir !== 0) return;
   let dx=0, dy=0;
-  if (!lockOpen) {
+  if (autoWalkFrames > 0) {
+    // Auto-walk away from wall after returning from a sub-room
+    dx = autoWalkDX; dy = autoWalkDY; autoWalkFrames--;
+  } else if (!lockOpen) {
     if(keys['ArrowLeft'] ||keys['a']||keys['A'])dx-=1;
     if(keys['ArrowRight']||keys['d']||keys['D'])dx+=1;
     if(keys['ArrowUp']   ||keys['w']||keys['W'])dy-=1;
     if(keys['ArrowDown'] ||keys['s']||keys['S'])dy+=1;
+    if(dx&&dy){dx*=Math.SQRT1_2;dy*=Math.SQRT1_2;}
+    if (dx === 0 && dy === 0 && joystick) {
+      const _jdx = joystick.ex - joystick.cx, _jdy = joystick.ey - joystick.cy;
+      const _jd = Math.sqrt(_jdx*_jdx + _jdy*_jdy);
+      if (_jd > 10) { dx = _jdx/_jd; dy = _jdy/_jd; }
+    }
   }
-  if(dx&&dy){dx*=Math.SQRT1_2;dy*=Math.SQRT1_2;}
-  if (!lockOpen && dx === 0 && dy === 0 && joystick) {
-    const _jdx = joystick.ex - joystick.cx, _jdy = joystick.ey - joystick.cy;
-    const _jd = Math.sqrt(_jdx*_jdx + _jdy*_jdy);
-    if (_jd > 10) { dx = _jdx/_jd; dy = _jdy/_jd; }
+
+  // Threshold detection — walk through room openings (requires direction toward wall)
+  if (!lockOpen && autoWalkFrames === 0) {
+    const rawX = player.x + dx*PLAYER_SPEED, rawY = player.y + dy*PLAYER_SPEED;
+    if (dx < 0 && rawX - PLAYER_R <= HWAL    && Math.abs(player.y - 500) < DOOR_HALF) { enterSubRoom('room_left');  return; }
+    if (dx > 0 && rawX + PLAYER_R >= HW-HWAL && Math.abs(player.y - 500) < DOOR_HALF) { enterSubRoom('room_right'); return; }
+    if (dy < 0 && rawY - PLAYER_R <= HWAL    && Math.abs(player.x - 500) < DOOR_HALF) {
+      if (!studyUnlocked) lockOpen = true;
+      else enterSubRoom('room_top');
+      return;
+    }
   }
+
   const p=houseCollide(player.x+dx*PLAYER_SPEED, player.y+dy*PLAYER_SPEED);
   player.x=p.x; player.y=p.y;
   pulseTime += 0.05;
@@ -1174,7 +1211,6 @@ function updateHouse() {
         clockProgress++;
         if (clockProgress === CLOCK_SEQ.length) trapdoorOpen = true;
       } else if (!(clockProgress > 0 && near === CLOCK_SEQ[clockProgress-1])) {
-        // Touched a number out of order — start over (touching 11 re-arms)
         clockProgress = near === CLOCK_SEQ[0] ? 1 : 0;
       }
     }
@@ -1187,25 +1223,14 @@ function updateHouse() {
       lockOpen = false;
     } else if (trapdoorOpen) {
       const tdx = player.x - TRAPDOOR.cx, tdy = player.y - TRAPDOOR.cy;
-      if (Math.sqrt(tdx*tdx+tdy*tdy) <= HOUSE_INTERACT_RANGE) {
-        triggerTransition('basement');
-      } else {
-        for (const door of HOUSE_DOORS) {
-          if (houseDoorDist(door) <= HOUSE_INTERACT_RANGE) {
-            if (door.id === 'top' && !studyUnlocked) lockOpen = true;
-            else triggerTransition(door.toScene);
-            break;
-          }
-        }
+      if (Math.sqrt(tdx*tdx+tdy*tdy) <= HOUSE_INTERACT_RANGE) triggerTransition('basement');
+      else {
+        const gate = HOUSE_DOORS.find(d => d.id === 'gate');
+        if (gate && houseDoorDist(gate) <= HOUSE_INTERACT_RANGE) triggerTransition('room1');
       }
     } else {
-      for (const door of HOUSE_DOORS) {
-        if (houseDoorDist(door) <= HOUSE_INTERACT_RANGE) {
-          if (door.id === 'top' && !studyUnlocked) lockOpen = true;
-          else triggerTransition(door.toScene);
-          break;
-        }
-      }
+      const gate = HOUSE_DOORS.find(d => d.id === 'gate');
+      if (gate && houseDoorDist(gate) <= HOUSE_INTERACT_RANGE) triggerTransition('room1');
     }
   }
   houseTWasDown = tDown;
@@ -1454,6 +1479,17 @@ function buildCourtyardCaches() {
   c.fillStyle='#5a3e1e';
   c.fillRect(0,0,HW,HWAL); c.fillRect(0,HH-HWAL,HW,HWAL);
   c.fillRect(0,HWAL,HWAL,HH-HWAL*2); c.fillRect(HW-HWAL,HWAL,HWAL,HH-HWAL*2);
+  // Room door openings — erase wall sections, paint passage depth
+  const DH = DOOR_HALF;
+  c.fillStyle = '#7a6248'; // dark stone passage
+  c.fillRect(0,          500-DH, HWAL, DH*2);  // left  (→ room_left)
+  c.fillRect(HW-HWAL,    500-DH, HWAL, DH*2);  // right (→ room_right)
+  c.fillRect(500-DH,     0,      DH*2, HWAL);  // top   (→ room_top)
+  // Inner threshold highlight
+  c.fillStyle = '#c8a870';
+  c.fillRect(HWAL-2, 500-DH, 2, DH*2);
+  c.fillRect(HW-HWAL, 500-DH, 2, DH*2);
+  c.fillRect(500-DH, HWAL-2, DH*2, 2);
   // Gate back to the driveway on the bottom wall
   drawIronGate(c, HOUSE_GATE.cx, HOUSE_GATE.top);
   // Pool stone rim
@@ -1576,46 +1612,30 @@ function drawHouse() {
     }
   }
 
-  // Doors
+  // Gate (only interactive door left — rooms are now walkthrough)
   const pulse = 0.5 + 0.5*Math.sin(pulseTime);
-  HOUSE_DOORS.forEach(door => {
-    const inRange = houseDoorDist(door) <= HOUSE_INTERACT_RANGE;
-    if (door.id === 'gate') {
-      // The gate itself is prerendered into the base; just glow when close
-      if (inRange) {
-        ctx.save();
-        ctx.shadowColor = '#ffe066';
-        ctx.shadowBlur  = 18 + pulse*14;
-        ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2.5;
-        ctx.strokeRect(HOUSE_GATE.cx - GATE.w/2 - 25, HOUSE_GATE.top - 8, GATE.w + 50, GATE.h + 16);
-        ctx.restore();
-      }
-    } else if (door.id === 'top') {
-      // Study door drawn upright, hanging from the top wall into the courtyard
-      drawPanelDoor(ctx, door.cx, door.cy + 18, 37, 72, inRange ? 18 + pulse*14 : 6);
-    } else {
-      drawPanelDoor(ctx, door.cx, door.cy, door.dw, door.dh, inRange ? 18 + pulse*14 : 6);
-    }
-
-    // Lock & chain on the study door when locked
-    if (door.id === 'top' && !studyUnlocked) {
-      drawStudyLock(ctx, door.cx, door.cy + 23);
-    }
-
+  {
+    const gate = HOUSE_DOORS.find(d => d.id === 'gate');
+    const inRange = houseDoorDist(gate) <= HOUSE_INTERACT_RANGE;
     if (inRange) {
-      ctx.font = 'bold 15px sans-serif';
-      ctx.textAlign = 'center';
-      // Position label clear of wall edge
-      let lx = door.cx, ly = door.cy - door.dh/2 - 8;
-      if (door.id === 'left')  lx = door.cx + door.dw/2 + 24;
-      if (door.id === 'right') lx = door.cx - door.dw/2 - 24;
-      if (door.id === 'top')   ly = door.cy + 71;
-      if (door.id === 'gate')  { lx = door.cx + GATE.w/2 + 48; ly = HOUSE_GATE.top + GATE.h/2 + 5; }
+      ctx.save();
+      ctx.shadowColor = '#ffe066'; ctx.shadowBlur = 18 + pulse*14;
+      ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2.5;
+      ctx.strokeRect(HOUSE_GATE.cx - GATE.w/2 - 25, HOUSE_GATE.top - 8, GATE.w + 50, GATE.h + 16);
+      ctx.restore();
+      ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center';
+      const lx = gate.cx + GATE.w/2 + 48, ly = HOUSE_GATE.top + GATE.h/2 + 5;
       ctx.strokeStyle = '#2a2418'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
       ctx.strokeText('[T]', lx, ly);
-      ctx.fillStyle = '#ffe066';
-      ctx.fillText('[T]', lx, ly);
+      ctx.fillStyle = '#ffe066'; ctx.fillText('[T]', lx, ly);
     }
+  }
+  // Study lock (floating on top wall when room is still locked)
+  if (!studyUnlocked) {
+    const top = HOUSE_DOORS.find(d => d.id === 'top');
+    drawStudyLock(ctx, top.cx, top.cy + 18);
+  }
+  HOUSE_DOORS.forEach(door => { // kept for lock-UI distance checks elsewhere
   });
 
   if (!lockOpen) {
@@ -1921,18 +1941,31 @@ let subRoomTWasDown = false;
 function updateSubRoom() {
   if (fadeDir !== 0) return;
   let dx=0, dy=0;
-  if (!kitchenWindowOpen && !livingRoomWindowOpen && !studyPaperOpen && !tvOpen) {
+  if (autoWalkFrames > 0) {
+    // Auto-walk into room after crossing threshold
+    dx = autoWalkDX; dy = autoWalkDY; autoWalkFrames--;
+  } else if (!kitchenWindowOpen && !livingRoomWindowOpen && !studyPaperOpen && !tvOpen) {
     if(keys['ArrowLeft'] ||keys['a']||keys['A'])dx-=1;
     if(keys['ArrowRight']||keys['d']||keys['D'])dx+=1;
     if(keys['ArrowUp']   ||keys['w']||keys['W'])dy-=1;
     if(keys['ArrowDown'] ||keys['s']||keys['S'])dy+=1;
+    if(dx&&dy){dx*=Math.SQRT1_2;dy*=Math.SQRT1_2;}
+    if (dx === 0 && dy === 0 && joystick) {
+      const _jdx = joystick.ex - joystick.cx, _jdy = joystick.ey - joystick.cy;
+      const _jd = Math.sqrt(_jdx*_jdx + _jdy*_jdy);
+      if (_jd > 10) { dx = _jdx/_jd; dy = _jdy/_jd; }
+    }
   }
-  if(dx&&dy){dx*=Math.SQRT1_2;dy*=Math.SQRT1_2;}
-  if (dx === 0 && dy === 0 && !kitchenWindowOpen && !livingRoomWindowOpen && !studyPaperOpen && !tvOpen && joystick) {
-    const _jdx = joystick.ex - joystick.cx, _jdy = joystick.ey - joystick.cy;
-    const _jd = Math.sqrt(_jdx*_jdx + _jdy*_jdy);
-    if (_jd > 10) { dx = _jdx/_jd; dy = _jdy/_jd; }
+
+  // Threshold exit — walk through the opening back to courtyard
+  const noUI = !kitchenWindowOpen && !livingRoomWindowOpen && !studyPaperOpen && !tvOpen;
+  if (noUI && autoWalkFrames === 0) {
+    const rawX = player.x + dx*PLAYER_SPEED, rawY = player.y + dy*PLAYER_SPEED;
+    if (currentScene === 'room_left'  && dx > 0 && rawX + PLAYER_R >= R1-R1W       && Math.abs(player.y - VIEWPORT_H/2) < DOOR_HALF) { exitToCourtyard(); return; }
+    if (currentScene === 'room_right' && dx < 0 && rawX - PLAYER_R <= R1W          && Math.abs(player.y - VIEWPORT_H/2) < DOOR_HALF) { exitToCourtyard(); return; }
+    if (currentScene === 'room_top'   && dy > 0 && rawY + PLAYER_R >= VIEWPORT_H-R1W && Math.abs(player.x - R1/2)       < DOOR_HALF) { exitToCourtyard(); return; }
   }
+
   player.x=Math.max(R1W+PLAYER_R,Math.min(R1-R1W-PLAYER_R,player.x+dx*PLAYER_SPEED));
   player.y=Math.max(R1W+PLAYER_R,Math.min(VIEWPORT_H-R1W-PLAYER_R,player.y+dy*PLAYER_SPEED));
   pulseTime += 0.05;
@@ -1956,8 +1989,6 @@ function updateSubRoom() {
       studyPaperOpen = false;
     } else if (currentScene === 'room_top' && studyPaperDist() <= INTERACT_RANGE) {
       studyPaperOpen = true;
-    } else if (!kitchenWindowOpen && !livingRoomWindowOpen && !studyPaperOpen && !tvOpen && subRoomDoorDist() <= HOUSE_INTERACT_RANGE) {
-      triggerTransition('house');
     }
   }
   subRoomTWasDown = tDown;
@@ -1965,8 +1996,16 @@ function updateSubRoom() {
 
 function drawSubRoom() {
   const s = SUB_ROOM_STYLE[currentScene];
+  ctx.save();
+  ctx.translate(roomPanX, roomPanY);
   ctx.fillStyle = s.wall;  ctx.fillRect(0, 0, R1, VIEWPORT_H);
   ctx.fillStyle = s.floor; ctx.fillRect(R1W, R1W, R1-R1W*2, VIEWPORT_H-R1W*2);
+  // Wall opening where player walks through to courtyard
+  ctx.fillStyle = '#1a1408';
+  if (currentScene === 'room_left')  ctx.fillRect(R1-R1W, VIEWPORT_H/2-DOOR_HALF, R1W, DOOR_HALF*2);
+  if (currentScene === 'room_right') ctx.fillRect(0,      VIEWPORT_H/2-DOOR_HALF, R1W, DOOR_HALF*2);
+  if (currentScene === 'room_top')   ctx.fillRect(R1/2-DOOR_HALF, VIEWPORT_H-R1W, DOOR_HALF*2, R1W);
+  ctx.restore();
 
   ctx.fillStyle = '#c8a84b'; ctx.font = '19px Amiri, serif';
   ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic'; ctx.direction = 'rtl';
@@ -2315,26 +2354,6 @@ function drawSubRoom() {
     }
   }
 
-  // Door back to courtyard
-  const door = SUB_ROOM_DOORS[currentScene];
-  const inRange = subRoomDoorDist() <= HOUSE_INTERACT_RANGE;
-  const pulse = 0.5 + 0.5*Math.sin(pulseTime);
-  if (currentScene === 'room_top') {
-    // Study door drawn upright, hanging from the bottom wall into the room
-    drawPanelDoor(ctx, door.cx, door.cy - 18, 37, 72, inRange ? 18 + pulse*14 : 6);
-  } else {
-    drawPanelDoor(ctx, door.cx, door.cy, door.dw, door.dh, inRange ? 18 + pulse*14 : 6);
-  }
-  if (inRange) {
-    ctx.fillStyle = '#ffe066'; ctx.font = 'bold 15px sans-serif';
-    ctx.textAlign = 'center';
-    let lx = door.cx, ly = door.cy - door.dh/2 - 8;
-    if (currentScene === 'room_left')  { lx = door.cx - door.dw/2 - 24; ly = door.cy; }
-    if (currentScene === 'room_right') { lx = door.cx + door.dw/2 + 24; ly = door.cy; }
-    if (currentScene === 'room_top')   { lx = door.cx + 42; ly = door.cy - 14; }
-    ctx.fillText('[T]', lx, ly);
-  }
-
   if (!kitchenWindowOpen && !livingRoomWindowOpen && !studyPaperOpen) {
     drawPlayer(ctx);
     // Thought bubble for nearest in-range interactable
@@ -2345,7 +2364,6 @@ function drawSubRoom() {
       else if (currentScene==='room_right' && livingRoomWinDist()<=INTERACT_RANGE)   _srIcon=tbWindow;
       else if (currentScene==='room_top'   && studyPaperDist()<=INTERACT_RANGE)      _srIcon=tbPaper;
     }
-    if (!_srIcon && subRoomDoorDist()<=HOUSE_INTERACT_RANGE) _srIcon=tbDoorExit;
     if (_srIcon) drawThoughtBubble(player.x,player.y,_srIcon); else thoughtBubbleBounds=null;
   }
 }
@@ -3000,6 +3018,10 @@ function update() {
   else if (currentScene==='room7')    updateRoom7();
   else                                updateSubRoom();
   updateFade();
+  // Decay camera pan offset toward zero (room entry animation)
+  roomPanX *= 0.78; roomPanY *= 0.78;
+  if (Math.abs(roomPanX) < 0.5) roomPanX = 0;
+  if (Math.abs(roomPanY) < 0.5) roomPanY = 0;
 }
 function drawJoystick() {
   if (!joystick) return;
