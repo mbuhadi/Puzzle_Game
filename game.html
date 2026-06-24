@@ -2873,17 +2873,6 @@ function drawRoom6() {
     }
     ctx.restore();
 
-    // Press-order badge (top-right of circle)
-    const ord = r6Input.indexOf(c.id);
-    if (ord >= 0) {
-      const bx = c.cx + CIRCLE_R6*0.62, by = c.cy - CIRCLE_R6*0.62;
-      ctx.fillStyle = r6Wrong ? '#c0392b' : '#c8a84b';
-      ctx.beginPath(); ctx.arc(bx, by, 14, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle='#0e0c18'; ctx.font='bold 13px Cinzel, serif';
-      ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText(String(ord+1), bx, by);
-      ctx.textBaseline='alphabetic';
-    }
   }
 
   // Wrong flash overlay

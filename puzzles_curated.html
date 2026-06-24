@@ -815,16 +815,6 @@ function buildPuzzleSix() {
       }
       g.restore();
 
-      // Press-order badge
-      const ord = input.indexOf(c.id);
-      if (ord >= 0) {
-        const bx = c.cx + R*0.62, by = c.cy - R*0.62;
-        g.fillStyle = wrong ? '#c0392b' : '#c8a84b';
-        g.beginPath(); g.arc(bx, by, 13, 0, Math.PI*2); g.fill();
-        g.fillStyle = '#0e0c18'; g.font = 'bold 12px Cinzel, serif';
-        g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.fillText(String(ord + 1), bx, by);
-      }
     }
 
     // Wrong flash
@@ -1315,8 +1305,6 @@ const PUZZLES = [
   {
     num:'6', name:'خيال الاطفال هو مفتاح الثروة', loc:'Beyond the Basement', build:'puzzle6',
     given:`
-      <div class="scene-preview"><canvas id="preview-p6" width="380" height="240"></canvas><div class="scene-label">IN GAME — شهر عسل 89</div></div>
-      <p>داخل الغرفة تجد ورقة مطوية على الأرض — مذكرات من رحلة لا تُنسى:</p>
       <div style="
         background: linear-gradient(160deg, #fdf6e3, #f5ead0);
         border: 1.5px solid #c8a96a;
@@ -1346,10 +1334,9 @@ const PUZZLES = [
         زرنا قرى بالبرتقال وكلينا طباخهم قبل لا نروح غابات اسبانيا<br>
         ختمنا احلى شهر باحلى شروق
       </div>
-      <p>أسفل الورقة تجد ستة دوائر — اضغطها بالترتيب الصحيح:</p>
       <div id="p6grid" style="margin:20px 0;"></div>
       <button class="reveal-btn" id="p6reset" style="margin-top:8px;">↺ RESET</button>`,
-    problem:`<p>Click the six circles in the correct order. A numbered badge appears on each circle you press. Any wrong press flashes red and resets your progress. Get all six right in sequence to break the seal.</p>`,
+    problem:`<p>Press the six circles in the correct order. Selected circles appear darker. The combination is only judged after all six have been pressed — if wrong, all six flash red and reset.</p>`,
     solution:`
       <div class="answer">6 → 3 → 5 → 4 → 2 → 1</div>
       <p style="font-family:sans-serif;color:var(--muted);line-height:1.7;">Press the circles in this order. The combination is only checked after all 6 have been pressed — no feedback is given mid-sequence.</p>`,
