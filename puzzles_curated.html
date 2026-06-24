@@ -754,7 +754,7 @@ function buildCylinderLock(){
 }
 
 /* ───────────────── Puzzle Six: Circle Sequence ───────────────── */
-const P6_CORRECT = [0, 2, 4, 1, 3, 5];
+const P6_CORRECT = [5, 2, 4, 3, 1, 0];
 function buildPuzzleSix() {
   sceneIllustration('preview-p6', drawScenePoemWall);
   const wrap = document.getElementById('p6grid'); if (!wrap) return;
@@ -862,8 +862,10 @@ function buildPuzzleSix() {
       if (Math.hypot(mx - c.cx, my - c.cy) <= R && !input.includes(c.id)) {
         input.push(c.id);
         const len = input.length;
-        if (input[len-1] !== P6_CORRECT[len-1]) { wrong = true; wrongTimer = 40; }
-        else if (len === P6_CORRECT.length) solved = true;
+        if (len === P6_CORRECT.length) {
+          if (P6_CORRECT.every((v, i) => input[i] === v)) solved = true;
+          else { wrong = true; wrongTimer = 40; }
+        }
         return;
       }
     }
@@ -1349,8 +1351,8 @@ const PUZZLES = [
       <button class="reveal-btn" id="p6reset" style="margin-top:8px;">↺ RESET</button>`,
     problem:`<p>Click the six circles in the correct order. A numbered badge appears on each circle you press. Any wrong press flashes red and resets your progress. Get all six right in sequence to break the seal.</p>`,
     solution:`
-      <div class="answer">1 → 3 → 5 → 2 → 4 → 6</div>
-      <p style="font-family:sans-serif;color:var(--muted);line-height:1.7;">Press the circles in this order (by their displayed number). The correct sequence in the game is defined as <code>[0, 2, 4, 1, 3, 5]</code> (zero-indexed), which maps to circles <b>1 → 3 → 5 → 2 → 4 → 6</b> as labelled on screen.</p>`,
+      <div class="answer">6 → 3 → 5 → 4 → 2 → 1</div>
+      <p style="font-family:sans-serif;color:var(--muted);line-height:1.7;">Press the circles in this order. The combination is only checked after all 6 have been pressed — no feedback is given mid-sequence.</p>`,
   },
   {
     num:'7', name:'عزيزين على القلب', loc:'Beyond شهر عسل 89', build:'puzzle7',
