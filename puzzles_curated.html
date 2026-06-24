@@ -1314,17 +1314,38 @@ const PUZZLES = [
   {
     num:'6', name:'خيال الاطفال هو مفتاح الثروة', loc:'Beyond the Basement', build:'puzzle6',
     given:`
-      <div class="scene-preview"><canvas id="preview-p6" width="380" height="240"></canvas><div class="scene-label">IN GAME — POEM ON THE WALL (ROOM SIX)</div></div>
-      <p>Past the basement door lies a dark room. On the wall hangs a poem — the only clue:</p>
-      <div class="clue">
-        <div class="head">The Sixth Seal</div>
-        Six circles stand in silent wait,<br>
-        Touch them true to open fate.<br>
-        The pattern hides within the verse —<br>
-        each wrong step makes the seal grow worse.<br><br>
-        Find the order. Break the seal.
+      <div class="scene-preview"><canvas id="preview-p6" width="380" height="240"></canvas><div class="scene-label">IN GAME — شهر عسل 89</div></div>
+      <p>داخل الغرفة تجد ورقة مطوية على الأرض — مذكرات من رحلة لا تُنسى:</p>
+      <div style="
+        background: linear-gradient(160deg, #fdf6e3, #f5ead0);
+        border: 1.5px solid #c8a96a;
+        border-radius: 6px;
+        padding: 28px 32px;
+        margin: 18px 0;
+        font-family: 'Amiri', 'Scheherazade New', serif;
+        font-size: 1.18rem;
+        line-height: 2;
+        color: #3a2a10;
+        direction: rtl;
+        text-align: right;
+        box-shadow: 2px 4px 18px rgba(0,0,0,0.13), inset 0 0 40px rgba(200,170,100,0.08);
+        position: relative;
+      ">
+        <div style="
+          position: absolute;
+          top: 10px; left: 10px; right: 10px; bottom: 10px;
+          border: 0.5px solid rgba(180,140,60,0.25);
+          border-radius: 4px;
+          pointer-events: none;
+        "></div>
+        كان اجمل شهر مع اجمل وحدة<br>
+        قضينا يومين في صحراء افريقيا وشفنا العجب<br>
+        صعدنا جبل وبحياتي ما شفت النجوم جذي!<br>
+        رحنا جزيرة هناك عرفت معنى الهدوء<br>
+        زرنا قرى بالبرتقال وكلينا طباخهم قبل لا نروح غابات اسبانيا<br>
+        ختمنا احلى شهر باحلى شروق
       </div>
-      <p>Below the poem, a 3 × 2 grid of six circles — each with a placeholder image — waits to be pressed in the right sequence. Click them below to try it out:</p>
+      <p>أسفل الورقة تجد ستة دوائر — اضغطها بالترتيب الصحيح:</p>
       <div id="p6grid" style="margin:20px 0;"></div>
       <button class="reveal-btn" id="p6reset" style="margin-top:8px;">↺ RESET</button>`,
     problem:`<p>Click the six circles in the correct order. A numbered badge appears on each circle you press. Any wrong press flashes red and resets your progress. Get all six right in sequence to break the seal.</p>`,
