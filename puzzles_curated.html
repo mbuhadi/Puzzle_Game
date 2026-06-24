@@ -781,6 +781,8 @@ function buildPuzzleSix() {
     }
   }
 
+  const P6_IMGS = [1,2,3,4,5,6].map(i => { const img = new Image(); img.src = `${i}.png`; return img; });
+
   let input = [], solved = false, wrong = false, wrongTimer = 0;
 
   function draw() {
@@ -798,23 +800,20 @@ function buildPuzzleSix() {
       else                       { g.strokeStyle = '#2a2642'; g.lineWidth = 2; }
       g.stroke();
 
-      // Circle fill
-      g.beginPath(); g.arc(c.cx, c.cy, R, 0, Math.PI*2);
-      g.fillStyle = pressed ? (wrong ? '#2a1218' : '#1e1a30') : '#1c192e';
-      g.fill();
-
-      // Placeholder image (cross-hatch square)
-      const ph = R * 0.72, ox = c.cx - ph/2, oy = c.cy - ph/2;
-      g.fillStyle = '#28253e'; g.fillRect(ox, oy, ph, ph);
-      g.strokeStyle = '#3e3a58'; g.lineWidth = 1.5;
-      g.strokeRect(ox, oy, ph, ph);
-      g.beginPath(); g.moveTo(ox, oy);     g.lineTo(ox+ph, oy+ph); g.stroke();
-      g.beginPath(); g.moveTo(ox+ph, oy); g.lineTo(ox, oy+ph);    g.stroke();
-
-      // Circle number label (bottom of placeholder)
-      g.fillStyle = '#5a5470'; g.font = 'bold 15px Cinzel, serif';
-      g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText(String(c.id + 1), c.cx, c.cy + ph*0.5 + 10);
+      // Seal image clipped to circle
+      g.save();
+      g.beginPath(); g.arc(c.cx, c.cy, R, 0, Math.PI*2); g.clip();
+      const _simg = P6_IMGS[c.id];
+      if (_simg.complete && _simg.naturalWidth > 0) {
+        g.drawImage(_simg, c.cx - R, c.cy - R, R*2, R*2);
+      } else {
+        g.fillStyle = '#1c192e'; g.fillRect(c.cx - R, c.cy - R, R*2, R*2);
+      }
+      if (pressed) {
+        g.fillStyle = wrong ? 'rgba(42,18,24,0.55)' : 'rgba(30,26,48,0.45)';
+        g.fillRect(c.cx - R, c.cy - R, R*2, R*2);
+      }
+      g.restore();
 
       // Press-order badge
       const ord = input.indexOf(c.id);

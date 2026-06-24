@@ -2646,23 +2646,11 @@ function r6ExitDist() {
   return Math.sqrt(dx*dx + dy*dy);
 }
 
-// One placeholder canvas per circle: dark background, gray cross-hatched square, index number
-const R6_PLACEHOLDERS = R6_CIRCLES.map((_, i) => {
-  const cv = document.createElement('canvas');
-  const s  = CIRCLE_R6;
-  cv.width = s*2; cv.height = s*2;
-  const g  = cv.getContext('2d');
-  g.fillStyle = '#1c192e'; g.fillRect(0, 0, s*2, s*2);
-  const ph = s * 0.72, ox = s - ph/2, oy = s - ph/2;
-  g.fillStyle   = '#28253e'; g.fillRect(ox, oy, ph, ph);
-  g.strokeStyle = '#3e3a58'; g.lineWidth = 1.5;
-  g.strokeRect(ox, oy, ph, ph);
-  g.beginPath(); g.moveTo(ox, oy);     g.lineTo(ox+ph, oy+ph); g.stroke();
-  g.beginPath(); g.moveTo(ox+ph, oy); g.lineTo(ox, oy+ph);    g.stroke();
-  g.fillStyle = '#5a5470'; g.font = 'bold 17px Cinzel, serif';
-  g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText(String(i+1), s, s + ph*0.5 + 11);
-  return cv;
+// Real images for each circle (1.png – 6.png)
+const R6_PLACEHOLDERS = [1,2,3,4,5,6].map(i => {
+  const img = new Image();
+  img.src = `${i}.png`;
+  return img;
 });
 
 // ─── Room 7 ───────────────────────────────────────────────────────────────────
@@ -2869,10 +2857,16 @@ function drawRoom6() {
     else                          { ctx.strokeStyle='#2a2642'; ctx.lineWidth=2; }
     ctx.stroke();
 
-    // Clip circle & draw placeholder image
+    // Clip circle & draw seal image
     ctx.save();
     ctx.beginPath(); ctx.arc(c.cx, c.cy, CIRCLE_R6, 0, Math.PI*2); ctx.clip();
-    ctx.drawImage(R6_PLACEHOLDERS[c.id], c.cx-CIRCLE_R6, c.cy-CIRCLE_R6);
+    const _img6 = R6_PLACEHOLDERS[c.id];
+    if (_img6.complete && _img6.naturalWidth > 0) {
+      ctx.drawImage(_img6, c.cx-CIRCLE_R6, c.cy-CIRCLE_R6, CIRCLE_R6*2, CIRCLE_R6*2);
+    } else {
+      ctx.fillStyle = '#1c192e';
+      ctx.fillRect(c.cx-CIRCLE_R6, c.cy-CIRCLE_R6, CIRCLE_R6*2, CIRCLE_R6*2);
+    }
     if (pressed) {
       ctx.fillStyle = r6Wrong ? 'rgba(192,57,43,0.32)' : 'rgba(106,90,154,0.30)';
       ctx.fillRect(c.cx-CIRCLE_R6, c.cy-CIRCLE_R6, CIRCLE_R6*2, CIRCLE_R6*2);
