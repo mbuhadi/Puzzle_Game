@@ -2279,16 +2279,16 @@ function drawSubRoom() {
 
       // Arabic text
       const TEXT = [
-        'عند الشجرة تبدأ الحكاية،',
-        'دورتان مع الزمن حول الماء،',
-        'ثم دورة تعاكسه،',
-        'ليظهر ما خفي عن الأنظار.',
+        'اليهال يموتون على الحوش في البيت،',
+        'دايما يلعبون هني، بس اشوفهم',
+        'يلفون لفتبن حول الماي ويختفون،',
+        'مادري وين يروحون',
       ];
       ctx.save();
       ctx.direction = 'rtl'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillStyle = '#2a1f0a';
-      ctx.font = 'bold 30px Amiri, serif';
-      const lineH = 68;
+      ctx.font = 'bold 26px Amiri, serif';
+      const lineH = 60;
       const startY = IY + IH/2 - ((TEXT.length-1)*lineH)/2;
       TEXT.forEach((line, i) => {
         ctx.fillText(line, IX+IW/2, startY + i*lineH);
