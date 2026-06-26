@@ -151,6 +151,10 @@
   .scene-preview canvas{display:block; max-width:100%; border-radius:8px; border:1px solid var(--line);}
   .scene-label{font-size:10px; color:var(--dim); font-family:sans-serif; letter-spacing:2px; margin-top:6px;}
 
+  /* ── Chunk labels ── */
+  .clabel{display:inline-block;font-family:monospace;font-size:10px;font-weight:bold;background:#ff8c00;color:#000;padding:1px 7px;border-radius:3px;letter-spacing:0.5px;margin-bottom:5px;user-select:none;}
+  .chunk{margin:10px 0;}
+
   /* ── Mobile overrides (must come after base rules) ── */
   @media(max-width:640px){
     .tree-layout{flex-direction:column;}
@@ -1118,253 +1122,248 @@ const PUZZLES = [
   {
     num:'1', name:'عائلتنا الكريمة', loc:'At the Gate', build:'tree',
     given:`
-      <div class="clue arabic">
-        <div class="head">عبدالرحمن يقول:</div>
-        • الاكبر الى الاصغر من اليسار لي اليمين<br>
-        • ابوي عنده 3 اولاد، انا واخواني<br>
-        • اكبرنا بوغازي ودايما يقول "طول عمري وانا يسموني بوغازي، عيب ما اسمي ولدي غازي"<br>
-        • يحليلهم عيسى ومشاري كانو دايما يقلدون اخوهم الكبير<br>
-        • لما انولد اخو رزان جا ابوي حق اصغر عيال بوغازي وقال له "مبروك بوعويس جانا السمي"<br>
-        • واخر شي لا تنسى سميك
+      <div class="chunk"><span class="clabel">p1g1</span>
+        <div class="clue arabic">
+          <div class="head">عبدالرحمن يقول:</div>
+          • الاكبر الى الاصغر من اليسار لي اليمين<br>
+          • ابوي عنده 3 اولاد، انا واخواني<br>
+          • اكبرنا بوغازي ودايما يقول "طول عمري وانا يسموني بوغازي، عيب ما اسمي ولدي غازي"<br>
+          • يحليلهم عيسى ومشاري كانو دايما يقلدون اخوهم الكبير<br>
+          • لما انولد اخو رزان جا ابوي حق اصغر عيال بوغازي وقال له "مبروك بوعويس جانا السمي"<br>
+          • واخر شي لا تنسى سميك
+        </div>
       </div>`,
-    problem:`<div class="tree-stage" id="treeStage"></div>`,
-    solution:`
-      <div class="tree-sol">
-        <b>الجد (الجذر):</b> عيسى<br><br>
-        <b>الأبناء (من اليسار لليمين):</b> فيصل «بوغازي» — عبدالعزيز — عبدالرحمن<br><br>
-        <b>أبناء فيصل (يسار → يمين):</b> غازي — مشاري — عيسى<br><br>
-        <b>أبناء عبدالعزيز:</b> رزان — عيسى<br><br>
-        <b>ابن عبدالرحمن:</b> عبدالعزيز (مثبت مسبقاً)
-      </div>
-      <p style="font-family:sans-serif;color:var(--muted);margin-top:18px;line-height:1.7;">
-      <b>Reasoning:</b> The father has 3 sons. The eldest is "Abu Ghazi" — he insists on naming his son غازي, so the
-      leftmost (eldest) son is <b>فيصل</b> and his first child is <b>غازي</b>. عيسى and مشاري imitate their eldest uncle,
-      so they appear as فيصل's other children. The grandfather's name reappears among the grandchildren ("don't forget
-      your namesake"), so عيسى repeats. When رزان's brother was born, the grandfather congratulated "Abu Owais"
-      (عبدالعزيز) — placing رزان under عبدالعزيز.</p>`,
+    problem:`<div class="chunk"><span class="clabel">p1p1</span><div class="tree-stage" id="treeStage"></div></div>`,
   },
   {
     num:'2', name:'أمام أعين الجميع', loc:'Study Door · Lock 1', build:'windows',
     given:`
-      <div class="scene-preview"><canvas id="preview-p2" width="380" height="200"></canvas><div class="scene-label">IN GAME — KITCHEN WINDOW (ROOM_LEFT)</div></div>
-      <p>This study-door lock is marked with a <b>window</b> icon. Its code is split across the two windows in the house —
-      each window shows <b>half</b> of a three-digit number.</p>
+      <div class="chunk"><span class="clabel">p2g1</span>
+        <div class="scene-preview"><canvas id="preview-p2" width="380" height="200"></canvas><div class="scene-label">IN GAME — KITCHEN WINDOW (ROOM_LEFT)</div></div>
+      </div>
+      <div class="chunk"><span class="clabel">p2g2</span>
+        <p>This study-door lock is marked with a <b>window</b> icon. Its code is split across the two windows in the house —
+        each window shows <b>half</b> of a three-digit number.</p>
+      </div>
       <div class="windows-wrap">
-        <div class="window-card">
-          <canvas id="kitchenWin" width="300" height="210"></canvas>
-          <div class="wlabel">Kitchen Window — top half</div>
+        <div class="chunk"><span class="clabel">p2g3</span>
+          <div class="window-card">
+            <canvas id="kitchenWin" width="300" height="210"></canvas>
+            <div class="wlabel">Kitchen Window — top half</div>
+          </div>
         </div>
-        <div class="window-card">
-          <canvas id="livingWin" width="300" height="210"></canvas>
-          <div class="wlabel">Living Room Window — bottom half</div>
+        <div class="chunk"><span class="clabel">p2g4</span>
+          <div class="window-card">
+            <canvas id="livingWin" width="300" height="210"></canvas>
+            <div class="wlabel">Living Room Window — bottom half</div>
+          </div>
         </div>
       </div>`,
-    problem:`<p>Open both windows and line up the two halves to read the three-digit code for Lock 1.</p>`,
-    solution:`
-      <div class="answer">Lock 1 = 613</div>
-      <p style="font-family:sans-serif;color:var(--muted);line-height:1.7;">Stack the kitchen window's top half over the living-room window's bottom half:</p>
-      <div class="window-card open" style="cursor:default; margin-top:10px;">
-        <canvas id="combinedWin" width="300" height="210"></canvas>
-        <div class="wlabel">Both halves combined → 613</div>
-      </div>`,
+    problem:`<div class="chunk"><span class="clabel">p2p1</span><p>Open both windows and line up the two halves to read the three-digit code for Lock 1.</p></div>`,
   },
   {
     num:'3', name:'الذكية', loc:'Study Door · Lock 2', build:'clothes',
     given:`
-      <div style="
-        background: linear-gradient(160deg, #fdf6e3, #f5ead0);
-        border: 1.5px solid #c8a96a;
-        border-radius: 6px;
-        padding: 28px 32px;
-        margin: 0 0 22px 0;
-        font-family: 'Amiri', 'Scheherazade New', serif;
-        font-size: 1.15rem;
-        line-height: 2;
-        color: #3a2a10;
-        direction: rtl;
-        text-align: right;
-        box-shadow: 2px 4px 18px rgba(0,0,0,0.13), inset 0 0 40px rgba(200,170,100,0.08);
-        position: relative;
-      ">
+      <div class="chunk"><span class="clabel">p3g1</span>
         <div style="
-          position: absolute;
-          top: 10px; left: 10px; right: 10px; bottom: 10px;
-          border: 0.5px solid rgba(180,140,60,0.25);
-          border-radius: 4px;
-          pointer-events: none;
-        "></div>
-        عزيزه ذكيه و تحب شي اسمه الغاز.<br>
-        طاحت على شي يديد اسمه morse code<br>
-        وهالايام قامت تفنتق بالاماكن الي تحطلنا فيها الالغاز.<br>
-        بس لو تشوف شغلها شغل البيت احسن.
+          background: linear-gradient(160deg, #fdf6e3, #f5ead0);
+          border: 1.5px solid #c8a96a;
+          border-radius: 6px;
+          padding: 28px 32px;
+          margin: 0 0 22px 0;
+          font-family: 'Amiri', 'Scheherazade New', serif;
+          font-size: 1.15rem;
+          line-height: 2;
+          color: #3a2a10;
+          direction: rtl;
+          text-align: right;
+          box-shadow: 2px 4px 18px rgba(0,0,0,0.13), inset 0 0 40px rgba(200,170,100,0.08);
+          position: relative;
+        ">
+          <div style="
+            position: absolute;
+            top: 10px; left: 10px; right: 10px; bottom: 10px;
+            border: 0.5px solid rgba(180,140,60,0.25);
+            border-radius: 4px;
+            pointer-events: none;
+          "></div>
+          عزيزه ذكيه و تحب شي اسمه الغاز.<br>
+          طاحت على شي يديد اسمه morse code<br>
+          وهالايام قامت تفنتق بالاماكن الي تحطلنا فيها الالغاز.<br>
+          بس لو تشوف شغلها شغل البيت احسن.
+        </div>
       </div>
-      <p>The code for this study-door lock is pegged out on the <b>washing line</b> as Morse. Each garment is one symbol:
-      a <b>small</b> item is a <b>dot</b>, a <b>wide</b> item is a <b>dash</b>. The three groups (separated by the larger gaps) are the three digits.</p>
-      <div class="clothes-wrap"><canvas id="clothesCanvas" width="720" height="300"></canvas></div>
-      <p>The living-room <b>TV</b> shows the decoder you need — the full Morse reference table:</p>
-      ${TV_HTML}`,
-    problem:`<p>Read the washing line as Morse, decode each group against the TV's reference table, and dial the three-digit code into Lock 2.</p>`,
-    solution:`
-      <div class="answer">Lock 2 = 248</div>
-      <p style="font-family:sans-serif;color:var(--muted);line-height:1.7;">Decode each group with the TV table —
-      <span class="morse">..---</span> = <b>2</b>,
-      <span class="morse">....-</span> = <b>4</b>,
-      <span class="morse">---..</span> = <b>8</b>.
-      Reading the washing line: small-small-wide-wide-wide = <b>2</b>, four-small-then-wide = <b>4</b>, wide-wide-wide-small-small = <b>8</b>.
-      With both study-door locks open (window lock = 613, this lock = 248), the door unchains.</p>`,
+      <div class="chunk"><span class="clabel">p3g2</span>
+        <p>The code for this study-door lock is pegged out on the <b>washing line</b> as Morse. Each garment is one symbol:
+        a <b>small</b> item is a <b>dot</b>, a <b>wide</b> item is a <b>dash</b>. The three groups (separated by the larger gaps) are the three digits.</p>
+      </div>
+      <div class="chunk"><span class="clabel">p3g3</span>
+        <div class="clothes-wrap"><canvas id="clothesCanvas" width="720" height="300"></canvas></div>
+      </div>
+      <div class="chunk"><span class="clabel">p3g4</span>
+        <p>The living-room <b>TV</b> shows the decoder you need — the full Morse reference table:</p>
+      </div>
+      <div class="chunk"><span class="clabel">p3g5</span>
+        ${TV_HTML}
+      </div>`,
+    problem:`<div class="chunk"><span class="clabel">p3p1</span><p>Read the washing line as Morse, decode each group against the TV's reference table, and dial the three-digit code into Lock 2.</p></div>`,
   },
   {
     num:'4', name:'لعب جهال', loc:'The Courtyard', build:'courtyard',
     given:`
-      <div class="scene-preview"><canvas id="preview-p4" width="380" height="200"></canvas><div class="scene-label">IN GAME — PAPER IN THE STUDY (ROOM_TOP)</div></div>
-      <p>The courtyard pool is ringed by the <b>twelve clock numbers</b> (<span class="arabic">١٢ ، ١ ، ٢ … ١١</span>)
-      laid into the floor tiles. Each number lights up as you stand on it.</p>
-      <p>A paper found in the study reads:</p>
-      <div class="clue arabic" style="direction:rtl;text-align:right;font-size:1.1rem;line-height:2;">
-        اليهال يموتون على الحوش في البيت،<br>
-        دايما يلعبون هني، بس اشوفهم<br>
-        يلفون لفتبن حول الماي ويختفون،<br>
-        مادري وين يروحون
+      <div class="chunk"><span class="clabel">p4g1</span>
+        <div class="scene-preview"><canvas id="preview-p4" width="380" height="200"></canvas><div class="scene-label">IN GAME — PAPER IN THE STUDY (ROOM_TOP)</div></div>
       </div>
-      <p class="play-hint"><b>Play it:</b> use <b>WASD</b> or the <b>arrow keys</b> to walk the red figure onto the clock numbers in the correct order. Walk around the water — step on a number out of order and the count resets. Reach the end to drain the pool.</p>
-      <div class="courtyard-wrap">
-        <canvas id="courtyardCanvas" width="520" height="520" tabindex="0"></canvas>
-        <button class="reveal-btn" id="courtyardReset">↺ RESET</button>
+      <div class="chunk"><span class="clabel">p4g2</span>
+        <p>The courtyard pool is ringed by the <b>twelve clock numbers</b> (<span class="arabic">١٢ ، ١ ، ٢ … ١١</span>)
+        laid into the floor tiles. Each number lights up as you stand on it.</p>
+      </div>
+      <div class="chunk"><span class="clabel">p4g3</span>
+        <p>A paper found in the study reads:</p>
+      </div>
+      <div class="chunk"><span class="clabel">p4g4</span>
+        <div class="clue arabic" style="direction:rtl;text-align:right;font-size:1.1rem;line-height:2;">
+          اليهال يموتون على الحوش في البيت،<br>
+          دايما يلعبون هني، بس اشوفهم<br>
+          يلفون لفتبن حول الماي ويختفون،<br>
+          مادري وين يروحون
+        </div>
+      </div>
+      <div class="chunk"><span class="clabel">p4g5</span>
+        <p class="play-hint"><b>Play it:</b> use <b>WASD</b> or the <b>arrow keys</b> to walk the red figure onto the clock numbers in the correct order. Walk around the water — step on a number out of order and the count resets. Reach the end to drain the pool.</p>
+      </div>
+      <div class="chunk"><span class="clabel">p4g6</span>
+        <div class="courtyard-wrap">
+          <canvas id="courtyardCanvas" width="520" height="520" tabindex="0"></canvas>
+          <button class="reveal-btn" id="courtyardReset">↺ RESET</button>
+        </div>
       </div>`,
-    problem:`<p>Walk the clock numbers in the order the poem describes to drain the pool and reveal the hidden trapdoor to the basement. Stepping on a number out of order resets the sequence.</p>`,
-    solution:`
-      <p style="font-family:sans-serif;color:var(--muted);line-height:1.8;">Start at the <b>11</b> and walk:</p>
-      <div class="answer" style="font-size:18px;line-height:1.9;">
-        11 → 12 → 1 → 2 → 3 → 4 → 5 &nbsp;<span style="color:var(--muted)">(clockwise)</span><br>
-        5 → 4 → 3 → 2 &nbsp;<span style="color:var(--muted)">(counter-clockwise)</span><br>
-        2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 &nbsp;<span style="color:var(--muted)">(clockwise)</span>
-      </div>
-      <p style="font-family:sans-serif;color:var(--muted);line-height:1.7;">Completing the full path drains the pool and opens the trapdoor to the basement. This is the exact order coded in <code style="color:#ff8c00">game.html</code> (<code style="color:#ff8c00">CLOCK_SEQ</code>).</p>
-      <div class="note">Note: the poem shown above describes a slightly different route than this coded order — the playable puzzle and this solution follow the game.</div>`,
+    problem:`<div class="chunk"><span class="clabel">p4p1</span><p>Walk the clock numbers in the order the poem describes to drain the pool and reveal the hidden trapdoor to the basement. Stepping on a number out of order resets the sequence.</p></div>`,
   },
   {
     num:'5', name:'خيال الاطفال مفتاح الثروة', loc:'The Basement', incomplete:false, build:'puzzle5',
     given:`
-      <div class="scene-preview"><canvas id="preview-p5" width="380" height="200"></canvas><div class="scene-label">IN GAME — NOTE ON THE BASEMENT FLOOR</div></div>
-      <p>A note lies on the basement floor with ten hand-drawn shapes in calming colors:</p>
-      <div class="shapes-grid">
-        <div class="shape-item">
-          <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-            <polygon points="100,30 40,160 160,160" fill="#6784B8" stroke="none" opacity="0.9"/>
-          </svg>
-          <div class="shape-label">Triangle</div>
-        </div>
-        <div class="shape-item">
-          <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-            <polygon points="100,25 175,75 150,160 50,160 25,75" fill="#C8758C" stroke="none" opacity="0.9"/>
-          </svg>
-          <div class="shape-label">Pentagon</div>
-        </div>
-        <div class="shape-item">
-          <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-            <polygon points="100,20 120,85 185,100 120,115 100,180 80,115 15,100 80,85" fill="#BA8858" stroke="none" opacity="0.9"/>
-          </svg>
-          <div class="shape-label">Four-Pointed Star</div>
-        </div>
-        <div class="shape-item">
-          <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="100" cy="100" r="75" fill="#5D7C48" stroke="none" opacity="0.9"/>
-          </svg>
-          <div class="shape-label">Circle</div>
-        </div>
-        <div class="shape-item">
-          <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-            <polygon points="100,15 130,70 185,100 130,130 100,185 70,130 15,100 70,70" fill="#942850" stroke="none" opacity="0.9"/>
-          </svg>
-          <div class="shape-label">Eight-Pointed Star</div>
+      <div class="chunk"><span class="clabel">p5g1</span>
+        <div class="scene-preview"><canvas id="preview-p5" width="380" height="200"></canvas><div class="scene-label">IN GAME — NOTE ON THE BASEMENT FLOOR</div></div>
+      </div>
+      <div class="chunk"><span class="clabel">p5g2</span>
+        <p>A note lies on the basement floor with ten hand-drawn shapes in calming colors:</p>
+      </div>
+      <div class="chunk"><span class="clabel">p5g3</span>
+        <div class="shapes-grid">
+          <div class="shape-item">
+            <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+              <polygon points="100,30 40,160 160,160" fill="#6784B8" stroke="none" opacity="0.9"/>
+            </svg>
+            <div class="shape-label">Triangle</div>
+          </div>
+          <div class="shape-item">
+            <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+              <polygon points="100,25 175,75 150,160 50,160 25,75" fill="#C8758C" stroke="none" opacity="0.9"/>
+            </svg>
+            <div class="shape-label">Pentagon</div>
+          </div>
+          <div class="shape-item">
+            <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+              <polygon points="100,20 120,85 185,100 120,115 100,180 80,115 15,100 80,85" fill="#BA8858" stroke="none" opacity="0.9"/>
+            </svg>
+            <div class="shape-label">Four-Pointed Star</div>
+          </div>
+          <div class="shape-item">
+            <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="100" cy="100" r="75" fill="#5D7C48" stroke="none" opacity="0.9"/>
+            </svg>
+            <div class="shape-label">Circle</div>
+          </div>
+          <div class="shape-item">
+            <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+              <polygon points="100,15 130,70 185,100 130,130 100,185 70,130 15,100 70,70" fill="#942850" stroke="none" opacity="0.9"/>
+            </svg>
+            <div class="shape-label">Eight-Pointed Star</div>
+          </div>
         </div>
       </div>
-      <p>Below the shapes, a note reveals the Venn diagram — the exact one drawn on the basement note in the game:</p>
-      <div class="circles-wrap">
-        <canvas id="circlesCanvas" width="600" height="440"></canvas>
+      <div class="chunk"><span class="clabel">p5g4</span>
+        <p>Below the shapes, a note reveals the Venn diagram — the exact one drawn on the basement note in the game:</p>
       </div>
-      <p>Five overlapping circles numbered 1–5, with coloured overlap regions:</p>
-      <ul>
-        <li>A chain of pairwise overlaps: 1∩2, 2∩3, 3∩4, 3∩5, 4∩5</li>
-        <li>A central triple overlap where circles 3, 4 and 5 all meet (3∩4∩5)</li>
-      </ul>`,
-    problem:`<p class="arabic" style="font-size:22px; line-height:2;">خيال الاطفال هو مفتاح الثروة</p>
-      <div class="shape-lock" id="shapeLock">
-        <div class="lock-row">
-          <div class="position">1:</div>
-          <div id="row0"></div>
+      <div class="chunk"><span class="clabel">p5g5</span>
+        <div class="circles-wrap">
+          <canvas id="circlesCanvas" width="600" height="440"></canvas>
         </div>
-        <div class="lock-row">
-          <div class="position">2:</div>
-          <div id="row1"></div>
-        </div>
-        <div class="lock-row">
-          <div class="position">3:</div>
-          <div id="row2"></div>
-        </div>
-        <div class="lock-row">
-          <div class="position">4:</div>
-          <div id="row3"></div>
-        </div>
-        <div class="lock-row">
-          <div class="position">5:</div>
-          <div id="row4"></div>
-        </div>
-        <div class="lock-status" id="lockStatus"></div>
+      </div>
+      <div class="chunk"><span class="clabel">p5g6</span>
+        <p>Five overlapping circles numbered 1–5, with coloured overlap regions:</p>
+        <ul>
+          <li>A chain of pairwise overlaps: 1∩2, 2∩3, 3∩4, 3∩5, 4∩5</li>
+          <li>A central triple overlap where circles 3, 4 and 5 all meet (3∩4∩5)</li>
+        </ul>
       </div>`,
-    solution:`
-      <div class="answer">Correct Order: Triangle → Pentagon → Four-Pointed Star → Circle → Eight-Pointed Star</div>
-      <p style="font-family:sans-serif;color:var(--muted);line-height:1.7;">The color combinations shown in the intersecting areas correspond to adjacent pairs of basic colors. By identifying which shape color represents each combination, you can deduce the sequence that unlocks the chest.</p>`,
+    problem:`<div class="chunk"><span class="clabel">p5p1</span><p class="arabic" style="font-size:22px; line-height:2;">خيال الاطفال هو مفتاح الثروة</p></div>
+      <div class="chunk"><span class="clabel">p5p2</span>
+        <div class="shape-lock" id="shapeLock">
+          <div class="lock-row"><div class="position">1:</div><div id="row0"></div></div>
+          <div class="lock-row"><div class="position">2:</div><div id="row1"></div></div>
+          <div class="lock-row"><div class="position">3:</div><div id="row2"></div></div>
+          <div class="lock-row"><div class="position">4:</div><div id="row3"></div></div>
+          <div class="lock-row"><div class="position">5:</div><div id="row4"></div></div>
+          <div class="lock-status" id="lockStatus"></div>
+        </div>
+      </div>`,
   },
   {
     num:'6', name:'شهر عسل 89', loc:'Beyond the Basement', build:'puzzle6',
     given:`
-      <div style="
-        background: linear-gradient(160deg, #fdf6e3, #f5ead0);
-        border: 1.5px solid #c8a96a;
-        border-radius: 6px;
-        padding: 28px 32px;
-        margin: 18px 0;
-        font-family: 'Amiri', 'Scheherazade New', serif;
-        font-size: 1.18rem;
-        line-height: 2;
-        color: #3a2a10;
-        direction: rtl;
-        text-align: right;
-        box-shadow: 2px 4px 18px rgba(0,0,0,0.13), inset 0 0 40px rgba(200,170,100,0.08);
-        position: relative;
-      ">
+      <div class="chunk"><span class="clabel">p6g1</span>
         <div style="
-          position: absolute;
-          top: 10px; left: 10px; right: 10px; bottom: 10px;
-          border: 0.5px solid rgba(180,140,60,0.25);
-          border-radius: 4px;
-          pointer-events: none;
-        "></div>
-        كان اجمل شهر مع اجمل رسامة<br>
-        قضينا يومين في صحراء افريقيا وشفنا العجب<br>
-        صعدنا جبل وبحياتي ما شفت النجوم جذي!<br>
-        رحنا جزيرة هناك عرفت معنى الهدوء<br>
-        زرنا قرى بالبرتقال وكلينا طباخهم قبل لا نروح غابات اسبانيا<br>
-        ختمنا احلى شهر باحلى شروق
+          background: linear-gradient(160deg, #fdf6e3, #f5ead0);
+          border: 1.5px solid #c8a96a;
+          border-radius: 6px;
+          padding: 28px 32px;
+          margin: 18px 0;
+          font-family: 'Amiri', 'Scheherazade New', serif;
+          font-size: 1.18rem;
+          line-height: 2;
+          color: #3a2a10;
+          direction: rtl;
+          text-align: right;
+          box-shadow: 2px 4px 18px rgba(0,0,0,0.13), inset 0 0 40px rgba(200,170,100,0.08);
+          position: relative;
+        ">
+          <div style="
+            position: absolute;
+            top: 10px; left: 10px; right: 10px; bottom: 10px;
+            border: 0.5px solid rgba(180,140,60,0.25);
+            border-radius: 4px;
+            pointer-events: none;
+          "></div>
+          كان اجمل شهر مع اجمل رسامة<br>
+          قضينا يومين في صحراء افريقيا وشفنا العجب<br>
+          صعدنا جبل وبحياتي ما شفت النجوم جذي!<br>
+          رحنا جزيرة هناك عرفت معنى الهدوء<br>
+          زرنا قرى بالبرتقال وكلينا طباخهم قبل لا نروح غابات اسبانيا<br>
+          ختمنا احلى شهر باحلى شروق
+        </div>
       </div>
-      <div id="p6grid" style="margin:20px 0;"></div>
-      <button class="reveal-btn" id="p6reset" style="margin-top:8px;">↺ RESET</button>`,
-    problem:`<p>Press the six circles in the correct order. Selected circles appear darker. The combination is only judged after all six have been pressed — if wrong, all six flash red and reset.</p>`,
-    solution:`
-      <div class="answer">6 → 3 → 5 → 4 → 2 → 1</div>
-      <p style="font-family:sans-serif;color:var(--muted);line-height:1.7;">Press the circles in this order. The combination is only checked after all 6 have been pressed — no feedback is given mid-sequence.</p>`,
+      <div class="chunk"><span class="clabel">p6g2</span>
+        <div id="p6grid" style="margin:20px 0;"></div>
+        <button class="reveal-btn" id="p6reset" style="margin-top:8px;">↺ RESET</button>
+      </div>`,
+    problem:`<div class="chunk"><span class="clabel">p6p1</span><p>Press the six circles in the correct order. Selected circles appear darker. The combination is only judged after all six have been pressed — if wrong, all six flash red and reset.</p></div>`,
   },
   {
     num:'7', name:'عزيزين على القلب', loc:'Beyond شهر عسل 89', build:'puzzle7',
-    given:`<p>Description coming soon.</p>
-      <p>A 3 × 3 grid of nine items. Three of them are the answer — and the order does not matter. Click them below to try it out:</p>
-      <div id="p7grid" style="margin:20px 0;"></div>
-      <button class="reveal-btn" id="p7reset" style="margin-top:8px;">↺ RESET</button>`,
-    problem:`<p>Click any three cells in the grid. Selection toggles — click a selected cell to deselect it. Once three are chosen the grid checks automatically. If wrong it flashes red and resets. Find the right three to break the seal.</p>`,
-    solution:`
-      <div class="answer">1 &nbsp; 5 &nbsp; 9</div>
-      <p style="font-family:sans-serif;color:var(--muted);line-height:1.7;">The three correct cells are <b>1, 5, and 9</b> (top-left, center, bottom-right). Order does not matter — as long as those three are selected the puzzle is solved.</p>`,
+    given:`
+      <div class="chunk"><span class="clabel">p7g1</span>
+        <p>Description coming soon.</p>
+      </div>
+      <div class="chunk"><span class="clabel">p7g2</span>
+        <p>A 3 × 3 grid of nine items. Three of them are the answer — and the order does not matter. Click them below to try it out:</p>
+      </div>
+      <div class="chunk"><span class="clabel">p7g3</span>
+        <div id="p7grid" style="margin:20px 0;"></div>
+        <button class="reveal-btn" id="p7reset" style="margin-top:8px;">↺ RESET</button>
+      </div>`,
+    problem:`<div class="chunk"><span class="clabel">p7p1</span><p>Click any three cells in the grid. Selection toggles — click a selected cell to deselect it. Once three are chosen the grid checks automatically. If wrong it flashes red and resets. Find the right three to break the seal.</p></div>`,
   },
 ];
 
@@ -1388,16 +1387,7 @@ function select(i){
     <div class="ptitle">${p.name}</div>
     <div class="pkicker">${p.loc.toUpperCase()}</div>
     <div class="section"><h2>THE GIVEN</h2>${p.given}</div>
-    <div class="section"><h2>THE PROBLEM</h2>${p.problem}</div>
-    <div class="section">
-      <button class="reveal-btn" id="revealBtn">▸ REVEAL SOLUTION</button>
-      <div class="solution" id="solution"><h2>THE SOLUTION</h2>${p.solution}</div>
-    </div>`;
-  document.getElementById('revealBtn').onclick=function(){
-    const sol=document.getElementById('solution');
-    const shown=sol.classList.toggle('shown');
-    this.textContent=shown?'▾ HIDE SOLUTION':'▸ REVEAL SOLUTION';
-  };
+    <div class="section"><h2>THE PROBLEM</h2>${p.problem}</div>`;
   // Interactive canvases (incl. any hidden in the solution) are drawn once here.
   if(p.build&&BUILDERS[p.build]){ const ret=BUILDERS[p.build](); if(typeof ret==='function')teardown=ret; }
   detail.scrollTop=0;
