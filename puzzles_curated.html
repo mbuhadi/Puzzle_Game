@@ -243,7 +243,6 @@ const TREE_NAMES=['عيسى','رزان','مشاري','غازي','فيصل','عب
 const TREE_CORRECT=['عيسى','فيصل','عبدالعزيز','عبدالرحمن','غازي','مشاري','عيسى','رزان','عيسى','عبدالعزيز'];
 
 function buildFamilyTree(){
-  sceneIllustration('preview-p1', drawSceneGate);
   const stage=document.getElementById('treeStage'); if(!stage)return;
   const bgImg=document.createElement('img');
   bgImg.src='tree_bg.png';
@@ -1119,25 +1118,16 @@ const PUZZLES = [
   {
     num:'1', name:'عائلتنا الكريمة', loc:'At the Gate', build:'tree',
     given:`
-      <div class="scene-preview"><canvas id="preview-p1" width="380" height="200"></canvas><div class="scene-label">IN GAME — THE ENTRANCE GATE</div></div>
-      <p>The family tree below is the actual puzzle — <b>click any empty box</b> and pick a name from عبدالرحمن's relatives.
-      Two boxes are locked in: <span class="arabic">عبدالرحمن</span> and his child <span class="arabic">عبدالعزيز</span>.
-      Fill every box correctly to solve it.</p>
-      <div class="tree-layout">
-        <div class="tree-stage" id="treeStage"></div>
-        <div class="tree-clues">
-          <div class="clue arabic">
-            <div class="head">عبدالرحمن يقول:</div>
-            • الاكبر الى الاصغر من اليسار لي اليمين<br>
-            • ابوي عنده 3 اولاد، انا واخواني<br>
-            • اكبرنا بوغازي ودايما يقول "طول عمري وانا يسموني بوغازي، عيب ما اسمي ولدي غازي"<br>
-            • يحليلهم عيسى ومشاري كانو دايما يقلدون اخوهم الكبير<br>
-            • لما انولد اخو رزان جا ابوي حق اصغر عيال بوغازي وقال له "مبروك بوعويس جانا السمي"<br>
-            • واخر شي لا تنسى سميك
-          </div>
-        </div>
+      <div class="clue arabic">
+        <div class="head">عبدالرحمن يقول:</div>
+        • الاكبر الى الاصغر من اليسار لي اليمين<br>
+        • ابوي عنده 3 اولاد، انا واخواني<br>
+        • اكبرنا بوغازي ودايما يقول "طول عمري وانا يسموني بوغازي، عيب ما اسمي ولدي غازي"<br>
+        • يحليلهم عيسى ومشاري كانو دايما يقلدون اخوهم الكبير<br>
+        • لما انولد اخو رزان جا ابوي حق اصغر عيال بوغازي وقال له "مبروك بوعويس جانا السمي"<br>
+        • واخر شي لا تنسى سميك
       </div>`,
-    problem:`<p>Place the correct name in every empty box using only عبدالرحمن's clues. Boxes run oldest → youngest, left → right within each generation. When every box is right, the "تم حل الأحجية" banner appears.</p>`,
+    problem:`<div class="tree-stage" id="treeStage"></div>`,
     solution:`
       <div class="tree-sol">
         <b>الجد (الجذر):</b> عيسى<br><br>
