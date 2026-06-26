@@ -1141,10 +1141,6 @@ const PUZZLES = [
       <div class="chunk"><span class="clabel">p2g1</span>
         <div class="scene-preview"><canvas id="preview-p2" width="380" height="200"></canvas><div class="scene-label">IN GAME — KITCHEN WINDOW (ROOM_LEFT)</div></div>
       </div>
-      <div class="chunk"><span class="clabel">p2g2</span>
-        <p>This study-door lock is marked with a <b>window</b> icon. Its code is split across the two windows in the house —
-        each window shows <b>half</b> of a three-digit number.</p>
-      </div>
       <div class="windows-wrap">
         <div class="chunk"><span class="clabel">p2g3</span>
           <div class="window-card">
@@ -1159,7 +1155,7 @@ const PUZZLES = [
           </div>
         </div>
       </div>`,
-    problem:`<div class="chunk"><span class="clabel">p2p1</span><p>Open both windows and line up the two halves to read the three-digit code for Lock 1.</p></div>`,
+    problem:``,
   },
   {
     num:'3', name:'الذكية', loc:'Study Door · Lock 2', build:'clothes',
@@ -1193,33 +1189,19 @@ const PUZZLES = [
           بس لو تشوف شغلها شغل البيت احسن.
         </div>
       </div>
-      <div class="chunk"><span class="clabel">p3g2</span>
-        <p>The code for this study-door lock is pegged out on the <b>washing line</b> as Morse. Each garment is one symbol:
-        a <b>small</b> item is a <b>dot</b>, a <b>wide</b> item is a <b>dash</b>. The three groups (separated by the larger gaps) are the three digits.</p>
-      </div>
       <div class="chunk"><span class="clabel">p3g3</span>
         <div class="clothes-wrap"><canvas id="clothesCanvas" width="720" height="300"></canvas></div>
-      </div>
-      <div class="chunk"><span class="clabel">p3g4</span>
-        <p>The living-room <b>TV</b> shows the decoder you need — the full Morse reference table:</p>
       </div>
       <div class="chunk"><span class="clabel">p3g5</span>
         ${TV_HTML}
       </div>`,
-    problem:`<div class="chunk"><span class="clabel">p3p1</span><p>Read the washing line as Morse, decode each group against the TV's reference table, and dial the three-digit code into Lock 2.</p></div>`,
+    problem:``,
   },
   {
     num:'4', name:'لعب جهال', loc:'The Courtyard', build:'courtyard',
     given:`
       <div class="chunk"><span class="clabel">p4g1</span>
         <div class="scene-preview"><canvas id="preview-p4" width="380" height="200"></canvas><div class="scene-label">IN GAME — PAPER IN THE STUDY (ROOM_TOP)</div></div>
-      </div>
-      <div class="chunk"><span class="clabel">p4g2</span>
-        <p>The courtyard pool is ringed by the <b>twelve clock numbers</b> (<span class="arabic">١٢ ، ١ ، ٢ … ١١</span>)
-        laid into the floor tiles. Each number lights up as you stand on it.</p>
-      </div>
-      <div class="chunk"><span class="clabel">p4g3</span>
-        <p>A paper found in the study reads:</p>
       </div>
       <div class="chunk"><span class="clabel">p4g4</span>
         <div class="clue arabic" style="direction:rtl;text-align:right;font-size:1.1rem;line-height:2;">
@@ -1229,25 +1211,19 @@ const PUZZLES = [
           مادري وين يروحون
         </div>
       </div>
-      <div class="chunk"><span class="clabel">p4g5</span>
-        <p class="play-hint"><b>Play it:</b> use <b>WASD</b> or the <b>arrow keys</b> to walk the red figure onto the clock numbers in the correct order. Walk around the water — step on a number out of order and the count resets. Reach the end to drain the pool.</p>
-      </div>
       <div class="chunk"><span class="clabel">p4g6</span>
         <div class="courtyard-wrap">
           <canvas id="courtyardCanvas" width="520" height="520" tabindex="0"></canvas>
           <button class="reveal-btn" id="courtyardReset">↺ RESET</button>
         </div>
       </div>`,
-    problem:`<div class="chunk"><span class="clabel">p4p1</span><p>Walk the clock numbers in the order the poem describes to drain the pool and reveal the hidden trapdoor to the basement. Stepping on a number out of order resets the sequence.</p></div>`,
+    problem:``,
   },
   {
     num:'5', name:'خيال الاطفال مفتاح الثروة', loc:'The Basement', incomplete:false, build:'puzzle5',
     given:`
       <div class="chunk"><span class="clabel">p5g1</span>
         <div class="scene-preview"><canvas id="preview-p5" width="380" height="200"></canvas><div class="scene-label">IN GAME — NOTE ON THE BASEMENT FLOOR</div></div>
-      </div>
-      <div class="chunk"><span class="clabel">p5g2</span>
-        <p>A note lies on the basement floor with ten hand-drawn shapes in calming colors:</p>
       </div>
       <div class="chunk"><span class="clabel">p5g3</span>
         <div class="shapes-grid">
@@ -1283,21 +1259,12 @@ const PUZZLES = [
           </div>
         </div>
       </div>
-      <div class="chunk"><span class="clabel">p5g4</span>
-        <p>Below the shapes, a note reveals the Venn diagram — the exact one drawn on the basement note in the game:</p>
-      </div>
       <div class="chunk"><span class="clabel">p5g5</span>
         <div class="circles-wrap">
           <canvas id="circlesCanvas" width="600" height="440"></canvas>
         </div>
       </div>
-      <div class="chunk"><span class="clabel">p5g6</span>
-        <p>Five overlapping circles numbered 1–5, with coloured overlap regions:</p>
-        <ul>
-          <li>A chain of pairwise overlaps: 1∩2, 2∩3, 3∩4, 3∩5, 4∩5</li>
-          <li>A central triple overlap where circles 3, 4 and 5 all meet (3∩4∩5)</li>
-        </ul>
-      </div>`,
+`,
     problem:`<div class="chunk"><span class="clabel">p5p1</span><p class="arabic" style="font-size:22px; line-height:2;">خيال الاطفال هو مفتاح الثروة</p></div>
       <div class="chunk"><span class="clabel">p5p2</span>
         <div class="shape-lock" id="shapeLock">
@@ -1348,22 +1315,16 @@ const PUZZLES = [
         <div id="p6grid" style="margin:20px 0;"></div>
         <button class="reveal-btn" id="p6reset" style="margin-top:8px;">↺ RESET</button>
       </div>`,
-    problem:`<div class="chunk"><span class="clabel">p6p1</span><p>Press the six circles in the correct order. Selected circles appear darker. The combination is only judged after all six have been pressed — if wrong, all six flash red and reset.</p></div>`,
+    problem:``,
   },
   {
     num:'7', name:'عزيزين على القلب', loc:'Beyond شهر عسل 89', build:'puzzle7',
     given:`
-      <div class="chunk"><span class="clabel">p7g1</span>
-        <p>Description coming soon.</p>
-      </div>
-      <div class="chunk"><span class="clabel">p7g2</span>
-        <p>A 3 × 3 grid of nine items. Three of them are the answer — and the order does not matter. Click them below to try it out:</p>
-      </div>
       <div class="chunk"><span class="clabel">p7g3</span>
         <div id="p7grid" style="margin:20px 0;"></div>
         <button class="reveal-btn" id="p7reset" style="margin-top:8px;">↺ RESET</button>
       </div>`,
-    problem:`<div class="chunk"><span class="clabel">p7p1</span><p>Click any three cells in the grid. Selection toggles — click a selected cell to deselect it. Once three are chosen the grid checks automatically. If wrong it flashes red and resets. Find the right three to break the seal.</p></div>`,
+    problem:``,
   },
 ];
 
