@@ -469,6 +469,7 @@ const examineOverlay = document.getElementById('examineOverlay');
 const examineFrame   = document.getElementById('examineFrame');
 
 function openExamine(id) {
+  for (const k in keys) keys[k] = false;
   const baseId = id.replace(/s$/, '');
   examineFrame.src = 'puzzles_curated.html?chunk=' + baseId;
   examineOverlay.classList.add('open');
@@ -768,7 +769,9 @@ canvas.addEventListener('keydown', e => {
   }
   if (e.key === 'Escape') closeExamine();
 });
-canvas.addEventListener('keyup', e => { keys[e.key] = false; });
+canvas.addEventListener('keyup',  e => { keys[e.key] = false; });
+canvas.addEventListener('blur',   ()  => { for (const k in keys) keys[k] = false; });
+window.addEventListener('blur',   ()  => { for (const k in keys) keys[k] = false; });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 canvas.width  = VIEWPORT_W;
