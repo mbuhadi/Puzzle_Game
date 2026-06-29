@@ -50,7 +50,7 @@
 <h1>Map 1</h1>
 <div class="meta">
   Scale: <span>1 tile = 10 sq ft</span>
-  &nbsp;|&nbsp; Speed: <span>20 tiles / sec</span>
+  &nbsp;|&nbsp; Speed: <span>10 tiles / sec</span>
   &nbsp;|&nbsp; Area: <span id="sqftLabel">generating…</span>
 </div>
 
@@ -58,7 +58,7 @@
 <div class="hint">WASD / Arrow Keys &nbsp;·&nbsp; click canvas to focus</div>
 
 <div class="legend">
-  <div class="legend-item"><div class="swatch" style="background:#1a1814;"></div>Void</div>
+  <div class="legend-item"><div class="swatch" style="background:#1a1814;"></div>Exterior</div>
   <div class="legend-item"><div class="swatch" style="background:#c8b98a;"></div>Floor</div>
   <div class="legend-item"><div class="swatch" style="background:#4a4235;"></div>Wall</div>
   <div class="legend-item"><div class="swatch" style="background:#4a7c59;"></div>Object</div>
@@ -70,9 +70,9 @@
 
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────────
-const TILE_PX       = 32;    // px per tile
-const SQFT_PER_TILE = 10;    // real-world sq ft per tile
-const SPEED         = 20;    // tiles per second
+const TILE_PX       = 32;
+const SQFT_PER_TILE = 10;
+const SPEED         = 10;    // tiles per second
 const HITBOX        = 0.28;  // collision half-size in tiles
 const VIEWPORT_W    = 800;
 const VIEWPORT_H    = 520;
@@ -83,96 +83,96 @@ const T = { VOID:0, FLOOR:1, WALL:2, OBJ:3 };
 
 // ── Interactables (future drag-and-drop) ──────────────────────────────────────
 // { id: 'p1g1s', col: Number, row: Number }
-// Add entries here; pressing E near one opens the given panel for that id.
 const INTERACTABLES = [];
 
-// ── Map generation ────────────────────────────────────────────────────────────
-function generateMap() {
-  let s = Date.now() | 0;
+// ── House blueprint ───────────────────────────────────────────────────────────
+// Interior rect placed roughly centred in the grid
+const HX = 11, HY = 15;  // top-left of interior floor
+const HW = 46, HH = 26;  // interior width × height (floor tiles)
+
+// BSP controls
+const MIN_ROOM_W = 7, MIN_ROOM_H = 6, MAX_BSP_DEPTH = 4;
+
+// ── Map generation (BSP house layout) ────────────────────────────────────────
+let mapGrid = null;
+
+function generateHouse() {
+  let seed = Date.now() | 0;
   const rng = (lo, hi) => {
-    s = Math.imul(s, 1664525) + 1013904223 | 0;
-    return lo + ((s >>> 0) % (hi - lo + 1));
+    seed = Math.imul(seed, 1664525) + 1013904223 | 0;
+    return lo + ((seed >>> 0) % (hi - lo + 1));
   };
 
   const grid = Array.from({ length: GRID_H }, () => new Array(GRID_W).fill(T.VOID));
   const rooms = [];
+
+  // Recursively subdivide the house interior into rooms.
+  // Each split places a 1-tile interior wall with a 2-tile opening.
+  function bsp(x, y, w, h, depth) {
+    const canV = w >= MIN_ROOM_W * 2 + 1;  // can split left/right
+    const canH = h >= MIN_ROOM_H * 2 + 1;  // can split top/bottom
+
+    if (depth >= MAX_BSP_DEPTH || (!canV && !canH)) {
+      // Leaf: fill entire sub-rect with floor
+      for (let ry = y; ry < y + h; ry++)
+        for (let rx = x; rx < x + w; rx++)
+          grid[ry][rx] = T.FLOOR;
+      rooms.push({ x, y, w, h, cx: x + (w >> 1), cy: y + (h >> 1) });
+      return;
+    }
+
+    // Prefer splitting the longer axis; randomise when both are possible
+    let vert;
+    if (canV && !canH) vert = true;
+    else if (!canV && canH) vert = false;
+    else vert = rng(0, 1) === 0;
+
+    if (vert) {
+      // Vertical dividing wall — splits room into left and right
+      const sx = x + MIN_ROOM_W + rng(0, Math.max(0, w - MIN_ROOM_W * 2 - 1));
+      bsp(x, y, sx - x, h, depth + 1);
+      bsp(sx + 1, y, x + w - sx - 1, h, depth + 1);
+      // Draw wall then cut a 2-tile-tall opening at a random row
+      for (let ry = y; ry < y + h; ry++) grid[ry][sx] = T.WALL;
+      const oy = y + 1 + rng(0, Math.max(0, h - 4));
+      grid[oy][sx] = T.FLOOR;
+      if (oy + 1 <= y + h - 2) grid[oy + 1][sx] = T.FLOOR;
+    } else {
+      // Horizontal dividing wall — splits room into top and bottom
+      const sy = y + MIN_ROOM_H + rng(0, Math.max(0, h - MIN_ROOM_H * 2 - 1));
+      bsp(x, y, w, sy - y, depth + 1);
+      bsp(x, sy + 1, w, y + h - sy - 1, depth + 1);
+      // Draw wall then cut a 2-tile-wide opening at a random column
+      for (let rx = x; rx < x + w; rx++) grid[sy][rx] = T.WALL;
+      const ox = x + 1 + rng(0, Math.max(0, w - 4));
+      grid[sy][ox] = T.FLOOR;
+      if (ox + 1 <= x + w - 2) grid[sy][ox + 1] = T.FLOOR;
+    }
+  }
+
+  bsp(HX, HY, HW, HH, 0);
+
+  // Exterior perimeter wall enclosing the house
+  for (let rx = HX - 1; rx <= HX + HW; rx++) {
+    grid[HY - 1][rx] = T.WALL;
+    grid[HY + HH][rx] = T.WALL;
+  }
+  for (let ry = HY - 1; ry <= HY + HH; ry++) {
+    grid[ry][HX - 1] = T.WALL;
+    grid[ry][HX + HW] = T.WALL;
+  }
+
+  // Count actual floor tiles
   let floorCount = 0;
+  for (const row of grid)
+    for (const t of row)
+      if (t === T.FLOOR) floorCount++;
 
-  // Place non-overlapping rooms until rooms supply ~800 floor tiles
-  for (let attempt = 0; attempt < 800 && floorCount < 800; attempt++) {
-    const w = rng(7, 16);
-    const h = rng(5, 12);
-    const x = rng(2, GRID_W - w - 3);
-    const y = rng(2, GRID_H - h - 3);
-
-    let ok = true;
-    for (const r of rooms) {
-      if (x < r.x2 + 3 && x + w > r.x1 - 2 && y < r.y2 + 3 && y + h > r.y1 - 2) {
-        ok = false; break;
-      }
-    }
-    if (!ok) continue;
-
-    for (let ry = y; ry < y + h; ry++)
-      for (let rx = x; rx < x + w; rx++) {
-        grid[ry][rx] = T.FLOOR;
-        floorCount++;
-      }
-    rooms.push({ x1:x, y1:y, x2:x+w-1, y2:y+h-1, cx:x+(w>>1), cy:y+(h>>1) });
-  }
-
-  // Connect rooms with 2-tile-wide corridors (nearest-neighbour MST)
-  const connected = new Set([0]);
-  while (connected.size < rooms.length) {
-    let best = Infinity, bi = -1, bj = -1;
-    for (const i of connected) {
-      for (let j = 0; j < rooms.length; j++) {
-        if (connected.has(j)) continue;
-        const d = (rooms[i].cx - rooms[j].cx) ** 2 + (rooms[i].cy - rooms[j].cy) ** 2;
-        if (d < best) { best = d; bi = i; bj = j; }
-      }
-    }
-    if (bi === -1) break;
-    const a = rooms[bi], b = rooms[bj];
-
-    // Horizontal leg (2 rows wide)
-    for (let rx = Math.min(a.cx, b.cx); rx <= Math.max(a.cx, b.cx); rx++)
-      for (let dy = 0; dy <= 1; dy++) {
-        const ny = a.cy + dy;
-        if (ny >= 0 && ny < GRID_H && grid[ny][rx] === T.VOID) {
-          grid[ny][rx] = T.FLOOR; floorCount++;
-        }
-      }
-    // Vertical leg (2 cols wide)
-    for (let ry = Math.min(a.cy, b.cy); ry <= Math.max(a.cy, b.cy); ry++)
-      for (let dx = 0; dx <= 1; dx++) {
-        const nx = b.cx + dx;
-        if (nx >= 0 && nx < GRID_W && grid[ry][nx] === T.VOID) {
-          grid[ry][nx] = T.FLOOR; floorCount++;
-        }
-      }
-
-    connected.add(bj);
-  }
-
-  // Surround every floor tile with walls
-  for (let ry = 0; ry < GRID_H; ry++)
-    for (let rx = 0; rx < GRID_W; rx++)
-      if (grid[ry][rx] === T.FLOOR)
-        for (let dy = -1; dy <= 1; dy++)
-          for (let dx = -1; dx <= 1; dx++) {
-            const ny = ry+dy, nx = rx+dx;
-            if (ny >= 0 && ny < GRID_H && nx >= 0 && nx < GRID_W && grid[ny][nx] === T.VOID)
-              grid[ny][nx] = T.WALL;
-          }
-
-  const start = rooms[0];
-  return { grid, floorCount, start: { x: start.cx + 0.5, y: start.cy + 0.5 } };
+  const s = rooms[0] || { cx: HX + (HW >> 1), cy: HY + (HH >> 1) };
+  return { grid, floorCount, start: { x: s.cx + 0.5, y: s.cy + 0.5 } };
 }
 
 // ── Collision ─────────────────────────────────────────────────────────────────
-let mapGrid = null;
-
 function walkable(col, row) {
   if (row < 0 || row >= GRID_H || col < 0 || col >= GRID_W) return false;
   const t = mapGrid[row][col];
@@ -198,7 +198,7 @@ function update(dt) {
   if (keys['ArrowDown']  || keys['s'] || keys['S']) dy += 1;
   if (dx && dy) { dx *= 0.7071; dy *= 0.7071; }
 
-  // Sub-step so fast movement can't tunnel through walls
+  // Sub-step collision to prevent tunnelling at high speed
   const steps = Math.max(1, Math.ceil(SPEED * dt / 0.35));
   const sdx = dx * SPEED * dt / steps;
   const sdy = dy * SPEED * dt / steps;
@@ -216,7 +216,7 @@ function getCamera() {
   };
 }
 
-// ── Drawing (swap ctx.fill… calls with ctx.drawImage(sprite,…) later) ─────────
+// ── Drawing ───────────────────────────────────────────────────────────────────
 const canvas = document.getElementById('mapCanvas');
 const ctx    = canvas.getContext('2d');
 
@@ -294,7 +294,7 @@ function render() {
   ctx.save();
   ctx.translate(-cam.x, -cam.y);
 
-  // Only render tiles visible in the current viewport (performance)
+  // Only render tiles visible in viewport
   const c0 = Math.max(0, Math.floor(cam.x / TILE_PX));
   const r0 = Math.max(0, Math.floor(cam.y / TILE_PX));
   const c1 = Math.min(GRID_W, c0 + Math.ceil(VIEWPORT_W / TILE_PX) + 2);
@@ -330,7 +330,7 @@ canvas.addEventListener('mousedown', () => canvas.focus());
 canvas.width  = VIEWPORT_W;
 canvas.height = VIEWPORT_H;
 
-const { grid, floorCount, start } = generateMap();
+const { grid, floorCount, start } = generateHouse();
 mapGrid   = grid;
 player.x  = start.x;
 player.y  = start.y;
