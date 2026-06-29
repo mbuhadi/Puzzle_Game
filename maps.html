@@ -21,13 +21,13 @@
   h1 { font-size: 26px; color: #c8a84b; letter-spacing: 3px; }
 
   .top-bar {
-    display: flex; align-items: center; gap: 20px;
+    display: flex; align-items: center; gap: 12px;
     flex-wrap: wrap; justify-content: center;
   }
   .meta { font-family: monospace; font-size: 12px; color: #6e695f; }
   .meta span { color: #a09070; }
 
-  #btnRandomize {
+  .bar-btn {
     background: none;
     border: 1px solid #3a3020;
     color: #c8a84b;
@@ -38,7 +38,15 @@
     cursor: pointer;
     letter-spacing: 1px;
   }
-  #btnRandomize:hover { background: #1e1c18; border-color: #c8a84b; }
+  .bar-btn:hover { background: #1e1c18; border-color: #c8a84b; }
+  #btnSave { color: #7a9a6a; border-color: #2a3a1e; }
+  #btnSave:hover { border-color: #7a9a6a; }
+  #saveConfirm {
+    font-family: monospace; font-size: 11px; color: #4a7c59;
+    opacity: 0; transition: opacity 0.4s;
+    pointer-events: none;
+  }
+  #saveConfirm.show { opacity: 1; }
 
   /* ── Layout ──────────────────────────────────────────────────────── */
   .layout-row {
@@ -58,6 +66,16 @@
   }
   #mapCanvas:focus { border-color: #c8a84b; }
   .hint { font-family: monospace; font-size: 11px; color: #3a3530; }
+
+  #examinePrompt {
+    font-family: monospace; font-size: 12px;
+    color: #c8a84b; letter-spacing: 1px;
+    visibility: hidden;
+    background: rgba(0,0,0,0.6);
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid rgba(200,168,75,0.3);
+  }
 
   /* ── Interactables panel ─────────────────────────────────────────── */
   .panel {
@@ -132,6 +150,47 @@
     box-shadow: 0 2px 8px rgba(0,0,0,0.5);
   }
 
+  /* ── Examine overlay ─────────────────────────────────────────────── */
+  #examineOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.88);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  #examineOverlay.open { display: flex; }
+  #examineBox {
+    position: relative;
+    width: 960px;
+    height: 82vh;
+    max-width: 96vw;
+    background: #14120e;
+    border: 2px solid #c8a84b;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  #examineClose {
+    position: absolute;
+    top: 10px; right: 12px;
+    z-index: 10;
+    background: #1a1814;
+    border: 1px solid #3a3020;
+    color: #c8a84b;
+    font-size: 16px;
+    width: 30px; height: 30px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: sans-serif;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #examineClose:hover { background: #2a2018; border-color: #c8a84b; }
+  #examineFrame {
+    width: 100%; height: 100%;
+    border: none;
+  }
+
   /* ── Legend ──────────────────────────────────────────────────────── */
   .legend {
     display: flex; gap: 16px; flex-wrap: wrap;
@@ -152,17 +211,20 @@
 <div class="top-bar">
   <div class="meta">
     Scale: <span>1 tile = 10 sq ft</span>
-    &nbsp;|&nbsp; Speed: <span>10 tiles / sec</span>
+    &nbsp;|&nbsp; Speed: <span>8.5 tiles / sec</span>
     &nbsp;|&nbsp; Area: <span id="sqftLabel">…</span>
   </div>
-  <button id="btnRandomize">Randomize</button>
+  <button class="bar-btn" id="btnRandomize">Randomize</button>
+  <button class="bar-btn" id="btnSave">Save Map</button>
+  <span id="saveConfirm">saved ✓</span>
 </div>
 
 <div class="layout-row">
 
   <div class="map-side">
     <canvas id="mapCanvas" tabindex="0"></canvas>
-    <div class="hint">WASD / Arrow Keys &nbsp;·&nbsp; click canvas to focus</div>
+    <div id="examinePrompt">[ E ] &nbsp;Examine &nbsp;<span id="examineId"></span></div>
+    <div class="hint">WASD / Arrow Keys &nbsp;·&nbsp; click canvas to focus &nbsp;·&nbsp; E to examine</div>
   </div>
 
   <div class="panel">
@@ -182,22 +244,31 @@
 </div>
 
 <a href="index.html">← Back to Home</a>
+
 <div id="dragGhost"></div>
+
+<!-- Examine overlay: loads puzzles_curated.html in an iframe -->
+<div id="examineOverlay">
+  <div id="examineBox">
+    <button id="examineClose" title="Close (Esc)">✕</button>
+    <iframe id="examineFrame" src="puzzles_curated.html"></iframe>
+  </div>
+</div>
 
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────────
 const TILE_PX       = 32;
 const SQFT_PER_TILE = 10;
-const SPEED         = 10;
+const SPEED         = 8.5;
 const HITBOX        = 0.28;
 const VIEWPORT_W    = 800;
 const VIEWPORT_H    = 520;
-const GRID_W        = 68;
-const GRID_H        = 58;
+const GRID_W        = 72;
+const GRID_H        = 60;
 const T = { VOID:0, FLOOR:1, WALL:2 };
 
-// House BSP settings
-const HX = 11, HY = 15, HW = 46, HH = 26;
+// House BSP settings  (~12 000 sq ft target)
+const HX = 11, HY = 15, HW = 50, HH = 28;
 const MIN_ROOM_W = 7, MIN_ROOM_H = 6, MAX_DEPTH = 4;
 
 // ── All interactables (from the puzzle system) ────────────────────────────────
@@ -213,6 +284,28 @@ const ALL = [
 
 // Placed interactables on the map: { id, col, row }
 const PLACED = [];
+
+// ── Seed / persistence ────────────────────────────────────────────────────────
+const DEFAULT_SEED = 0x4b3c2a;
+let currentSeed = parseInt(localStorage.getItem('map1seed')) || DEFAULT_SEED;
+
+const PLACED_KEY = seed => 'map1placed_' + seed;
+
+function savePlaced() {
+  localStorage.setItem(PLACED_KEY(currentSeed), JSON.stringify(PLACED));
+  const el = document.getElementById('saveConfirm');
+  el.classList.add('show');
+  clearTimeout(savePlaced._t);
+  savePlaced._t = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+function loadPlaced(seed) {
+  PLACED.length = 0;
+  try {
+    const raw = localStorage.getItem(PLACED_KEY(seed));
+    if (raw) JSON.parse(raw).forEach(p => PLACED.push(p));
+  } catch(e) {}
+}
 
 // ── Map generation ────────────────────────────────────────────────────────────
 let mapGrid = null;
@@ -301,6 +394,66 @@ function canMoveTo(x, y) {
 const player = { x: 0, y: 0 };
 const keys   = {};
 
+// ── Examine system ────────────────────────────────────────────────────────────
+const examineOverlay = document.getElementById('examineOverlay');
+const examineFrame   = document.getElementById('examineFrame');
+let iframeReady = false;
+let pendingPuzzleIdx = null;
+
+examineFrame.addEventListener('load', () => {
+  iframeReady = true;
+  if (pendingPuzzleIdx !== null) {
+    try { examineFrame.contentWindow.select(pendingPuzzleIdx); } catch(e) {}
+    pendingPuzzleIdx = null;
+  }
+});
+
+function openExamine(id) {
+  const m = id.match(/^p(\d+)/);
+  if (!m) return;
+  const idx = parseInt(m[1]) - 1;
+
+  if (iframeReady) {
+    try { examineFrame.contentWindow.select(idx); } catch(e) {}
+  } else {
+    pendingPuzzleIdx = idx;
+  }
+
+  examineOverlay.classList.add('open');
+}
+
+function closeExamine() {
+  examineOverlay.classList.remove('open');
+  canvas.focus();
+}
+
+document.getElementById('examineClose').addEventListener('click', closeExamine);
+examineOverlay.addEventListener('click', e => { if (e.target === examineOverlay) closeExamine(); });
+
+// ── Nearby interactable detection ─────────────────────────────────────────────
+function getNearbyInteractable() {
+  for (const p of PLACED) {
+    // tile center is at (p.col + 0.5, p.row + 0.5); player center is at (player.x, player.y)
+    if (Math.abs(player.x - (p.col + 0.5)) < 0.55 && Math.abs(player.y - (p.row + 0.5)) < 0.55)
+      return p;
+  }
+  return null;
+}
+
+let lastNearbyId = null;
+
+function updateExaminePrompt() {
+  const nearby = getNearbyInteractable();
+  const id = nearby ? nearby.id : null;
+  if (id === lastNearbyId) return;
+  lastNearbyId = id;
+  const prompt = document.getElementById('examinePrompt');
+  const lbl    = document.getElementById('examineId');
+  if (id) { lbl.textContent = id; prompt.style.visibility = 'visible'; }
+  else    { prompt.style.visibility = 'hidden'; }
+}
+
+// ── Update ────────────────────────────────────────────────────────────────────
 function update(dt) {
   if (drag.active) return;
   let dx = 0, dy = 0;
@@ -316,6 +469,7 @@ function update(dt) {
     if (canMoveTo(player.x + sdx, player.y)) player.x += sdx;
     if (canMoveTo(player.x, player.y + sdy)) player.y += sdy;
   }
+  updateExaminePrompt();
 }
 
 // ── Camera ────────────────────────────────────────────────────────────────────
@@ -402,13 +556,11 @@ function endDrag() {
   document.body.style.cursor = '';
 }
 
-// Panel: mousedown on an item
 function onItemDown(e, id) {
   e.preventDefault();
   startDrag(id, false, e.clientX, e.clientY);
 }
 
-// Canvas: mousedown — pick up a placed interactable OR focus for WASD
 canvas.addEventListener('mousedown', e => {
   const rect = canvas.getBoundingClientRect();
   const { col, row } = screenToTile(e.clientX - rect.left, e.clientY - rect.top);
@@ -421,7 +573,6 @@ canvas.addEventListener('mousedown', e => {
   canvas.focus();
 });
 
-// Global move: update ghost + hover highlight
 document.addEventListener('mousemove', e => {
   if (!drag.active) return;
   ghost.style.left = e.clientX + 'px';
@@ -432,7 +583,6 @@ document.addEventListener('mousemove', e => {
   hoverTile = over ? screenToTile(e.clientX - rect.left, e.clientY - rect.top) : null;
 });
 
-// Global up: place or remove
 document.addEventListener('mouseup', e => {
   if (!drag.active) return;
 
@@ -446,15 +596,12 @@ document.addEventListener('mouseup', e => {
     const isOccupied = PLACED.some(p => p.col === col && p.row === row && p.id !== drag.id);
 
     if (isFloor && !isOccupied) {
-      // Remove existing instance of this id (move), then add at new tile
       const ex = PLACED.findIndex(p => p.id === drag.id);
       if (ex !== -1) PLACED.splice(ex, 1);
       PLACED.push({ id: drag.id, col, row });
       canvas.focus();
     }
-    // else: invalid drop → if fromMap, item remains in PLACED at original pos
   } else {
-    // Dropped outside canvas: remove from map if it was there
     const ex = PLACED.findIndex(p => p.id === drag.id);
     if (drag.fromMap && ex !== -1) PLACED.splice(ex, 1);
   }
@@ -468,7 +615,6 @@ function updatePanel() {
   const list = document.getElementById('panelList');
   list.innerHTML = '';
 
-  // Group by puzzle number
   const groups = {};
   for (const item of ALL) {
     (groups[item.puzzle] ??= []).push(item.id);
@@ -515,7 +661,6 @@ function render() {
     for (let c = c0; c < c1; c++)
       drawTile(mapGrid[r][c], c*TILE_PX, r*TILE_PX);
 
-  // Hover highlight during drag (green = valid, red = invalid)
   if (drag.active && hoverTile) {
     const { col, row } = hoverTile;
     const inBounds = row >= 0 && row < GRID_H && col >= 0 && col < GRID_W;
@@ -525,7 +670,6 @@ function render() {
     ctx.fillRect(col*TILE_PX, row*TILE_PX, TILE_PX, TILE_PX);
   }
 
-  // Draw placed interactables (dimmed if currently being dragged)
   for (const p of PLACED)
     drawPlacedItem(p.col*TILE_PX, p.row*TILE_PX, p.id, drag.active && drag.id === p.id);
 
@@ -544,36 +688,48 @@ function loop(ts) {
 }
 
 // ── Input ─────────────────────────────────────────────────────────────────────
-canvas.addEventListener('keydown', e => { keys[e.key] = true;  e.preventDefault(); });
-canvas.addEventListener('keyup',   e => { keys[e.key] = false; });
+canvas.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  e.preventDefault();
+
+  if ((e.key === 'e' || e.key === 'E') && !examineOverlay.classList.contains('open')) {
+    const nearby = getNearbyInteractable();
+    if (nearby) openExamine(nearby.id);
+  }
+  if (e.key === 'Escape') {
+    closeExamine();
+  }
+});
+canvas.addEventListener('keyup', e => { keys[e.key] = false; });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 canvas.width  = VIEWPORT_W;
 canvas.height = VIEWPORT_H;
 
-function applyMap(result) {
+function applyMap(result, seed) {
   mapGrid  = result.grid;
   player.x = result.start.x;
   player.y = result.start.y;
   document.getElementById('sqftLabel').textContent =
     `~${(result.floorCount * SQFT_PER_TILE).toLocaleString()} sq ft`;
+  loadPlaced(seed);
 }
 
-// Persist seed across refreshes so the map stays stable until Randomize is clicked
-const DEFAULT_SEED = 0x4b3c2a;
-const initSeed = parseInt(localStorage.getItem('map1seed')) || DEFAULT_SEED;
-
-applyMap(generateHouse(initSeed));
+applyMap(generateHouse(currentSeed), currentSeed);
 updatePanel();
 canvas.focus();
 requestAnimationFrame(loop);
 
 document.getElementById('btnRandomize').addEventListener('click', () => {
-  const newSeed = Date.now() | 0;
-  localStorage.setItem('map1seed', newSeed);
-  PLACED.length = 0;
-  applyMap(generateHouse(newSeed));
+  currentSeed = Date.now() | 0;
+  localStorage.setItem('map1seed', currentSeed);
+  applyMap(generateHouse(currentSeed), currentSeed);
   updatePanel();
+  canvas.focus();
+});
+
+document.getElementById('btnSave').addEventListener('click', () => {
+  savePlaced();
   canvas.focus();
 });
 </script>
