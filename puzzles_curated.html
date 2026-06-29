@@ -1205,7 +1205,7 @@ const PUZZLES = [
       <div class="chunk"><span class="clabel">p3g2</span>
         <div class="clothes-wrap"><canvas id="clothesCanvas" width="720" height="300"></canvas></div>
       </div>
-      <div class="chunk"><span class="clabel">p3g5</span>
+      <div class="chunk"><span class="clabel">p3g3</span>
         ${TV_HTML}
       </div>`,
     problem:``,
@@ -1216,7 +1216,7 @@ const PUZZLES = [
       <div class="chunk"><span class="clabel">p4g1s</span>
         <div class="scene-preview"><canvas id="preview-p4" width="380" height="200"></canvas><div class="scene-label">IN GAME — PAPER IN THE STUDY (ROOM_TOP)</div></div>
       </div>
-      <div class="chunk"><span class="clabel">p4g4</span>
+      <div class="chunk"><span class="clabel">p4g1</span>
         <div class="clue arabic" style="direction:rtl;text-align:right;font-size:1.1rem;line-height:2;">
           اليهال يموتون على الحوش في البيت،<br>
           دايما يلعبون هني، بس اشوفهم<br>
@@ -1293,6 +1293,9 @@ const PUZZLES = [
   {
     num:'6', name:'شهر عسل 89', loc:'Beyond the Basement', build:'puzzle6',
     given:`
+      <div class="chunk"><span class="clabel">p6g1s</span>
+        <div class="scene-preview"><canvas id="preview-p6" width="380" height="200"></canvas><div class="scene-label">IN GAME — POEM WALL</div></div>
+      </div>
       <div class="chunk"><span class="clabel">p6g1</span>
         <div style="
           background: linear-gradient(160deg, #fdf6e3, #f5ead0);
@@ -1325,15 +1328,29 @@ const PUZZLES = [
         </div>
       </div>
 `,
-    problem:`<div class="chunk"><span class="clabel">p6p1</span>
+    problem:`<div class="chunk"><span class="clabel">p6p1s</span>
+        <div class="scene-preview"><canvas id="preview-p6p" width="380" height="200"></canvas><div class="scene-label">IN GAME — POEM WALL</div></div>
+      </div>
+      <div class="chunk"><span class="clabel">p6p1</span>
         <div id="p6grid" style="margin:20px 0;"></div>
         <button class="reveal-btn" id="p6reset" style="margin-top:8px;">↺ RESET</button>
       </div>`,
   },
   {
     num:'7', name:'عزيزين على القلب', loc:'Beyond شهر عسل 89', build:'puzzle7',
-    given:``,
-    problem:`<div class="chunk"><span class="clabel">p7p1</span>
+    given:`
+      <div class="chunk"><span class="clabel">p7g1s</span>
+        <div class="scene-preview"><canvas id="preview-p7a" width="380" height="200"></canvas><div class="scene-label">IN GAME</div></div>
+      </div>
+      <div class="chunk"><span class="clabel">p7g2s</span>
+        <div class="scene-preview"><canvas id="preview-p7b" width="380" height="200"></canvas><div class="scene-label">IN GAME</div></div>
+      </div>
+      <div class="chunk"><span class="clabel">p7g1</span></div>
+      <div class="chunk"><span class="clabel">p7g2</span></div>`,
+    problem:`<div class="chunk"><span class="clabel">p7p1s</span>
+        <div class="scene-preview"><canvas id="preview-p7p" width="380" height="200"></canvas><div class="scene-label">IN GAME</div></div>
+      </div>
+      <div class="chunk"><span class="clabel">p7p1</span>
         <div id="p7grid" style="margin:20px 0;"></div>
         <button class="reveal-btn" id="p7reset" style="margin-top:8px;">↺ RESET</button>
       </div>`,
