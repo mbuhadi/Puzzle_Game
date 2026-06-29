@@ -186,10 +186,7 @@
     display: flex; align-items: center; justify-content: center;
   }
   #examineClose:hover { background: #2a2018; border-color: #c8a84b; }
-  #examineFrame {
-    width: 100%; height: 100%;
-    border: none;
-  }
+  #examineFrame { width: 100%; height: 100%; border: none; }
 
   /* ── Legend ──────────────────────────────────────────────────────── */
   .legend {
@@ -236,18 +233,18 @@
 </div>
 
 <div class="legend">
-  <div class="legend-item"><div class="swatch" style="background:#1a1814;"></div>Exterior</div>
-  <div class="legend-item"><div class="swatch" style="background:#c8b98a;"></div>Floor</div>
-  <div class="legend-item"><div class="swatch" style="background:#4a4235;"></div>Wall</div>
+  <div class="legend-item"><div class="swatch" style="background:#1a1410;"></div>Exterior</div>
+  <div class="legend-item"><div class="swatch" style="background:#c8a86a;"></div>Room Floor</div>
+  <div class="legend-item"><div class="swatch" style="background:#d4ba88;"></div>Courtyard</div>
+  <div class="legend-item"><div class="swatch" style="background:#3a7aaa;"></div>Pond</div>
+  <div class="legend-item"><div class="swatch" style="background:#8a6a40;"></div>Wall</div>
   <div class="legend-item"><div class="swatch" style="background:#c8a84b;border-radius:50%;"></div>Player</div>
-  <div class="legend-item"><div class="swatch" style="background:rgba(200,168,75,0.35);border-color:#c8a84b;"></div>Interactable</div>
 </div>
 
 <a href="index.html">← Back to Home</a>
 
 <div id="dragGhost"></div>
 
-<!-- Examine overlay: loads puzzles_curated.html in an iframe -->
 <div id="examineOverlay">
   <div id="examineBox">
     <button id="examineClose" title="Close (Esc)">✕</button>
@@ -265,13 +262,35 @@ const VIEWPORT_W    = 800;
 const VIEWPORT_H    = 520;
 const GRID_W        = 72;
 const GRID_H        = 60;
-const T = { VOID:0, FLOOR:1, WALL:2 };
 
-// House BSP settings  (~12 000 sq ft target)
-const HX = 11, HY = 15, HW = 50, HH = 28;
-const MIN_ROOM_W = 7, MIN_ROOM_H = 6, MAX_DEPTH = 4;
+const T = { VOID:0, FLOOR:1, WALL:2, WATER:3, COURTYARD:4 };
 
-// ── All interactables (from the puzzle system) ────────────────────────────────
+// ── Riad house layout parameters (~7 000 sq ft) ───────────────────────────────
+// Interior origin inside the grid
+const HX = 17, HY = 19;
+// Interior dimensions: 3 columns (12 | 1wall | 12 | 1wall | 12 = 38)
+//                      3 rows    (5  | 1wall | 10 | 1wall | 5  = 22)
+const HW = 38, HH = 22;
+
+// Column split points (all in absolute grid coords)
+const VW1 = HX + 12;       // left  vertical inner wall
+const VW2 = HX + 25;       // right vertical inner wall
+const CX1 = HX + 13;       // courtyard / center column start
+const CX2 = HX + 24;       // courtyard / center column end
+
+// Row split points
+const HW1 = HY + 5;        // top   horizontal inner wall
+const HW2 = HY + 16;       // bottom horizontal inner wall
+const CY1 = HY + 6;        // courtyard row start
+const CY2 = HY + 15;       // courtyard row end
+
+// Pond (sits inside courtyard)
+const POND_X = CX1 + 2;    // HX+15
+const POND_Y = CY1 + 2;    // HY+8
+const POND_W = 8;
+const POND_H = 6;
+
+// ── All interactables ─────────────────────────────────────────────────────────
 const ALL = [
   { id:'p1g1s', puzzle:1 }, { id:'p1p1s', puzzle:1 },
   { id:'p2g1s', puzzle:2 }, { id:'p2g2s', puzzle:2 },
@@ -282,7 +301,6 @@ const ALL = [
   { id:'p7g1s', puzzle:7 }, { id:'p7g2s', puzzle:7 }, { id:'p7p1s', puzzle:7 },
 ];
 
-// Placed interactables on the map: { id, col, row }
 const PLACED = [];
 
 // ── Seed / persistence ────────────────────────────────────────────────────────
@@ -307,10 +325,17 @@ function loadPlaced(seed) {
   } catch(e) {}
 }
 
-// ── Map generation ────────────────────────────────────────────────────────────
+// ── Map generation (Arabian riad with central courtyard) ──────────────────────
 let mapGrid = null;
 
-function generateHouse(seed) {
+function fillRect(grid, x, y, w, h, type) {
+  for (let ry = y; ry < y + h; ry++)
+    for (let rx = x; rx < x + w; rx++)
+      if (ry >= 0 && ry < GRID_H && rx >= 0 && rx < GRID_W)
+        grid[ry][rx] = type;
+}
+
+function generateRiad(seed) {
   let s = seed | 0;
   const rng = (lo, hi) => {
     s = Math.imul(s, 1664525) + 1013904223 | 0;
@@ -318,69 +343,114 @@ function generateHouse(seed) {
   };
 
   const grid = Array.from({ length: GRID_H }, () => new Array(GRID_W).fill(T.VOID));
-  const rooms = [];
 
-  function bsp(x, y, w, h, depth) {
-    const canV = w >= MIN_ROOM_W * 2 + 1;
-    const canH = h >= MIN_ROOM_H * 2 + 1;
+  // ── Fill rooms with floor ──────────────────────────────────────────────────
+  fillRect(grid, HX,    HY,    12, 5,  T.FLOOR);      // TL
+  fillRect(grid, CX1,   HY,    12, 5,  T.FLOOR);      // TC
+  fillRect(grid, VW2+1, HY,    12, 5,  T.FLOOR);      // TR
 
-    if (depth >= MAX_DEPTH || (!canV && !canH)) {
-      for (let ry = y; ry < y + h; ry++)
-        for (let rx = x; rx < x + w; rx++)
-          grid[ry][rx] = T.FLOOR;
-      rooms.push({ cx: x + (w >> 1), cy: y + (h >> 1) });
-      return;
+  fillRect(grid, HX,    CY1,   12, 10, T.FLOOR);      // ML
+  fillRect(grid, CX1,   CY1,   12, 10, T.COURTYARD);  // courtyard
+  fillRect(grid, VW2+1, CY1,   12, 10, T.FLOOR);      // MR
+
+  fillRect(grid, HX,    HW2+1, 12, 5,  T.FLOOR);      // BL
+  fillRect(grid, CX1,   HW2+1, 12, 5,  T.FLOOR);      // BC
+  fillRect(grid, VW2+1, HW2+1, 12, 5,  T.FLOOR);      // BR
+
+  // ── Interior walls ─────────────────────────────────────────────────────────
+  for (let x = HX; x < HX + HW; x++) {
+    grid[HW1][x] = T.WALL;
+    grid[HW2][x] = T.WALL;
+  }
+  for (let y = HY; y < HY + HH; y++) {
+    grid[y][VW1] = T.WALL;
+    grid[y][VW2] = T.WALL;
+  }
+
+  // ── Doorways (seed varies positions slightly) ──────────────────────────────
+  // Horizontal wall HW1: top rooms <-> middle section
+  const dTL = HX  + 3 + rng(0, 4);   // TL <-> ML
+  const dTC = CX1 + 3 + rng(0, 3);   // TC <-> Courtyard
+  const dTR = VW2 + 3 + rng(0, 4);   // TR <-> MR
+  grid[HW1][dTL] = T.FLOOR;      grid[HW1][dTL+1] = T.FLOOR;
+  grid[HW1][dTC] = T.COURTYARD;  grid[HW1][dTC+1] = T.COURTYARD;
+  grid[HW1][dTR] = T.FLOOR;      grid[HW1][dTR+1] = T.FLOOR;
+
+  // Horizontal wall HW2: middle section <-> bottom rooms
+  const dBL = HX  + 3 + rng(0, 4);
+  const dBC = CX1 + 3 + rng(0, 3);
+  const dBR = VW2 + 3 + rng(0, 4);
+  grid[HW2][dBL] = T.FLOOR;      grid[HW2][dBL+1] = T.FLOOR;
+  grid[HW2][dBC] = T.COURTYARD;  grid[HW2][dBC+1] = T.COURTYARD;
+  grid[HW2][dBR] = T.FLOOR;      grid[HW2][dBR+1] = T.FLOOR;
+
+  // Vertical wall VW1: left rooms <-> center
+  const dVL_T = HY   + 1 + rng(0, 2);   // TL <-> TC
+  const dVL_M = CY1  + 3 + rng(0, 3);   // ML <-> Courtyard
+  const dVL_B = HW2  + 1 + rng(0, 2);   // BL <-> BC
+  grid[dVL_T][VW1] = T.FLOOR;      grid[dVL_T+1][VW1] = T.FLOOR;
+  grid[dVL_M][VW1] = T.FLOOR;      grid[dVL_M+1][VW1] = T.FLOOR;
+  grid[dVL_B][VW1] = T.FLOOR;      grid[dVL_B+1][VW1] = T.FLOOR;
+
+  // Vertical wall VW2: center <-> right rooms
+  const dVR_T = HY   + 1 + rng(0, 2);   // TC <-> TR
+  const dVR_M = CY1  + 3 + rng(0, 3);   // Courtyard <-> MR
+  const dVR_B = HW2  + 1 + rng(0, 2);   // BC <-> BR
+  grid[dVR_T][VW2] = T.FLOOR;      grid[dVR_T+1][VW2] = T.FLOOR;
+  grid[dVR_M][VW2] = T.FLOOR;      grid[dVR_M+1][VW2] = T.FLOOR;
+  grid[dVR_B][VW2] = T.FLOOR;      grid[dVR_B+1][VW2] = T.FLOOR;
+
+  // ── Pond ───────────────────────────────────────────────────────────────────
+  fillRect(grid, POND_X, POND_Y, POND_W, POND_H, T.WATER);
+
+  // ── Exterior perimeter wall ────────────────────────────────────────────────
+  for (let rx = HX-1; rx <= HX+HW; rx++) {
+    grid[HY-1][rx] = T.WALL;
+    grid[HY+HH][rx] = T.WALL;
+  }
+  for (let ry = HY-1; ry <= HY+HH; ry++) {
+    grid[ry][HX-1] = T.WALL;
+    grid[ry][HX+HW] = T.WALL;
+  }
+
+  // ── Seed-based optional internal room subdivisions ────────────────────────
+  // Random sub-wall in ML (left middle room)
+  if (rng(0, 1)) {
+    const wY = CY1 + 1 + rng(1, 5);
+    if (wY < HW2 - 1) {
+      for (let x = HX; x < VW1; x++) grid[wY][x] = T.WALL;
+      const dX = HX + 1 + rng(0, 5);
+      grid[wY][dX] = T.FLOOR; grid[wY][dX+1] = T.FLOOR;
     }
-
-    let vert;
-    if (canV && !canH) vert = true;
-    else if (!canV && canH) vert = false;
-    else vert = rng(0, 1) === 0;
-
-    if (vert) {
-      const sx = x + MIN_ROOM_W + rng(0, Math.max(0, w - MIN_ROOM_W * 2 - 1));
-      bsp(x, y, sx - x, h, depth + 1);
-      bsp(sx + 1, y, x + w - sx - 1, h, depth + 1);
-      for (let ry = y; ry < y + h; ry++) grid[ry][sx] = T.WALL;
-      const oy = y + 1 + rng(0, Math.max(0, h - 4));
-      grid[oy][sx] = T.FLOOR;
-      if (oy + 1 <= y + h - 2) grid[oy + 1][sx] = T.FLOOR;
-    } else {
-      const sy = y + MIN_ROOM_H + rng(0, Math.max(0, h - MIN_ROOM_H * 2 - 1));
-      bsp(x, y, w, sy - y, depth + 1);
-      bsp(x, sy + 1, w, y + h - sy - 1, depth + 1);
-      for (let rx = x; rx < x + w; rx++) grid[sy][rx] = T.WALL;
-      const ox = x + 1 + rng(0, Math.max(0, w - 4));
-      grid[sy][ox] = T.FLOOR;
-      if (ox + 1 <= x + w - 2) grid[sy][ox + 1] = T.FLOOR;
+  }
+  // Random sub-wall in MR (right middle room)
+  if (rng(0, 1)) {
+    const wY = CY1 + 1 + rng(1, 5);
+    if (wY < HW2 - 1) {
+      for (let x = VW2+1; x < HX+HW; x++) grid[wY][x] = T.WALL;
+      const dX = VW2 + 1 + rng(0, 5);
+      grid[wY][dX] = T.FLOOR; grid[wY][dX+1] = T.FLOOR;
     }
   }
 
-  bsp(HX, HY, HW, HH, 0);
-
-  // Exterior perimeter wall
-  for (let rx = HX - 1; rx <= HX + HW; rx++) {
-    grid[HY - 1][rx] = T.WALL;
-    grid[HY + HH][rx] = T.WALL;
-  }
-  for (let ry = HY - 1; ry <= HY + HH; ry++) {
-    grid[ry][HX - 1] = T.WALL;
-    grid[ry][HX + HW] = T.WALL;
-  }
-
+  // ── Floor count ────────────────────────────────────────────────────────────
   let floorCount = 0;
   for (const row of grid)
     for (const t of row)
-      if (t === T.FLOOR) floorCount++;
+      if (t === T.FLOOR || t === T.COURTYARD) floorCount++;
 
-  const s0 = rooms[0] || { cx: HX + (HW >> 1), cy: HY + (HH >> 1) };
-  return { grid, floorCount, start: { x: s0.cx + 0.5, y: s0.cy + 0.5 } };
+  return {
+    grid,
+    floorCount,
+    start: { x: HX + 5 + 0.5, y: HY + 2 + 0.5 },  // TL room
+  };
 }
 
 // ── Collision ─────────────────────────────────────────────────────────────────
 function walkable(col, row) {
   if (row < 0 || row >= GRID_H || col < 0 || col >= GRID_W) return false;
-  return mapGrid[row][col] === T.FLOOR;
+  const t = mapGrid[row][col];
+  return t === T.FLOOR || t === T.COURTYARD;
 }
 function canMoveTo(x, y) {
   const h = HITBOX;
@@ -403,7 +473,6 @@ function openExamine(id) {
   examineFrame.src = 'puzzles_curated.html?chunk=' + baseId;
   examineOverlay.classList.add('open');
 }
-
 function closeExamine() {
   examineOverlay.classList.remove('open');
   canvas.focus();
@@ -415,15 +484,14 @@ examineOverlay.addEventListener('click', e => { if (e.target === examineOverlay)
 // ── Nearby interactable detection ─────────────────────────────────────────────
 function getNearbyInteractable() {
   for (const p of PLACED) {
-    // tile center is at (p.col + 0.5, p.row + 0.5); player center is at (player.x, player.y)
-    if (Math.abs(player.x - (p.col + 0.5)) < 0.55 && Math.abs(player.y - (p.row + 0.5)) < 0.55)
+    if (Math.abs(player.x - (p.col + 0.5)) < 0.55 &&
+        Math.abs(player.y - (p.row + 0.5)) < 0.55)
       return p;
   }
   return null;
 }
 
 let lastNearbyId = null;
-
 function updateExaminePrompt() {
   const nearby = getNearbyInteractable();
   const id = nearby ? nearby.id : null;
@@ -474,17 +542,57 @@ function drawTile(t, px, py) {
   const S = TILE_PX;
   switch (t) {
     case T.VOID:
-      ctx.fillStyle = '#1a1814'; ctx.fillRect(px, py, S, S); break;
+      ctx.fillStyle = '#1a1410'; ctx.fillRect(px, py, S, S);
+      break;
+
     case T.FLOOR:
-      ctx.fillStyle = '#c8b98a'; ctx.fillRect(px, py, S, S);
-      ctx.strokeStyle = 'rgba(0,0,0,0.07)'; ctx.lineWidth = 0.5;
-      ctx.strokeRect(px+.5, py+.5, S-1, S-1); break;
-    case T.WALL:
-      ctx.fillStyle = '#4a4235'; ctx.fillRect(px, py, S, S);
-      ctx.fillStyle = '#5e5245'; ctx.fillRect(px, py, S, 5);
-      ctx.fillStyle = '#302820'; ctx.fillRect(px, py+S-3, S, 3);
-      ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1;
-      ctx.strokeRect(px+.5, py+.5, S-1, S-1); break;
+      // Warm sandstone tile with subtle grid lines
+      ctx.fillStyle = '#c8a86a'; ctx.fillRect(px, py, S, S);
+      ctx.fillStyle = 'rgba(160,120,40,0.15)';
+      ctx.fillRect(px, py, S, 1);      // top grout
+      ctx.fillRect(px, py, 1, S);      // left grout
+      ctx.fillStyle = 'rgba(255,220,140,0.18)';
+      ctx.fillRect(px+2, py+2, S-4, S-4);  // tile highlight
+      break;
+
+    case T.COURTYARD:
+      // Lighter open-air marble/stone
+      ctx.fillStyle = '#d4ba88'; ctx.fillRect(px, py, S, S);
+      ctx.fillStyle = 'rgba(180,140,60,0.12)';
+      ctx.fillRect(px, py, S, 1);
+      ctx.fillRect(px, py, 1, S);
+      ctx.fillStyle = 'rgba(255,240,180,0.2)';
+      ctx.fillRect(px+3, py+3, S-6, S-6);
+      break;
+
+    case T.WALL: {
+      // Adobe mud-brick
+      ctx.fillStyle = '#8a6a40'; ctx.fillRect(px, py, S, S);
+      // Top highlight (lighter brick course)
+      ctx.fillStyle = '#a07a4a'; ctx.fillRect(px, py, S, 6);
+      // Bottom shadow
+      ctx.fillStyle = '#5a4020'; ctx.fillRect(px, py+S-4, S, 4);
+      // Brick pattern
+      ctx.fillStyle = 'rgba(0,0,0,0.15)';
+      ctx.fillRect(px, py+9, S, 1);
+      ctx.fillRect(px, py+18, S, 1);
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1;
+      ctx.strokeRect(px+.5, py+.5, S-1, S-1);
+      break;
+    }
+
+    case T.WATER: {
+      // Pond water with subtle shimmer
+      const wt = performance.now() / 1000;
+      ctx.fillStyle = '#2a6898'; ctx.fillRect(px, py, S, S);
+      const shimmer = 0.12 + 0.08 * Math.sin(px * 0.25 + wt * 1.8) * Math.cos(py * 0.25 + wt * 1.3);
+      ctx.fillStyle = `rgba(80,160,220,${shimmer.toFixed(3)})`;
+      ctx.fillRect(px+2, py+2, S-4, S-4);
+      // Tiny specular glint
+      ctx.fillStyle = 'rgba(200,240,255,0.25)';
+      ctx.fillRect(px+6, py+5, 4, 2);
+      break;
+    }
   }
 }
 
@@ -517,20 +625,16 @@ function drawPlayer(px, py) {
 // ── Drag and drop ─────────────────────────────────────────────────────────────
 const ghost = document.getElementById('dragGhost');
 let hoverTile = null;
-
 const drag = { active: false, id: null, fromMap: false };
 
 function startDrag(id, fromMap, clientX, clientY) {
-  drag.active  = true;
-  drag.id      = id;
-  drag.fromMap = fromMap;
+  drag.active = true; drag.id = id; drag.fromMap = fromMap;
   ghost.textContent = id;
   ghost.style.display = 'block';
   ghost.style.left = clientX + 'px';
   ghost.style.top  = clientY + 'px';
   document.body.style.cursor = 'grabbing';
 }
-
 function endDrag() {
   drag.active = false; drag.id = null; drag.fromMap = false;
   ghost.style.display = 'none';
@@ -547,11 +651,7 @@ canvas.addEventListener('mousedown', e => {
   const rect = canvas.getBoundingClientRect();
   const { col, row } = screenToTile(e.clientX - rect.left, e.clientY - rect.top);
   const hit = PLACED.findIndex(p => p.col === col && p.row === row);
-  if (hit !== -1) {
-    startDrag(PLACED[hit].id, true, e.clientX, e.clientY);
-    e.preventDefault();
-    return;
-  }
+  if (hit !== -1) { startDrag(PLACED[hit].id, true, e.clientX, e.clientY); e.preventDefault(); return; }
   canvas.focus();
 });
 
@@ -567,17 +667,15 @@ document.addEventListener('mousemove', e => {
 
 document.addEventListener('mouseup', e => {
   if (!drag.active) return;
-
-  const rect   = canvas.getBoundingClientRect();
+  const rect = canvas.getBoundingClientRect();
   const overCanvas = e.clientX >= rect.left && e.clientX <= rect.right &&
                      e.clientY >= rect.top  && e.clientY <= rect.bottom;
-
   if (overCanvas) {
     const { col, row } = screenToTile(e.clientX - rect.left, e.clientY - rect.top);
-    const isFloor    = row >= 0 && row < GRID_H && col >= 0 && col < GRID_W && mapGrid[row][col] === T.FLOOR;
-    const isOccupied = PLACED.some(p => p.col === col && p.row === row && p.id !== drag.id);
-
-    if (isFloor && !isOccupied) {
+    const t = row >= 0 && row < GRID_H && col >= 0 && col < GRID_W ? mapGrid[row][col] : T.VOID;
+    const isWalkable = t === T.FLOOR || t === T.COURTYARD;
+    const occupied   = PLACED.some(p => p.col === col && p.row === row && p.id !== drag.id);
+    if (isWalkable && !occupied) {
       const ex = PLACED.findIndex(p => p.id === drag.id);
       if (ex !== -1) PLACED.splice(ex, 1);
       PLACED.push({ id: drag.id, col, row });
@@ -587,7 +685,6 @@ document.addEventListener('mouseup', e => {
     const ex = PLACED.findIndex(p => p.id === drag.id);
     if (drag.fromMap && ex !== -1) PLACED.splice(ex, 1);
   }
-
   updatePanel();
   endDrag();
 });
@@ -596,33 +693,23 @@ document.addEventListener('mouseup', e => {
 function updatePanel() {
   const list = document.getElementById('panelList');
   list.innerHTML = '';
-
   const groups = {};
-  for (const item of ALL) {
-    (groups[item.puzzle] ??= []).push(item.id);
-  }
-
+  for (const item of ALL) (groups[item.puzzle] ??= []).push(item.id);
   for (const [puzzle, ids] of Object.entries(groups)) {
     const grp = document.createElement('div');
     grp.className = 'puzzle-group';
-
     const lbl = document.createElement('div');
     lbl.className = 'puzzle-label';
     lbl.textContent = `PUZZLE ${puzzle}`;
     grp.appendChild(lbl);
-
     for (const id of ids) {
       const isPlaced = PLACED.some(p => p.id === id);
       const el = document.createElement('div');
       el.className = 'pi-item' + (isPlaced ? ' is-placed' : '');
-      el.innerHTML =
-        `<span class="pi-handle">⠿</span>` +
-        `<span class="pi-id">${id}</span>` +
-        `<span class="pi-dot"></span>`;
+      el.innerHTML = `<span class="pi-handle">⠿</span><span class="pi-id">${id}</span><span class="pi-dot"></span>`;
       el.addEventListener('mousedown', e => onItemDown(e, id));
       grp.appendChild(el);
     }
-
     list.appendChild(grp);
   }
 }
@@ -643,12 +730,14 @@ function render() {
     for (let c = c0; c < c1; c++)
       drawTile(mapGrid[r][c], c*TILE_PX, r*TILE_PX);
 
+  // Hover highlight during drag (green = valid, red = invalid)
   if (drag.active && hoverTile) {
     const { col, row } = hoverTile;
     const inBounds = row >= 0 && row < GRID_H && col >= 0 && col < GRID_W;
-    const isFloor  = inBounds && mapGrid[row][col] === T.FLOOR;
-    const occupied = isFloor && PLACED.some(p => p.col === col && p.row === row && p.id !== drag.id);
-    ctx.fillStyle = (isFloor && !occupied) ? 'rgba(74,124,89,0.45)' : 'rgba(180,60,60,0.45)';
+    const t = inBounds ? mapGrid[row][col] : T.VOID;
+    const isWalkable = t === T.FLOOR || t === T.COURTYARD;
+    const occupied = isWalkable && PLACED.some(p => p.col === col && p.row === row && p.id !== drag.id);
+    ctx.fillStyle = (isWalkable && !occupied) ? 'rgba(74,124,89,0.45)' : 'rgba(180,60,60,0.45)';
     ctx.fillRect(col*TILE_PX, row*TILE_PX, TILE_PX, TILE_PX);
   }
 
@@ -673,14 +762,11 @@ function loop(ts) {
 canvas.addEventListener('keydown', e => {
   keys[e.key] = true;
   e.preventDefault();
-
   if ((e.key === 'e' || e.key === 'E') && !examineOverlay.classList.contains('open')) {
     const nearby = getNearbyInteractable();
     if (nearby) openExamine(nearby.id);
   }
-  if (e.key === 'Escape') {
-    closeExamine();
-  }
+  if (e.key === 'Escape') closeExamine();
 });
 canvas.addEventListener('keyup', e => { keys[e.key] = false; });
 
@@ -697,7 +783,7 @@ function applyMap(result, seed) {
   loadPlaced(seed);
 }
 
-applyMap(generateHouse(currentSeed), currentSeed);
+applyMap(generateRiad(currentSeed), currentSeed);
 updatePanel();
 canvas.focus();
 requestAnimationFrame(loop);
@@ -705,7 +791,7 @@ requestAnimationFrame(loop);
 document.getElementById('btnRandomize').addEventListener('click', () => {
   currentSeed = Date.now() | 0;
   localStorage.setItem('map1seed', currentSeed);
-  applyMap(generateHouse(currentSeed), currentSeed);
+  applyMap(generateRiad(currentSeed), currentSeed);
   updatePanel();
   canvas.focus();
 });
