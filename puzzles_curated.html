@@ -1370,12 +1370,15 @@ function buildPuzzle5(){ sceneIllustration('preview-p5', drawSceneNote); buildCi
 const BUILDERS={tree:buildFamilyTree, windows:buildWindows, courtyard:buildCourtyard, circles:buildCircles, clothes:buildClothes, puzzle5:buildPuzzle5, puzzle6:buildPuzzleSix, puzzle7:buildPuzzleSeven};
 const plist=document.getElementById('plist'), detail=document.getElementById('detail');
 let teardown=null;   // cleanup for the previously-built interactive puzzle
+const CHUNK_PARAM = new URLSearchParams(location.search).get('chunk');
 
-PUZZLES.forEach((p,i)=>{
-  const li=document.createElement('li'); li.className='pitem';
-  li.innerHTML=`<div class="num">${p.num}</div>`;
-  li.onclick=()=>select(i); plist.appendChild(li);
-});
+if (!CHUNK_PARAM) {
+  PUZZLES.forEach((p,i)=>{
+    const li=document.createElement('li'); li.className='pitem';
+    li.innerHTML=`<div class="num">${p.num}</div>`;
+    li.onclick=()=>select(i); plist.appendChild(li);
+  });
+}
 
 function select(i){
   if(teardown){ teardown(); teardown=null; }
@@ -1392,7 +1395,56 @@ function select(i){
   detail.scrollTop=0;
 }
 
-select(0);
+if (!CHUNK_PARAM) {
+  select(0);
+} else {
+  // Single-chunk mode: show only the matching chunk, full-screen, no navigation
+  (function() {
+    let chunkHTML = null, builderKey = null;
+
+    outer:
+    for (const p of PUZZLES) {
+      for (const sec of [p.given || '', p.problem || '']) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = sec;
+        for (const chunk of tmp.querySelectorAll('.chunk')) {
+          if (chunk.querySelector('.clabel')?.textContent.trim() === CHUNK_PARAM) {
+            chunk.querySelector('.clabel')?.remove();
+            chunkHTML = chunk.innerHTML.trim();
+            builderKey = p.build || null;
+            break outer;
+          }
+        }
+      }
+    }
+
+    if (!chunkHTML) return;
+
+    // Hide sidebar and all nav chrome
+    document.getElementById('sidebar').style.display = 'none';
+    document.getElementById('menuBtn').style.display = 'none';
+    document.getElementById('menuOverlay').style.display = 'none';
+
+    // Full-screen centered layout for the chunk
+    document.body.style.overflow  = 'auto';
+    document.body.style.height    = 'auto';
+    document.body.style.minHeight = '100vh';
+    document.body.style.alignItems    = 'flex-start';
+    document.body.style.justifyContent = 'center';
+    document.body.style.padding = '60px 80px';
+
+    detail.style.flex    = 'none';
+    detail.style.padding = '0';
+    detail.style.overflow = 'visible';
+    detail.style.width   = '100%';
+    detail.style.maxWidth = '900px';
+    detail.innerHTML = chunkHTML;
+
+    if (builderKey && BUILDERS[builderKey]) {
+      try { BUILDERS[builderKey](); } catch(e) {}
+    }
+  })();
+}
 
 /* ── Hamburger menu ── */
 (function(){

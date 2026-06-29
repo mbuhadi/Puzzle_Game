@@ -251,7 +251,7 @@
 <div id="examineOverlay">
   <div id="examineBox">
     <button id="examineClose" title="Close (Esc)">✕</button>
-    <iframe id="examineFrame" src="puzzles_curated.html"></iframe>
+    <iframe id="examineFrame"></iframe>
   </div>
 </div>
 
@@ -397,28 +397,10 @@ const keys   = {};
 // ── Examine system ────────────────────────────────────────────────────────────
 const examineOverlay = document.getElementById('examineOverlay');
 const examineFrame   = document.getElementById('examineFrame');
-let iframeReady = false;
-let pendingPuzzleIdx = null;
-
-examineFrame.addEventListener('load', () => {
-  iframeReady = true;
-  if (pendingPuzzleIdx !== null) {
-    try { examineFrame.contentWindow.select(pendingPuzzleIdx); } catch(e) {}
-    pendingPuzzleIdx = null;
-  }
-});
 
 function openExamine(id) {
-  const m = id.match(/^p(\d+)/);
-  if (!m) return;
-  const idx = parseInt(m[1]) - 1;
-
-  if (iframeReady) {
-    try { examineFrame.contentWindow.select(idx); } catch(e) {}
-  } else {
-    pendingPuzzleIdx = idx;
-  }
-
+  const baseId = id.replace(/s$/, '');
+  examineFrame.src = 'puzzles_curated.html?chunk=' + baseId;
   examineOverlay.classList.add('open');
 }
 
