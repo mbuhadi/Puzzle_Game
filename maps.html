@@ -15,18 +15,258 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 16px;
+    padding: 32px 20px 48px;
+    gap: 20px;
   }
-  h1 { font-size: 36px; color: #c8a84b; letter-spacing: 3px; }
-  p  { font-size: 13px; color: #6e695f; letter-spacing: 2px; }
-  a  { font-size: 12px; color: #6e695f; font-family: sans-serif; text-decoration: none; margin-top: 24px; }
+  h1 { font-size: 28px; color: #c8a84b; letter-spacing: 3px; }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    font-family: monospace;
+    font-size: 13px;
+    color: #a09070;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .controls label { display: flex; align-items: center; gap: 8px; }
+  .controls input[type=number] {
+    background: #1e1c18;
+    border: 1px solid #3a3020;
+    color: #e8dfc8;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    width: 110px;
+    font-family: monospace;
+  }
+  .controls input[type=number]:focus { outline: none; border-color: #c8a84b; }
+
+  #stats {
+    font-family: monospace;
+    font-size: 12px;
+    color: #6e695f;
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  #stats span { color: #c8a84b; }
+
+  #mapWrap {
+    overflow: auto;
+    max-width: 100%;
+    border: 2px solid #2e2a1e;
+    border-radius: 6px;
+  }
+  #mapCanvas { display: block; image-rendering: pixelated; }
+
+  .legend {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-family: monospace;
+    font-size: 12px;
+    color: #6e695f;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .swatch {
+    width: 14px; height: 14px;
+    border-radius: 2px;
+    border: 1px solid rgba(255,255,255,0.1);
+    flex-shrink: 0;
+  }
+
+  a { font-size: 12px; color: #6e695f; font-family: sans-serif; text-decoration: none; }
   a:hover { color: #c8a84b; }
 </style>
 </head>
 <body>
-  <h1>Maps</h1>
-  <p>COMING SOON</p>
-  <a href="index.html">← Back to Home</a>
+
+<h1>Maps</h1>
+
+<div class="controls">
+  <label>
+    Square footage:
+    <input type="number" id="sqftInput" value="1200" min="100" max="20000" step="100">
+  </label>
+  <span id="scaleNote" style="color:#555;font-size:11px;">1 tile = 16 sq ft &nbsp;(4 ft × 4 ft per tile)</span>
+</div>
+
+<div id="stats"></div>
+
+<div id="mapWrap"><canvas id="mapCanvas"></canvas></div>
+
+<div class="legend">
+  <div class="legend-item"><div class="swatch" style="background:#1a1814;border-color:#333;"></div>Void</div>
+  <div class="legend-item"><div class="swatch" style="background:#c8b98a;"></div>Floor</div>
+  <div class="legend-item"><div class="swatch" style="background:#4a4235;"></div>Wall</div>
+  <div class="legend-item"><div class="swatch" style="background:#8b6914;"></div>Door</div>
+  <div class="legend-item"><div class="swatch" style="background:#4a7c59;"></div>Object / Furniture</div>
+  <div class="legend-item"><div class="swatch" style="background:#c8a84b;border-radius:50%;"></div>Player Start</div>
+</div>
+
+<a href="index.html">← Back to Home</a>
+
+<script>
+// ─── Tile type constants ──────────────────────────────────────────────────────
+const T = { VOID:0, FLOOR:1, WALL:2, DOOR:3, OBJ:4, PLAYER:5 };
+
+const TILE_PX       = 32;   // display pixels per tile
+const SQFT_PER_TILE = 16;   // real-world sq ft each tile represents (4ft × 4ft)
+
+// ─── Sample map — 1,200 sq ft house ─────────────────────────────────────────
+// Layout:  top floor = 3 rooms + connecting hallway
+//          bottom    = 2 side rooms off the hallway
+// Legend:  0=void, 1=floor, 2=wall, 3=door, 4=object, 5=player_start
+const SAMPLE_MAP = [
+  [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+  [2,1,1,1,1,2,1,1,1,1,1,1,1,2,1,1,1,1,1,2],
+  [2,1,4,1,1,2,1,1,4,1,1,1,1,2,1,4,1,1,1,2],
+  [2,1,1,1,1,3,1,1,1,1,1,1,1,3,1,1,1,1,1,2],
+  [2,1,1,1,1,2,1,1,1,1,1,1,1,2,1,1,1,1,1,2],
+  [2,2,2,3,2,2,2,2,2,2,2,2,2,2,2,2,3,2,2,2],
+  [2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2],
+  [2,2,2,2,3,2,2,2,2,2,2,2,2,2,3,2,2,2,2,2],
+  [0,0,0,2,1,1,1,1,1,2,0,0,2,1,1,1,1,1,2,0],
+  [0,0,0,2,1,4,1,1,1,2,0,0,2,5,1,1,4,1,2,0],
+  [0,0,0,2,1,1,1,1,1,2,0,0,2,1,1,1,1,1,2,0],
+  [0,0,0,2,2,2,2,2,2,2,0,0,2,2,2,2,2,2,2,0],
+];
+
+// ─── Count walkable floor tiles ───────────────────────────────────────────────
+function countFloor(map) {
+  let n = 0;
+  for (const row of map)
+    for (const t of row)
+      if (t !== T.VOID && t !== T.WALL) n++;
+  return n;
+}
+
+// ─── Draw one tile ────────────────────────────────────────────────────────────
+function drawTile(ctx, t, x, y) {
+  const S = TILE_PX;
+
+  // Floor base (used by most tiles)
+  const floorBase = () => {
+    ctx.fillStyle = '#c8b98a';
+    ctx.fillRect(x, y, S, S);
+    ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(x + 0.5, y + 0.5, S - 1, S - 1);
+  };
+
+  switch (t) {
+    case T.VOID:
+      ctx.fillStyle = '#1a1814';
+      ctx.fillRect(x, y, S, S);
+      break;
+
+    case T.FLOOR:
+      floorBase();
+      break;
+
+    case T.WALL:
+      // Body
+      ctx.fillStyle = '#4a4235';
+      ctx.fillRect(x, y, S, S);
+      // Top highlight (light source from above)
+      ctx.fillStyle = '#5e5245';
+      ctx.fillRect(x, y, S, 5);
+      // Bottom shadow
+      ctx.fillStyle = '#302820';
+      ctx.fillRect(x, y + S - 4, S, 4);
+      // Subtle brick line
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, S - 1, S - 1);
+      break;
+
+    case T.DOOR:
+      floorBase();
+      // Door frame
+      ctx.fillStyle = '#6b4f10';
+      ctx.fillRect(x + 5, y + 1, S - 10, S - 2);
+      // Door panel
+      ctx.fillStyle = '#8b6914';
+      ctx.fillRect(x + 7, y + 3, S - 14, S - 6);
+      // Door knob
+      ctx.fillStyle = '#d4a830';
+      ctx.beginPath();
+      ctx.arc(x + S - 10, y + S / 2, 2, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+
+    case T.OBJ:
+      floorBase();
+      // Object shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.18)';
+      ctx.fillRect(x + 6, y + 7, S - 10, S - 11);
+      // Object body
+      ctx.fillStyle = '#4a7c59';
+      ctx.fillRect(x + 5, y + 5, S - 10, S - 11);
+      // Object highlight
+      ctx.fillStyle = '#5d9470';
+      ctx.fillRect(x + 5, y + 5, S - 10, 4);
+      break;
+
+    case T.PLAYER:
+      floorBase();
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.2)';
+      ctx.beginPath();
+      ctx.ellipse(x + S / 2 + 1, y + S / 2 + 2, S / 2 - 7, S / 2 - 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Body circle
+      ctx.fillStyle = '#c8a84b';
+      ctx.beginPath();
+      ctx.arc(x + S / 2, y + S / 2, S / 2 - 6, 0, Math.PI * 2);
+      ctx.fill();
+      // Inner highlight
+      ctx.fillStyle = '#e8c85b';
+      ctx.beginPath();
+      ctx.arc(x + S / 2 - 2, y + S / 2 - 2, S / 2 - 11, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+  }
+}
+
+// ─── Render full map ──────────────────────────────────────────────────────────
+function render(map) {
+  const rows = map.length;
+  const cols = map[0].length;
+  const canvas = document.getElementById('mapCanvas');
+  canvas.width  = cols * TILE_PX;
+  canvas.height = rows * TILE_PX;
+  const ctx = canvas.getContext('2d');
+
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++)
+      drawTile(ctx, map[r][c], c * TILE_PX, r * TILE_PX);
+
+  // Update stats
+  const floorCount = countFloor(map);
+  const actualSqft = floorCount * SQFT_PER_TILE;
+  document.getElementById('stats').innerHTML =
+    `Grid: <span>${cols} × ${rows} tiles</span>` +
+    `&nbsp;|&nbsp; Walkable tiles: <span>${floorCount}</span>` +
+    `&nbsp;|&nbsp; Area: <span>~${actualSqft.toLocaleString()} sq ft</span>`;
+}
+
+// ─── Sq footage input — updates info note ────────────────────────────────────
+document.getElementById('sqftInput').addEventListener('input', function () {
+  const target      = parseInt(this.value) || 1200;
+  const targetTiles = Math.round(target / SQFT_PER_TILE);
+  const currentFloor = countFloor(SAMPLE_MAP);
+  document.getElementById('scaleNote').textContent =
+    `1 tile = ${SQFT_PER_TILE} sq ft  |  ` +
+    `${target.toLocaleString()} sq ft ≈ ${targetTiles} floor tiles  ` +
+    `(this map: ${currentFloor} tiles = ~${(currentFloor * SQFT_PER_TILE).toLocaleString()} sq ft)`;
+});
+
+render(SAMPLE_MAP);
+</script>
 </body>
 </html>
