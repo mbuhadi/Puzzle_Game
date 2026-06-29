@@ -96,7 +96,7 @@
   @keyframes tddIn{from{opacity:0;transform:translateX(-50%) translateY(-8px) scale(0.95);}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1);}}
   .tdd{position:absolute; transform:translateX(-50%); width:140px; background:#fff; border:1.5px solid #5db87a; border-radius:10px; padding:4px; z-index:10; box-shadow:0 8px 20px rgba(0,0,0,.18),0 0 0 3px rgba(93,184,122,0.2); animation:tddIn .18s ease-out;}
   .tdd-row{font-family:'Amiri',serif; direction:rtl; text-align:right; font-size:19px; color:#504030; padding:7px 12px; border-radius:6px; cursor:pointer;}
-  .tdd-row:hover{background:#fffaee; color:#8a6820;}
+  .tdd-row:hover{background:#e0f5f3; color:#1a8888;}
   .tree-banner{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:none; background:#fffcf0; border:2px solid var(--gold); border-radius:12px; padding:18px 36px; font-family:'Amiri',serif; font-size:24px; font-weight:bold; color:#8a6820; z-index:20; box-shadow:0 10px 30px rgba(0,0,0,.18);}
   .tree-clues{flex:1; min-width:300px;}
 
@@ -1122,10 +1122,14 @@ const TV_HTML=`
 const PUZZLES = [
   {
     num:'1', name:'عائلتنا الكريمة', loc:'At the Gate', build:'tree',
-    given:`
+    interactables:`
       <div class="chunk"><span class="clabel">p1g1s</span>
         <div class="scene-preview"><canvas id="preview-p1" width="380" height="200"></canvas><div class="scene-label">IN GAME — THE ENTRANCE GATE</div></div>
       </div>
+      <div class="chunk"><span class="clabel">p1p1s</span>
+        <div class="scene-preview"><canvas id="preview-p1p" width="380" height="200"></canvas><div class="scene-label">IN GAME — THE ENTRANCE GATE</div></div>
+      </div>`,
+    given:`
       <div class="chunk"><span class="clabel">p1g1</span>
         <div class="clue arabic">
           <div class="head">عبدالرحمن يقول:</div>
@@ -1137,20 +1141,18 @@ const PUZZLES = [
           • واخر شي لا تنسى سميك
         </div>
       </div>`,
-    problem:`<div class="chunk"><span class="clabel">p1p1s</span>
-        <div class="scene-preview"><canvas id="preview-p1p" width="380" height="200"></canvas><div class="scene-label">IN GAME — THE ENTRANCE GATE</div></div>
-      </div>
-      <div class="chunk"><span class="clabel">p1p1</span><div class="tree-stage" id="treeStage"></div></div>`,
+    problem:`<div class="chunk"><span class="clabel">p1p1</span><div class="tree-stage" id="treeStage"></div></div>`,
   },
   {
     num:'2', name:'أمام أعين الجميع', loc:'Study Door · Lock 1', build:'windows',
-    given:`
+    interactables:`
       <div class="chunk"><span class="clabel">p2g1s</span>
         <div class="scene-preview"><canvas id="preview-p2" width="380" height="200"></canvas><div class="scene-label">IN GAME — KITCHEN WINDOW (ROOM_LEFT)</div></div>
       </div>
       <div class="chunk"><span class="clabel">p2g2s</span>
         <div class="scene-preview"><canvas id="preview-p2b" width="380" height="200"></canvas><div class="scene-label">IN GAME — KITCHEN WINDOW (ROOM_LEFT)</div></div>
-      </div>
+      </div>`,
+    given:`
       <div class="windows-wrap">
         <div class="chunk"><span class="clabel">p2g1</span>
           <div class="window-card">
@@ -1169,10 +1171,17 @@ const PUZZLES = [
   },
   {
     num:'3', name:'الذكية', loc:'Study Door · Lock 2', build:'clothes',
-    given:`
+    interactables:`
       <div class="chunk"><span class="clabel">p3g1s</span>
         <div class="scene-preview"><canvas id="preview-p3" width="380" height="200"></canvas><div class="scene-label">IN GAME — WASHING LINE</div></div>
       </div>
+      <div class="chunk"><span class="clabel">p3g2s</span>
+        <div class="scene-preview"><canvas id="preview-p3b" width="380" height="200"></canvas><div class="scene-label">IN GAME — WASHING LINE</div></div>
+      </div>
+      <div class="chunk"><span class="clabel">p3g3s</span>
+        <div class="scene-preview"><canvas id="preview-p3c" width="380" height="200"></canvas><div class="scene-label">IN GAME — TV</div></div>
+      </div>`,
+    given:`
       <div class="chunk"><span class="clabel">p3g1</span>
         <div style="
           background: linear-gradient(160deg, #fdf6e3, #f5ead0);
@@ -1212,10 +1221,11 @@ const PUZZLES = [
   },
   {
     num:'4', name:'لعب جهال', loc:'The Courtyard', build:'courtyard',
-    given:`
+    interactables:`
       <div class="chunk"><span class="clabel">p4g1s</span>
         <div class="scene-preview"><canvas id="preview-p4" width="380" height="200"></canvas><div class="scene-label">IN GAME — PAPER IN THE STUDY (ROOM_TOP)</div></div>
-      </div>
+      </div>`,
+    given:`
       <div class="chunk"><span class="clabel">p4g1</span>
         <div class="clue arabic" style="direction:rtl;text-align:right;font-size:1.1rem;line-height:2;">
           اليهال يموتون على الحوش في البيت،<br>
@@ -1223,21 +1233,21 @@ const PUZZLES = [
           يلفون لفتبن حول الماي ويختفون،<br>
           مادري وين يروحون
         </div>
-      </div>
-      <div class="chunk"><span class="clabel">p4g6</span>
+      </div>`,
+    problem:`<div class="chunk"><span class="clabel">p4p1</span>
         <div class="courtyard-wrap">
           <canvas id="courtyardCanvas" width="520" height="520" tabindex="0"></canvas>
           <button class="reveal-btn" id="courtyardReset">↺ RESET</button>
         </div>
       </div>`,
-    problem:``,
   },
   {
     num:'5', name:'خيال الاطفال مفتاح الثروة', loc:'The Basement', incomplete:false, build:'puzzle5',
-    given:`
+    interactables:`
       <div class="chunk"><span class="clabel">p5g1s</span>
         <div class="scene-preview"><canvas id="preview-p5" width="380" height="200"></canvas><div class="scene-label">IN GAME — NOTE ON THE BASEMENT FLOOR</div></div>
-      </div>
+      </div>`,
+    given:`
       <div class="chunk"><span class="clabel">p5g3</span>
         <div class="shapes-grid">
           <div class="shape-item">
@@ -1276,10 +1286,9 @@ const PUZZLES = [
         <div class="circles-wrap">
           <canvas id="circlesCanvas" width="600" height="440"></canvas>
         </div>
-      </div>
-`,
-    problem:`<div class="chunk"><span class="clabel">p5p1</span><p class="arabic" style="font-size:22px; line-height:2;">خيال الاطفال هو مفتاح الثروة</p></div>
-      <div class="chunk"><span class="clabel">p5p2</span>
+      </div>`,
+    problem:`<div class="chunk"><span class="clabel">p5p1</span>
+        <p class="arabic" style="font-size:22px; line-height:2;">خيال الاطفال هو مفتاح الثروة</p>
         <div class="shape-lock" id="shapeLock">
           <div class="lock-row"><div class="position">1:</div><div id="row0"></div></div>
           <div class="lock-row"><div class="position">2:</div><div id="row1"></div></div>
@@ -1292,10 +1301,12 @@ const PUZZLES = [
   },
   {
     num:'6', name:'شهر عسل 89', loc:'Beyond the Basement', build:'puzzle6',
+    interactables:`
+      <div class="chunk"><span class="clabel">p6g1s</span></div>
+      <div class="chunk"><span class="clabel">p6p1s</span>
+        <div class="scene-preview"><canvas id="preview-p6p" width="380" height="200"></canvas><div class="scene-label">IN GAME — POEM WALL</div></div>
+      </div>`,
     given:`
-      <div class="chunk"><span class="clabel">p6g1s</span>
-        <div class="scene-preview"><canvas id="preview-p6" width="380" height="200"></canvas><div class="scene-label">IN GAME — POEM WALL</div></div>
-      </div>
       <div class="chunk"><span class="clabel">p6g1</span>
         <div style="
           background: linear-gradient(160deg, #fdf6e3, #f5ead0);
@@ -1326,31 +1337,28 @@ const PUZZLES = [
           زرنا قرى بالبرتقال وكلينا طباخهم قبل لا نروح غابات اسبانيا<br>
           ختمنا احلى شهر باحلى شروق
         </div>
-      </div>
-`,
-    problem:`<div class="chunk"><span class="clabel">p6p1s</span>
-        <div class="scene-preview"><canvas id="preview-p6p" width="380" height="200"></canvas><div class="scene-label">IN GAME — POEM WALL</div></div>
-      </div>
-      <div class="chunk"><span class="clabel">p6p1</span>
+      </div>`,
+    problem:`<div class="chunk"><span class="clabel">p6p1</span>
         <div id="p6grid" style="margin:20px 0;"></div>
         <button class="reveal-btn" id="p6reset" style="margin-top:8px;">↺ RESET</button>
       </div>`,
   },
   {
     num:'7', name:'عزيزين على القلب', loc:'Beyond شهر عسل 89', build:'puzzle7',
-    given:`
+    interactables:`
       <div class="chunk"><span class="clabel">p7g1s</span>
         <div class="scene-preview"><canvas id="preview-p7a" width="380" height="200"></canvas><div class="scene-label">IN GAME</div></div>
       </div>
       <div class="chunk"><span class="clabel">p7g2s</span>
         <div class="scene-preview"><canvas id="preview-p7b" width="380" height="200"></canvas><div class="scene-label">IN GAME</div></div>
       </div>
+      <div class="chunk"><span class="clabel">p7p1s</span>
+        <div class="scene-preview"><canvas id="preview-p7p" width="380" height="200"></canvas><div class="scene-label">IN GAME</div></div>
+      </div>`,
+    given:`
       <div class="chunk"><span class="clabel">p7g1</span></div>
       <div class="chunk"><span class="clabel">p7g2</span></div>`,
-    problem:`<div class="chunk"><span class="clabel">p7p1s</span>
-        <div class="scene-preview"><canvas id="preview-p7p" width="380" height="200"></canvas><div class="scene-label">IN GAME</div></div>
-      </div>
-      <div class="chunk"><span class="clabel">p7p1</span>
+    problem:`<div class="chunk"><span class="clabel">p7p1</span>
         <div id="p7grid" style="margin:20px 0;"></div>
         <button class="reveal-btn" id="p7reset" style="margin-top:8px;">↺ RESET</button>
       </div>`,
@@ -1376,6 +1384,7 @@ function select(i){
   detail.innerHTML=`
     <div class="ptitle">${p.name}</div>
     <div class="pkicker">${p.loc.toUpperCase()}</div>
+    ${p.interactables?`<div class="section"><h2>INTERACTABLES</h2>${p.interactables}</div>`:''}
     <div class="section"><h2>THE GIVEN</h2>${p.given}</div>
     <div class="section"><h2>THE PROBLEM</h2>${p.problem}</div>`;
   // Interactive canvases (incl. any hidden in the solution) are drawn once here.
