@@ -547,23 +547,11 @@ function drawTile(t, px, py) {
       break;
 
     case T.FLOOR:
-      // Warm sandstone tile with subtle grid lines
       ctx.fillStyle = '#c8a86a'; ctx.fillRect(px, py, S, S);
-      ctx.fillStyle = 'rgba(160,120,40,0.15)';
-      ctx.fillRect(px, py, S, 1);      // top grout
-      ctx.fillRect(px, py, 1, S);      // left grout
-      ctx.fillStyle = 'rgba(255,220,140,0.18)';
-      ctx.fillRect(px+2, py+2, S-4, S-4);  // tile highlight
       break;
 
     case T.COURTYARD:
-      // Lighter open-air marble/stone
       ctx.fillStyle = '#d4ba88'; ctx.fillRect(px, py, S, S);
-      ctx.fillStyle = 'rgba(180,140,60,0.12)';
-      ctx.fillRect(px, py, S, 1);
-      ctx.fillRect(px, py, 1, S);
-      ctx.fillStyle = 'rgba(255,240,180,0.2)';
-      ctx.fillRect(px+3, py+3, S-6, S-6);
       break;
 
     case T.WALL: {
