@@ -588,12 +588,19 @@ function drawTile(t, px, py) {
 function drawPlacedItem(px, py, id, dimmed) {
   const S = TILE_PX;
   ctx.globalAlpha = dimmed ? 0.3 : 1;
-  ctx.fillStyle = 'rgba(200,168,75,0.18)';
+
+  // Pulsing green glow
+  const pulse = 0.55 + 0.25 * Math.sin(performance.now() / 400);
+  ctx.shadowColor  = '#44ff88';
+  ctx.shadowBlur   = 12 * pulse;
+  ctx.fillStyle = `rgba(40,180,90,${(0.18 * pulse).toFixed(3)})`;
   ctx.fillRect(px+1, py+1, S-2, S-2);
-  ctx.strokeStyle = '#c8a84b';
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = `rgba(80,220,120,${pulse.toFixed(3)})`;
+  ctx.lineWidth = 1.8;
   ctx.strokeRect(px+1.5, py+1.5, S-3, S-3);
-  ctx.fillStyle = '#c8a84b';
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = '#88ffb8';
   ctx.font = 'bold 7px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
