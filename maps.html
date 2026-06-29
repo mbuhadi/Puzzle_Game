@@ -16,12 +16,39 @@
     flex-direction: column;
     align-items: center;
     padding: 24px 20px 48px;
-    gap: 14px;
+    gap: 16px;
   }
   h1 { font-size: 26px; color: #c8a84b; letter-spacing: 3px; }
+
+  .top-bar {
+    display: flex; align-items: center; gap: 20px;
+    flex-wrap: wrap; justify-content: center;
+  }
   .meta { font-family: monospace; font-size: 12px; color: #6e695f; }
   .meta span { color: #a09070; }
 
+  #btnRandomize {
+    background: none;
+    border: 1px solid #3a3020;
+    color: #c8a84b;
+    font-family: 'Cinzel', serif;
+    font-size: 11px;
+    padding: 5px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    letter-spacing: 1px;
+  }
+  #btnRandomize:hover { background: #1e1c18; border-color: #c8a84b; }
+
+  /* ── Layout ──────────────────────────────────────────────────────── */
+  .layout-row {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+  .map-side {
+    display: flex; flex-direction: column; gap: 10px; align-items: center;
+  }
   #mapCanvas {
     display: block;
     image-rendering: pixelated;
@@ -30,11 +57,84 @@
     outline: none;
   }
   #mapCanvas:focus { border-color: #c8a84b; }
-
   .hint { font-family: monospace; font-size: 11px; color: #3a3530; }
 
+  /* ── Interactables panel ─────────────────────────────────────────── */
+  .panel {
+    width: 190px;
+    flex-shrink: 0;
+    background: #0e0d0a;
+    border: 1px solid #2e2a1e;
+    border-radius: 8px;
+    padding: 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    max-height: 524px;
+    overflow-y: auto;
+  }
+  .panel-title {
+    font-family: monospace;
+    font-size: 10px;
+    color: #4a4540;
+    letter-spacing: 1.5px;
+    margin-bottom: 10px;
+  }
+  .puzzle-group { margin-bottom: 8px; }
+  .puzzle-label {
+    font-family: monospace;
+    font-size: 9px;
+    color: #2e2a1e;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+    padding-left: 4px;
+  }
+  .pi-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 6px;
+    border-radius: 4px;
+    cursor: grab;
+    user-select: none;
+    border: 1px solid transparent;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .pi-item:hover { background: #1a1814; border-color: #2e2a1e; }
+  .pi-item.is-placed { opacity: 0.4; }
+  .pi-handle { color: #2e2a24; font-size: 14px; line-height: 1; flex-shrink: 0; }
+  .pi-id { font-family: monospace; font-size: 12px; color: #c8a84b; flex: 1; }
+  .pi-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: #4a7c59; flex-shrink: 0; visibility: hidden;
+  }
+  .pi-item.is-placed .pi-dot { visibility: visible; }
+  .panel-foot {
+    font-family: monospace; font-size: 9px; color: #2a2520;
+    text-align: center; margin-top: 10px; letter-spacing: 0.5px;
+  }
+
+  /* ── Drag ghost ──────────────────────────────────────────────────── */
+  #dragGhost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    display: none;
+    background: #ff8c00;
+    color: #000;
+    font-family: monospace;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 3px 9px;
+    border-radius: 3px;
+    transform: translate(-50%, -130%);
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  }
+
+  /* ── Legend ──────────────────────────────────────────────────────── */
   .legend {
-    display: flex; gap: 18px; flex-wrap: wrap;
+    display: flex; gap: 16px; flex-wrap: wrap;
     justify-content: center;
     font-family: monospace; font-size: 11px; color: #4a4540;
   }
@@ -48,101 +148,114 @@
 <body>
 
 <h1>Map 1</h1>
-<div class="meta">
-  Scale: <span>1 tile = 10 sq ft</span>
-  &nbsp;|&nbsp; Speed: <span>10 tiles / sec</span>
-  &nbsp;|&nbsp; Area: <span id="sqftLabel">generating…</span>
+
+<div class="top-bar">
+  <div class="meta">
+    Scale: <span>1 tile = 10 sq ft</span>
+    &nbsp;|&nbsp; Speed: <span>10 tiles / sec</span>
+    &nbsp;|&nbsp; Area: <span id="sqftLabel">…</span>
+  </div>
+  <button id="btnRandomize">Randomize</button>
 </div>
 
-<canvas id="mapCanvas" tabindex="0"></canvas>
-<div class="hint">WASD / Arrow Keys &nbsp;·&nbsp; click canvas to focus</div>
+<div class="layout-row">
+
+  <div class="map-side">
+    <canvas id="mapCanvas" tabindex="0"></canvas>
+    <div class="hint">WASD / Arrow Keys &nbsp;·&nbsp; click canvas to focus</div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">INTERACTABLES</div>
+    <div id="panelList"></div>
+    <div class="panel-foot">drag onto map · drag off to remove</div>
+  </div>
+
+</div>
 
 <div class="legend">
   <div class="legend-item"><div class="swatch" style="background:#1a1814;"></div>Exterior</div>
   <div class="legend-item"><div class="swatch" style="background:#c8b98a;"></div>Floor</div>
   <div class="legend-item"><div class="swatch" style="background:#4a4235;"></div>Wall</div>
-  <div class="legend-item"><div class="swatch" style="background:#4a7c59;"></div>Object</div>
   <div class="legend-item"><div class="swatch" style="background:#c8a84b;border-radius:50%;"></div>Player</div>
-  <div class="legend-item"><div class="swatch" style="background:rgba(200,168,75,0.3);border-color:#c8a84b;"></div>Interactable</div>
+  <div class="legend-item"><div class="swatch" style="background:rgba(200,168,75,0.35);border-color:#c8a84b;"></div>Interactable</div>
 </div>
 
 <a href="index.html">← Back to Home</a>
+<div id="dragGhost"></div>
 
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────────
 const TILE_PX       = 32;
 const SQFT_PER_TILE = 10;
-const SPEED         = 10;    // tiles per second
-const HITBOX        = 0.28;  // collision half-size in tiles
+const SPEED         = 10;
+const HITBOX        = 0.28;
 const VIEWPORT_W    = 800;
 const VIEWPORT_H    = 520;
 const GRID_W        = 68;
 const GRID_H        = 58;
+const T = { VOID:0, FLOOR:1, WALL:2 };
 
-const T = { VOID:0, FLOOR:1, WALL:2, OBJ:3 };
+// House BSP settings
+const HX = 11, HY = 15, HW = 46, HH = 26;
+const MIN_ROOM_W = 7, MIN_ROOM_H = 6, MAX_DEPTH = 4;
 
-// ── Interactables (future drag-and-drop) ──────────────────────────────────────
-// { id: 'p1g1s', col: Number, row: Number }
-const INTERACTABLES = [];
+// ── All interactables (from the puzzle system) ────────────────────────────────
+const ALL = [
+  { id:'p1g1s', puzzle:1 }, { id:'p1p1s', puzzle:1 },
+  { id:'p2g1s', puzzle:2 }, { id:'p2g2s', puzzle:2 },
+  { id:'p3g1s', puzzle:3 }, { id:'p3g2s', puzzle:3 }, { id:'p3g3s', puzzle:3 },
+  { id:'p4g1s', puzzle:4 },
+  { id:'p5g1s', puzzle:5 },
+  { id:'p6g1s', puzzle:6 }, { id:'p6p1s', puzzle:6 },
+  { id:'p7g1s', puzzle:7 }, { id:'p7g2s', puzzle:7 }, { id:'p7p1s', puzzle:7 },
+];
 
-// ── House blueprint ───────────────────────────────────────────────────────────
-// Interior rect placed roughly centred in the grid
-const HX = 11, HY = 15;  // top-left of interior floor
-const HW = 46, HH = 26;  // interior width × height (floor tiles)
+// Placed interactables on the map: { id, col, row }
+const PLACED = [];
 
-// BSP controls
-const MIN_ROOM_W = 7, MIN_ROOM_H = 6, MAX_BSP_DEPTH = 4;
-
-// ── Map generation (BSP house layout) ────────────────────────────────────────
+// ── Map generation ────────────────────────────────────────────────────────────
 let mapGrid = null;
 
-function generateHouse() {
-  let seed = Date.now() | 0;
+function generateHouse(seed) {
+  let s = seed | 0;
   const rng = (lo, hi) => {
-    seed = Math.imul(seed, 1664525) + 1013904223 | 0;
-    return lo + ((seed >>> 0) % (hi - lo + 1));
+    s = Math.imul(s, 1664525) + 1013904223 | 0;
+    return lo + ((s >>> 0) % (hi - lo + 1));
   };
 
   const grid = Array.from({ length: GRID_H }, () => new Array(GRID_W).fill(T.VOID));
   const rooms = [];
 
-  // Recursively subdivide the house interior into rooms.
-  // Each split places a 1-tile interior wall with a 2-tile opening.
   function bsp(x, y, w, h, depth) {
-    const canV = w >= MIN_ROOM_W * 2 + 1;  // can split left/right
-    const canH = h >= MIN_ROOM_H * 2 + 1;  // can split top/bottom
+    const canV = w >= MIN_ROOM_W * 2 + 1;
+    const canH = h >= MIN_ROOM_H * 2 + 1;
 
-    if (depth >= MAX_BSP_DEPTH || (!canV && !canH)) {
-      // Leaf: fill entire sub-rect with floor
+    if (depth >= MAX_DEPTH || (!canV && !canH)) {
       for (let ry = y; ry < y + h; ry++)
         for (let rx = x; rx < x + w; rx++)
           grid[ry][rx] = T.FLOOR;
-      rooms.push({ x, y, w, h, cx: x + (w >> 1), cy: y + (h >> 1) });
+      rooms.push({ cx: x + (w >> 1), cy: y + (h >> 1) });
       return;
     }
 
-    // Prefer splitting the longer axis; randomise when both are possible
     let vert;
     if (canV && !canH) vert = true;
     else if (!canV && canH) vert = false;
     else vert = rng(0, 1) === 0;
 
     if (vert) {
-      // Vertical dividing wall — splits room into left and right
       const sx = x + MIN_ROOM_W + rng(0, Math.max(0, w - MIN_ROOM_W * 2 - 1));
       bsp(x, y, sx - x, h, depth + 1);
       bsp(sx + 1, y, x + w - sx - 1, h, depth + 1);
-      // Draw wall then cut a 2-tile-tall opening at a random row
       for (let ry = y; ry < y + h; ry++) grid[ry][sx] = T.WALL;
       const oy = y + 1 + rng(0, Math.max(0, h - 4));
       grid[oy][sx] = T.FLOOR;
       if (oy + 1 <= y + h - 2) grid[oy + 1][sx] = T.FLOOR;
     } else {
-      // Horizontal dividing wall — splits room into top and bottom
       const sy = y + MIN_ROOM_H + rng(0, Math.max(0, h - MIN_ROOM_H * 2 - 1));
       bsp(x, y, w, sy - y, depth + 1);
       bsp(x, sy + 1, w, y + h - sy - 1, depth + 1);
-      // Draw wall then cut a 2-tile-wide opening at a random column
       for (let rx = x; rx < x + w; rx++) grid[sy][rx] = T.WALL;
       const ox = x + 1 + rng(0, Math.max(0, w - 4));
       grid[sy][ox] = T.FLOOR;
@@ -152,7 +265,7 @@ function generateHouse() {
 
   bsp(HX, HY, HW, HH, 0);
 
-  // Exterior perimeter wall enclosing the house
+  // Exterior perimeter wall
   for (let rx = HX - 1; rx <= HX + HW; rx++) {
     grid[HY - 1][rx] = T.WALL;
     grid[HY + HH][rx] = T.WALL;
@@ -162,21 +275,19 @@ function generateHouse() {
     grid[ry][HX + HW] = T.WALL;
   }
 
-  // Count actual floor tiles
   let floorCount = 0;
   for (const row of grid)
     for (const t of row)
       if (t === T.FLOOR) floorCount++;
 
-  const s = rooms[0] || { cx: HX + (HW >> 1), cy: HY + (HH >> 1) };
-  return { grid, floorCount, start: { x: s.cx + 0.5, y: s.cy + 0.5 } };
+  const s0 = rooms[0] || { cx: HX + (HW >> 1), cy: HY + (HH >> 1) };
+  return { grid, floorCount, start: { x: s0.cx + 0.5, y: s0.cy + 0.5 } };
 }
 
 // ── Collision ─────────────────────────────────────────────────────────────────
 function walkable(col, row) {
   if (row < 0 || row >= GRID_H || col < 0 || col >= GRID_W) return false;
-  const t = mapGrid[row][col];
-  return t === T.FLOOR || t === T.OBJ;
+  return mapGrid[row][col] === T.FLOOR;
 }
 function canMoveTo(x, y) {
   const h = HITBOX;
@@ -191,14 +302,13 @@ const player = { x: 0, y: 0 };
 const keys   = {};
 
 function update(dt) {
+  if (drag.active) return;
   let dx = 0, dy = 0;
   if (keys['ArrowLeft']  || keys['a'] || keys['A']) dx -= 1;
   if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 1;
   if (keys['ArrowUp']    || keys['w'] || keys['W']) dy -= 1;
   if (keys['ArrowDown']  || keys['s'] || keys['S']) dy += 1;
   if (dx && dy) { dx *= 0.7071; dy *= 0.7071; }
-
-  // Sub-step collision to prevent tunnelling at high speed
   const steps = Math.max(1, Math.ceil(SPEED * dt / 0.35));
   const sdx = dx * SPEED * dt / steps;
   const sdy = dy * SPEED * dt / steps;
@@ -215,6 +325,10 @@ function getCamera() {
     y: Math.round(Math.max(0, Math.min(GRID_H * TILE_PX - VIEWPORT_H, player.y * TILE_PX - VIEWPORT_H / 2))),
   };
 }
+function screenToTile(relX, relY) {
+  const cam = getCamera();
+  return { col: Math.floor((relX + cam.x) / TILE_PX), row: Math.floor((relY + cam.y) / TILE_PX) };
+}
 
 // ── Drawing ───────────────────────────────────────────────────────────────────
 const canvas = document.getElementById('mapCanvas');
@@ -224,77 +338,174 @@ function drawTile(t, px, py) {
   const S = TILE_PX;
   switch (t) {
     case T.VOID:
-      ctx.fillStyle = '#1a1814';
-      ctx.fillRect(px, py, S, S);
-      break;
+      ctx.fillStyle = '#1a1814'; ctx.fillRect(px, py, S, S); break;
     case T.FLOOR:
-      ctx.fillStyle = '#c8b98a';
-      ctx.fillRect(px, py, S, S);
-      ctx.strokeStyle = 'rgba(0,0,0,0.07)';
-      ctx.lineWidth = 0.5;
-      ctx.strokeRect(px+.5, py+.5, S-1, S-1);
-      break;
+      ctx.fillStyle = '#c8b98a'; ctx.fillRect(px, py, S, S);
+      ctx.strokeStyle = 'rgba(0,0,0,0.07)'; ctx.lineWidth = 0.5;
+      ctx.strokeRect(px+.5, py+.5, S-1, S-1); break;
     case T.WALL:
-      ctx.fillStyle = '#4a4235';
-      ctx.fillRect(px, py, S, S);
-      ctx.fillStyle = '#5e5245';
-      ctx.fillRect(px, py, S, 5);
-      ctx.fillStyle = '#302820';
-      ctx.fillRect(px, py+S-3, S, 3);
-      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(px+.5, py+.5, S-1, S-1);
-      break;
-    case T.OBJ:
-      ctx.fillStyle = '#c8b98a';
-      ctx.fillRect(px, py, S, S);
-      ctx.fillStyle = 'rgba(0,0,0,0.15)';
-      ctx.fillRect(px+6, py+7, S-10, S-10);
-      ctx.fillStyle = '#4a7c59';
-      ctx.fillRect(px+5, py+5, S-10, S-10);
-      ctx.fillStyle = '#5d9470';
-      ctx.fillRect(px+5, py+5, S-10, 4);
-      break;
+      ctx.fillStyle = '#4a4235'; ctx.fillRect(px, py, S, S);
+      ctx.fillStyle = '#5e5245'; ctx.fillRect(px, py, S, 5);
+      ctx.fillStyle = '#302820'; ctx.fillRect(px, py+S-3, S, 3);
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1;
+      ctx.strokeRect(px+.5, py+.5, S-1, S-1); break;
   }
 }
 
-function drawInteractable(px, py, id) {
+function drawPlacedItem(px, py, id, dimmed) {
   const S = TILE_PX;
+  ctx.globalAlpha = dimmed ? 0.3 : 1;
   ctx.fillStyle = 'rgba(200,168,75,0.18)';
-  ctx.fillRect(px+2, py+2, S-4, S-4);
+  ctx.fillRect(px+1, py+1, S-2, S-2);
   ctx.strokeStyle = '#c8a84b';
   ctx.lineWidth = 1.5;
-  ctx.strokeRect(px+2.5, py+2.5, S-5, S-5);
+  ctx.strokeRect(px+1.5, py+1.5, S-3, S-3);
   ctx.fillStyle = '#c8a84b';
   ctx.font = 'bold 7px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(id, px+S/2, py+S/2);
+  ctx.globalAlpha = 1;
 }
 
 function drawPlayer(px, py) {
   const S = TILE_PX, cx = px+S/2, cy = py+S/2;
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
-  ctx.beginPath();
-  ctx.ellipse(cx+1, cy+4, 7, 3.5, 0, 0, Math.PI*2);
-  ctx.fill();
+  ctx.beginPath(); ctx.ellipse(cx+1, cy+4, 7, 3.5, 0, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = '#c8a84b';
-  ctx.beginPath();
-  ctx.arc(cx, cy, 9, 0, Math.PI*2);
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = '#e8c860';
-  ctx.beginPath();
-  ctx.arc(cx-2.5, cy-2.5, 4, 0, Math.PI*2);
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(cx-2.5, cy-2.5, 4, 0, Math.PI*2); ctx.fill();
 }
 
+// ── Drag and drop ─────────────────────────────────────────────────────────────
+const ghost = document.getElementById('dragGhost');
+let hoverTile = null;
+
+const drag = { active: false, id: null, fromMap: false };
+
+function startDrag(id, fromMap, clientX, clientY) {
+  drag.active  = true;
+  drag.id      = id;
+  drag.fromMap = fromMap;
+  ghost.textContent = id;
+  ghost.style.display = 'block';
+  ghost.style.left = clientX + 'px';
+  ghost.style.top  = clientY + 'px';
+  document.body.style.cursor = 'grabbing';
+}
+
+function endDrag() {
+  drag.active = false; drag.id = null; drag.fromMap = false;
+  ghost.style.display = 'none';
+  hoverTile = null;
+  document.body.style.cursor = '';
+}
+
+// Panel: mousedown on an item
+function onItemDown(e, id) {
+  e.preventDefault();
+  startDrag(id, false, e.clientX, e.clientY);
+}
+
+// Canvas: mousedown — pick up a placed interactable OR focus for WASD
+canvas.addEventListener('mousedown', e => {
+  const rect = canvas.getBoundingClientRect();
+  const { col, row } = screenToTile(e.clientX - rect.left, e.clientY - rect.top);
+  const hit = PLACED.findIndex(p => p.col === col && p.row === row);
+  if (hit !== -1) {
+    startDrag(PLACED[hit].id, true, e.clientX, e.clientY);
+    e.preventDefault();
+    return;
+  }
+  canvas.focus();
+});
+
+// Global move: update ghost + hover highlight
+document.addEventListener('mousemove', e => {
+  if (!drag.active) return;
+  ghost.style.left = e.clientX + 'px';
+  ghost.style.top  = e.clientY + 'px';
+  const rect = canvas.getBoundingClientRect();
+  const over = e.clientX >= rect.left && e.clientX <= rect.right &&
+               e.clientY >= rect.top  && e.clientY <= rect.bottom;
+  hoverTile = over ? screenToTile(e.clientX - rect.left, e.clientY - rect.top) : null;
+});
+
+// Global up: place or remove
+document.addEventListener('mouseup', e => {
+  if (!drag.active) return;
+
+  const rect   = canvas.getBoundingClientRect();
+  const overCanvas = e.clientX >= rect.left && e.clientX <= rect.right &&
+                     e.clientY >= rect.top  && e.clientY <= rect.bottom;
+
+  if (overCanvas) {
+    const { col, row } = screenToTile(e.clientX - rect.left, e.clientY - rect.top);
+    const isFloor    = row >= 0 && row < GRID_H && col >= 0 && col < GRID_W && mapGrid[row][col] === T.FLOOR;
+    const isOccupied = PLACED.some(p => p.col === col && p.row === row && p.id !== drag.id);
+
+    if (isFloor && !isOccupied) {
+      // Remove existing instance of this id (move), then add at new tile
+      const ex = PLACED.findIndex(p => p.id === drag.id);
+      if (ex !== -1) PLACED.splice(ex, 1);
+      PLACED.push({ id: drag.id, col, row });
+      canvas.focus();
+    }
+    // else: invalid drop → if fromMap, item remains in PLACED at original pos
+  } else {
+    // Dropped outside canvas: remove from map if it was there
+    const ex = PLACED.findIndex(p => p.id === drag.id);
+    if (drag.fromMap && ex !== -1) PLACED.splice(ex, 1);
+  }
+
+  updatePanel();
+  endDrag();
+});
+
+// ── Panel rendering ───────────────────────────────────────────────────────────
+function updatePanel() {
+  const list = document.getElementById('panelList');
+  list.innerHTML = '';
+
+  // Group by puzzle number
+  const groups = {};
+  for (const item of ALL) {
+    (groups[item.puzzle] ??= []).push(item.id);
+  }
+
+  for (const [puzzle, ids] of Object.entries(groups)) {
+    const grp = document.createElement('div');
+    grp.className = 'puzzle-group';
+
+    const lbl = document.createElement('div');
+    lbl.className = 'puzzle-label';
+    lbl.textContent = `PUZZLE ${puzzle}`;
+    grp.appendChild(lbl);
+
+    for (const id of ids) {
+      const isPlaced = PLACED.some(p => p.id === id);
+      const el = document.createElement('div');
+      el.className = 'pi-item' + (isPlaced ? ' is-placed' : '');
+      el.innerHTML =
+        `<span class="pi-handle">⠿</span>` +
+        `<span class="pi-id">${id}</span>` +
+        `<span class="pi-dot"></span>`;
+      el.addEventListener('mousedown', e => onItemDown(e, id));
+      grp.appendChild(el);
+    }
+
+    list.appendChild(grp);
+  }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
 function render() {
   const cam = getCamera();
   ctx.clearRect(0, 0, VIEWPORT_W, VIEWPORT_H);
   ctx.save();
   ctx.translate(-cam.x, -cam.y);
 
-  // Only render tiles visible in viewport
   const c0 = Math.max(0, Math.floor(cam.x / TILE_PX));
   const r0 = Math.max(0, Math.floor(cam.y / TILE_PX));
   const c1 = Math.min(GRID_W, c0 + Math.ceil(VIEWPORT_W / TILE_PX) + 2);
@@ -304,8 +515,19 @@ function render() {
     for (let c = c0; c < c1; c++)
       drawTile(mapGrid[r][c], c*TILE_PX, r*TILE_PX);
 
-  for (const obj of INTERACTABLES)
-    drawInteractable(obj.col*TILE_PX, obj.row*TILE_PX, obj.id);
+  // Hover highlight during drag (green = valid, red = invalid)
+  if (drag.active && hoverTile) {
+    const { col, row } = hoverTile;
+    const inBounds = row >= 0 && row < GRID_H && col >= 0 && col < GRID_W;
+    const isFloor  = inBounds && mapGrid[row][col] === T.FLOOR;
+    const occupied = isFloor && PLACED.some(p => p.col === col && p.row === row && p.id !== drag.id);
+    ctx.fillStyle = (isFloor && !occupied) ? 'rgba(74,124,89,0.45)' : 'rgba(180,60,60,0.45)';
+    ctx.fillRect(col*TILE_PX, row*TILE_PX, TILE_PX, TILE_PX);
+  }
+
+  // Draw placed interactables (dimmed if currently being dragged)
+  for (const p of PLACED)
+    drawPlacedItem(p.col*TILE_PX, p.row*TILE_PX, p.id, drag.active && drag.id === p.id);
 
   drawPlayer((player.x - 0.5)*TILE_PX, (player.y - 0.5)*TILE_PX);
   ctx.restore();
@@ -324,21 +546,36 @@ function loop(ts) {
 // ── Input ─────────────────────────────────────────────────────────────────────
 canvas.addEventListener('keydown', e => { keys[e.key] = true;  e.preventDefault(); });
 canvas.addEventListener('keyup',   e => { keys[e.key] = false; });
-canvas.addEventListener('mousedown', () => canvas.focus());
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 canvas.width  = VIEWPORT_W;
 canvas.height = VIEWPORT_H;
 
-const { grid, floorCount, start } = generateHouse();
-mapGrid   = grid;
-player.x  = start.x;
-player.y  = start.y;
-document.getElementById('sqftLabel').textContent =
-  `~${(floorCount * SQFT_PER_TILE).toLocaleString()} sq ft`;
+function applyMap(result) {
+  mapGrid  = result.grid;
+  player.x = result.start.x;
+  player.y = result.start.y;
+  document.getElementById('sqftLabel').textContent =
+    `~${(result.floorCount * SQFT_PER_TILE).toLocaleString()} sq ft`;
+}
 
+// Persist seed across refreshes so the map stays stable until Randomize is clicked
+const DEFAULT_SEED = 0x4b3c2a;
+const initSeed = parseInt(localStorage.getItem('map1seed')) || DEFAULT_SEED;
+
+applyMap(generateHouse(initSeed));
+updatePanel();
 canvas.focus();
 requestAnimationFrame(loop);
+
+document.getElementById('btnRandomize').addEventListener('click', () => {
+  const newSeed = Date.now() | 0;
+  localStorage.setItem('map1seed', newSeed);
+  PLACED.length = 0;
+  applyMap(generateHouse(newSeed));
+  updatePanel();
+  canvas.focus();
+});
 </script>
 </body>
 </html>
