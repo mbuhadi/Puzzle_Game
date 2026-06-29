@@ -247,6 +247,7 @@ const TREE_NAMES=['عيسى','رزان','مشاري','غازي','فيصل','عب
 const TREE_CORRECT=['عيسى','فيصل','عبدالعزيز','عبدالرحمن','غازي','مشاري','عيسى','رزان','عيسى','عبدالعزيز'];
 
 function buildFamilyTree(){
+  sceneIllustration('preview-p1', drawSceneGate);
   const stage=document.getElementById('treeStage'); if(!stage)return;
   const bgImg=document.createElement('img');
   bgImg.src='tree_bg.png';
@@ -1122,6 +1123,9 @@ const PUZZLES = [
   {
     num:'1', name:'عائلتنا الكريمة', loc:'At the Gate', build:'tree',
     given:`
+      <div class="chunk"><span class="clabel">p1g1s</span>
+        <div class="scene-preview"><canvas id="preview-p1" width="380" height="200"></canvas><div class="scene-label">IN GAME — THE ENTRANCE GATE</div></div>
+      </div>
       <div class="chunk"><span class="clabel">p1g1</span>
         <div class="clue arabic">
           <div class="head">عبدالرحمن يقول:</div>
