@@ -265,30 +265,23 @@ const GRID_H        = 60;
 
 const T = { VOID:0, FLOOR:1, WALL:2, WATER:3, COURTYARD:4 };
 
-// ── Riad house layout parameters (~7 000 sq ft) ───────────────────────────────
-// Interior origin inside the grid
-const HX = 17, HY = 19;
-// Interior dimensions: 3 columns (12 | 1wall | 12 | 1wall | 12 = 38)
-//                      3 rows    (5  | 1wall | 10 | 1wall | 5  = 22)
-const HW = 38, HH = 22;
+// ── Riad house layout parameters (5-room, ~8.5k sq ft) ───────────────────────
+const HX = 14, HY = 12;
+const LEFT_W = 12, CENT_W = 18, TOP_H = 7, MID_H = 16, BOT_H = 7;
+const HW = LEFT_W + 1 + CENT_W + 1 + LEFT_W;  // 44
+const HH = TOP_H  + 1 + MID_H  + 1 + BOT_H;   // 32
 
-// Column split points (all in absolute grid coords)
-const VW1 = HX + 12;       // left  vertical inner wall
-const VW2 = HX + 25;       // right vertical inner wall
-const CX1 = HX + 13;       // courtyard / center column start
-const CX2 = HX + 24;       // courtyard / center column end
+const VW1  = HX + LEFT_W;              // 26 — left inner wall column
+const VW2  = VW1 + 1 + CENT_W;         // 45 — right inner wall column
+const CX1  = VW1 + 1;                  // 27 — center column start
+const HW1  = HY + TOP_H;              // 19 — full horizontal wall (top)
+const CY1  = HW1 + 1;                 // 20 — courtyard start
+const HW2Y = HY + TOP_H + 1 + MID_H; // 36 — partial wall row (left/right only)
+const BOT_Y = HW2Y + 1;              // 37 — bottom rooms start
 
-// Row split points
-const HW1 = HY + 5;        // top   horizontal inner wall
-const HW2 = HY + 16;       // bottom horizontal inner wall
-const CY1 = HY + 6;        // courtyard row start
-const CY2 = HY + 15;       // courtyard row end
-
-// Pond (sits inside courtyard)
-const POND_X = CX1 + 2;    // HX+15
-const POND_Y = CY1 + 2;    // HY+8
-const POND_W = 8;
-const POND_H = 6;
+const POND_W = 4, POND_H = 12;
+const POND_X = CX1 + Math.floor((CENT_W - POND_W) / 2);  // 34
+const POND_Y = CY1 + Math.floor((MID_H  - POND_H) / 2);  // 22
 
 // ── All interactables ─────────────────────────────────────────────────────────
 const ALL = [
@@ -344,66 +337,56 @@ function generateRiad(seed) {
 
   const grid = Array.from({ length: GRID_H }, () => new Array(GRID_W).fill(T.VOID));
 
-  // ── Fill rooms with floor ──────────────────────────────────────────────────
-  fillRect(grid, HX,    HY,    12, 5,  T.FLOOR);      // TL
-  fillRect(grid, CX1,   HY,    12, 5,  T.FLOOR);      // TC
-  fillRect(grid, VW2+1, HY,    12, 5,  T.FLOOR);      // TR
+  // ── Fill rooms ──────────────────────────────────────────────────────────────
+  fillRect(grid, HX,    HY, LEFT_W, TOP_H, T.FLOOR);      // TL
+  fillRect(grid, CX1,   HY, CENT_W, TOP_H, T.FLOOR);      // TC
+  fillRect(grid, VW2+1, HY, LEFT_W, TOP_H, T.FLOOR);      // TR
 
-  fillRect(grid, HX,    CY1,   12, 10, T.FLOOR);      // ML
-  fillRect(grid, CX1,   CY1,   12, 10, T.COURTYARD);  // courtyard
-  fillRect(grid, VW2+1, CY1,   12, 10, T.FLOOR);      // MR
+  // Courtyard spans center column from CY1 all the way to bottom interior
+  fillRect(grid, CX1, CY1, CENT_W, HH - TOP_H - 1, T.COURTYARD);
 
-  fillRect(grid, HX,    HW2+1, 12, 5,  T.FLOOR);      // BL
-  fillRect(grid, CX1,   HW2+1, 12, 5,  T.FLOOR);      // BC
-  fillRect(grid, VW2+1, HW2+1, 12, 5,  T.FLOOR);      // BR
+  fillRect(grid, HX,    BOT_Y, LEFT_W, BOT_H, T.FLOOR);   // BL
+  fillRect(grid, VW2+1, BOT_Y, LEFT_W, BOT_H, T.FLOOR);   // BR
 
-  // ── Interior walls ─────────────────────────────────────────────────────────
-  for (let x = HX; x < HX + HW; x++) {
-    grid[HW1][x] = T.WALL;
-    grid[HW2][x] = T.WALL;
-  }
+  // ── Interior walls ──────────────────────────────────────────────────────────
+  // Full horizontal wall separating top rooms from middle
+  for (let x = HX; x < HX + HW; x++) grid[HW1][x] = T.WALL;
+
+  // Full-height vertical walls
   for (let y = HY; y < HY + HH; y++) {
     grid[y][VW1] = T.WALL;
     grid[y][VW2] = T.WALL;
   }
 
-  // ── Doorways (seed varies positions slightly) ──────────────────────────────
-  // Horizontal wall HW1: top rooms <-> middle section
-  const dTL = HX  + 3 + rng(0, 4);   // TL <-> ML
-  const dTC = CX1 + 3 + rng(0, 3);   // TC <-> Courtyard
-  const dTR = VW2 + 3 + rng(0, 4);   // TR <-> MR
-  grid[HW1][dTL] = T.FLOOR;      grid[HW1][dTL+1] = T.FLOOR;
-  grid[HW1][dTC] = T.COURTYARD;  grid[HW1][dTC+1] = T.COURTYARD;
-  grid[HW1][dTR] = T.FLOOR;      grid[HW1][dTR+1] = T.FLOOR;
+  // Solid wall in left/right middle columns (includes partial HW2Y row)
+  fillRect(grid, HX,    CY1, LEFT_W, MID_H + 1, T.WALL);
+  fillRect(grid, VW2+1, CY1, LEFT_W, MID_H + 1, T.WALL);
 
-  // Horizontal wall HW2: middle section <-> bottom rooms
-  const dBL = HX  + 3 + rng(0, 4);
-  const dBC = CX1 + 3 + rng(0, 3);
-  const dBR = VW2 + 3 + rng(0, 4);
-  grid[HW2][dBL] = T.FLOOR;      grid[HW2][dBL+1] = T.FLOOR;
-  grid[HW2][dBC] = T.COURTYARD;  grid[HW2][dBC+1] = T.COURTYARD;
-  grid[HW2][dBR] = T.FLOOR;      grid[HW2][dBR+1] = T.FLOOR;
-
-  // Vertical wall VW1: left rooms <-> center
-  const dVL_T = HY   + 1 + rng(0, 2);   // TL <-> TC
-  const dVL_M = CY1  + 3 + rng(0, 3);   // ML <-> Courtyard
-  const dVL_B = HW2  + 1 + rng(0, 2);   // BL <-> BC
+  // ── Doorways ────────────────────────────────────────────────────────────────
+  // VW1 at top section: TL <-> TC
+  const dVL_T = HY + 1 + rng(0, TOP_H - 4);
   grid[dVL_T][VW1] = T.FLOOR;      grid[dVL_T+1][VW1] = T.FLOOR;
-  grid[dVL_M][VW1] = T.FLOOR;      grid[dVL_M+1][VW1] = T.FLOOR;
+
+  // VW2 at top section: TC <-> TR
+  const dVR_T = HY + 1 + rng(0, TOP_H - 4);
+  grid[dVR_T][VW2] = T.FLOOR;      grid[dVR_T+1][VW2] = T.FLOOR;
+
+  // HW1 at center column: TC <-> courtyard
+  const dTC = CX1 + 3 + rng(0, CENT_W - 8);
+  grid[HW1][dTC] = T.COURTYARD;    grid[HW1][dTC+1] = T.COURTYARD;
+
+  // VW1 at BL section: BL <-> courtyard
+  const dVL_B = BOT_Y + 1 + rng(0, BOT_H - 4);
   grid[dVL_B][VW1] = T.FLOOR;      grid[dVL_B+1][VW1] = T.FLOOR;
 
-  // Vertical wall VW2: center <-> right rooms
-  const dVR_T = HY   + 1 + rng(0, 2);   // TC <-> TR
-  const dVR_M = CY1  + 3 + rng(0, 3);   // Courtyard <-> MR
-  const dVR_B = HW2  + 1 + rng(0, 2);   // BC <-> BR
-  grid[dVR_T][VW2] = T.FLOOR;      grid[dVR_T+1][VW2] = T.FLOOR;
-  grid[dVR_M][VW2] = T.FLOOR;      grid[dVR_M+1][VW2] = T.FLOOR;
+  // VW2 at BR section: BR <-> courtyard
+  const dVR_B = BOT_Y + 1 + rng(0, BOT_H - 4);
   grid[dVR_B][VW2] = T.FLOOR;      grid[dVR_B+1][VW2] = T.FLOOR;
 
-  // ── Pond ───────────────────────────────────────────────────────────────────
+  // ── Pond (vertical, centered in upper courtyard) ─────────────────────────────
   fillRect(grid, POND_X, POND_Y, POND_W, POND_H, T.WATER);
 
-  // ── Exterior perimeter wall ────────────────────────────────────────────────
+  // ── Exterior perimeter wall ──────────────────────────────────────────────────
   for (let rx = HX-1; rx <= HX+HW; rx++) {
     grid[HY-1][rx] = T.WALL;
     grid[HY+HH][rx] = T.WALL;
@@ -413,27 +396,7 @@ function generateRiad(seed) {
     grid[ry][HX+HW] = T.WALL;
   }
 
-  // ── Seed-based optional internal room subdivisions ────────────────────────
-  // Random sub-wall in ML (left middle room)
-  if (rng(0, 1)) {
-    const wY = CY1 + 1 + rng(1, 5);
-    if (wY < HW2 - 1) {
-      for (let x = HX; x < VW1; x++) grid[wY][x] = T.WALL;
-      const dX = HX + 1 + rng(0, 5);
-      grid[wY][dX] = T.FLOOR; grid[wY][dX+1] = T.FLOOR;
-    }
-  }
-  // Random sub-wall in MR (right middle room)
-  if (rng(0, 1)) {
-    const wY = CY1 + 1 + rng(1, 5);
-    if (wY < HW2 - 1) {
-      for (let x = VW2+1; x < HX+HW; x++) grid[wY][x] = T.WALL;
-      const dX = VW2 + 1 + rng(0, 5);
-      grid[wY][dX] = T.FLOOR; grid[wY][dX+1] = T.FLOOR;
-    }
-  }
-
-  // ── Floor count ────────────────────────────────────────────────────────────
+  // ── Floor count ──────────────────────────────────────────────────────────────
   let floorCount = 0;
   for (const row of grid)
     for (const t of row)
@@ -442,7 +405,7 @@ function generateRiad(seed) {
   return {
     grid,
     floorCount,
-    start: { x: HX + 5 + 0.5, y: HY + 2 + 0.5 },  // TL room
+    start: { x: HX + 5 + 0.5, y: HY + 3 + 0.5 },  // TL room
   };
 }
 
