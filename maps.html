@@ -67,15 +67,6 @@
   #mapCanvas:focus { border-color: #c8a84b; }
   .hint { font-family: monospace; font-size: 11px; color: #3a3530; }
 
-  #examinePrompt {
-    font-family: monospace; font-size: 12px;
-    color: #c8a84b; letter-spacing: 1px;
-    visibility: hidden;
-    background: rgba(0,0,0,0.6);
-    padding: 4px 12px;
-    border-radius: 4px;
-    border: 1px solid rgba(200,168,75,0.3);
-  }
 
   /* ── Interactables panel ─────────────────────────────────────────── */
   .panel {
@@ -162,7 +153,8 @@
   }
   #examineOverlay.open { display: flex; }
   #examineBox {
-    position: relative;
+    display: flex;
+    flex-direction: column;
     width: 960px;
     height: 82vh;
     max-width: 96vw;
@@ -171,22 +163,22 @@
     border-radius: 10px;
     overflow: hidden;
   }
-  #examineClose {
-    position: absolute;
-    top: 10px; right: 12px;
-    z-index: 10;
-    background: #1a1814;
-    border: 1px solid #3a3020;
+  #examineFrame { flex: 1; border: none; width: 100%; min-height: 0; }
+  #examineLeave {
+    flex-shrink: 0;
+    background: #0e0d0a;
+    border: none;
+    border-top: 1px solid #2e2a1e;
     color: #c8a84b;
-    font-size: 16px;
-    width: 30px; height: 30px;
-    border-radius: 4px;
+    font-family: 'Cinzel', serif;
+    font-size: 13px;
+    letter-spacing: 2px;
+    padding: 14px 0;
     cursor: pointer;
-    font-family: sans-serif;
-    display: flex; align-items: center; justify-content: center;
+    width: 100%;
+    transition: background 0.15s, color 0.15s;
   }
-  #examineClose:hover { background: #2a2018; border-color: #c8a84b; }
-  #examineFrame { width: 100%; height: 100%; border: none; }
+  #examineLeave:hover { background: #1a1814; color: #e8c860; }
 
   /* ── Legend ──────────────────────────────────────────────────────── */
   .legend {
@@ -220,8 +212,7 @@
 
   <div class="map-side">
     <canvas id="mapCanvas" tabindex="0"></canvas>
-    <div id="examinePrompt">[ E ] &nbsp;Examine &nbsp;<span id="examineId"></span></div>
-    <div class="hint">WASD / Arrow Keys &nbsp;·&nbsp; click canvas to focus &nbsp;·&nbsp; E to examine</div>
+    <div class="hint">WASD / Arrow Keys &nbsp;·&nbsp; click canvas to focus</div>
   </div>
 
   <div class="panel">
@@ -247,8 +238,8 @@
 
 <div id="examineOverlay">
   <div id="examineBox">
-    <button id="examineClose" title="Close (Esc)">✕</button>
     <iframe id="examineFrame"></iframe>
+    <button id="examineLeave">Leave</button>
   </div>
 </div>
 
@@ -462,40 +453,59 @@ const keys   = {};
 const examineOverlay = document.getElementById('examineOverlay');
 const examineFrame   = document.getElementById('examineFrame');
 
-function openExamine(id) {
+const INTERACT_RADIUS = 1.2;   // tiles — auto-trigger distance
+let activeInteractable = null; // the item currently open
+let exitDir = { x: 0, y: -1 }; // direction to push player on leave
+let exitCooldown = 0;           // timestamp, suppresses re-trigger after leave
+
+function openExamine(p) {
   for (const k in keys) keys[k] = false;
-  const baseId = id.replace(/s$/, '');
+  activeInteractable = p;
+  const ix = p.col + 0.5, iy = p.row + 0.5;
+  const dx = player.x - ix, dy = player.y - iy;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  exitDir = dist > 0.05 ? { x: dx/dist, y: dy/dist } : { x: 0, y: -1 };
+  const baseId = p.id.replace(/s$/, '');
   examineFrame.src = 'puzzles_curated.html?chunk=' + baseId;
   examineOverlay.classList.add('open');
 }
+
 function closeExamine() {
   examineOverlay.classList.remove('open');
+  examineFrame.src = '';
+  if (activeInteractable) {
+    // Push player 2.5 tiles away from the interactable center
+    const ix = activeInteractable.col + 0.5, iy = activeInteractable.row + 0.5;
+    const PUSH = 2.5;
+    const tx = ix + exitDir.x * PUSH, ty = iy + exitDir.y * PUSH;
+    if (canMoveTo(tx, ty)) { player.x = tx; player.y = ty; }
+    activeInteractable = null;
+  }
+  exitCooldown = performance.now() + 600;
+  lastNearbyId = null;
   canvas.focus();
 }
 
-document.getElementById('examineClose').addEventListener('click', closeExamine);
-examineOverlay.addEventListener('click', e => { if (e.target === examineOverlay) closeExamine(); });
+document.getElementById('examineLeave').addEventListener('click', closeExamine);
 
 // ── Nearby interactable detection ─────────────────────────────────────────────
 function getNearbyInteractable() {
   for (const p of PLACED) {
-    if (Math.abs(player.x - (p.col + 0.5)) < 0.55 &&
-        Math.abs(player.y - (p.row + 0.5)) < 0.55)
-      return p;
+    const dx = player.x - (p.col + 0.5), dy = player.y - (p.row + 0.5);
+    if (Math.sqrt(dx*dx + dy*dy) < INTERACT_RADIUS) return p;
   }
   return null;
 }
 
 let lastNearbyId = null;
 function updateExaminePrompt() {
+  if (examineOverlay.classList.contains('open')) return;
+  if (performance.now() < exitCooldown) return;
   const nearby = getNearbyInteractable();
   const id = nearby ? nearby.id : null;
   if (id === lastNearbyId) return;
   lastNearbyId = id;
-  const prompt = document.getElementById('examinePrompt');
-  const lbl    = document.getElementById('examineId');
-  if (id) { lbl.textContent = id; prompt.style.visibility = 'visible'; }
-  else    { prompt.style.visibility = 'hidden'; }
+  if (id) openExamine(nearby);
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────
@@ -663,9 +673,9 @@ document.addEventListener('mouseup', e => {
   if (overCanvas) {
     const { col, row } = screenToTile(e.clientX - rect.left, e.clientY - rect.top);
     const t = row >= 0 && row < GRID_H && col >= 0 && col < GRID_W ? mapGrid[row][col] : T.VOID;
-    const isWalkable = t === T.FLOOR || t === T.COURTYARD;
-    const occupied   = PLACED.some(p => p.col === col && p.row === row && p.id !== drag.id);
-    if (isWalkable && !occupied) {
+    const isPlaceable = t === T.FLOOR || t === T.COURTYARD || t === T.WALL;
+    const occupied    = PLACED.some(p => p.col === col && p.row === row && p.id !== drag.id);
+    if (isPlaceable && !occupied) {
       const ex = PLACED.findIndex(p => p.id === drag.id);
       if (ex !== -1) PLACED.splice(ex, 1);
       PLACED.push({ id: drag.id, col, row });
@@ -725,9 +735,9 @@ function render() {
     const { col, row } = hoverTile;
     const inBounds = row >= 0 && row < GRID_H && col >= 0 && col < GRID_W;
     const t = inBounds ? mapGrid[row][col] : T.VOID;
-    const isWalkable = t === T.FLOOR || t === T.COURTYARD;
-    const occupied = isWalkable && PLACED.some(p => p.col === col && p.row === row && p.id !== drag.id);
-    ctx.fillStyle = (isWalkable && !occupied) ? 'rgba(74,124,89,0.45)' : 'rgba(180,60,60,0.45)';
+    const isPlaceable = t === T.FLOOR || t === T.COURTYARD || t === T.WALL;
+    const occupied = isPlaceable && PLACED.some(p => p.col === col && p.row === row && p.id !== drag.id);
+    ctx.fillStyle = (isPlaceable && !occupied) ? 'rgba(74,124,89,0.45)' : 'rgba(180,60,60,0.45)';
     ctx.fillRect(col*TILE_PX, row*TILE_PX, TILE_PX, TILE_PX);
   }
 
@@ -752,10 +762,6 @@ function loop(ts) {
 canvas.addEventListener('keydown', e => {
   keys[e.key] = true;
   e.preventDefault();
-  if ((e.key === 'e' || e.key === 'E') && !examineOverlay.classList.contains('open')) {
-    const nearby = getNearbyInteractable();
-    if (nearby) openExamine(nearby.id);
-  }
   if (e.key === 'Escape') closeExamine();
 });
 canvas.addEventListener('keyup',  e => { keys[e.key] = false; });
