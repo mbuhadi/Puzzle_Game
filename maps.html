@@ -664,10 +664,10 @@ function drawThoughtBubble() {
 
 // ── Virtual joystick ──────────────────────────────────────────────────────────
 const JOY = {
-  cx: 78, cy: VIEWPORT_H - 78,  // base center in canvas (screen) coords
+  cx: 0, cy: 0,
   baseR: 50, thumbR: 22,
   active: false, touchId: null,
-  tx: 78, ty: VIEWPORT_H - 78,
+  tx: 0, ty: 0,
   dx: 0, dy: 0,
 };
 
@@ -687,6 +687,7 @@ function joyMove(cx, cy) {
 }
 
 function drawJoystick() {
+  if (!JOY.active) return;
   const j = JOY;
   ctx.save();
   // Base ring
@@ -867,20 +868,22 @@ canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   for (const t of e.changedTouches) {
     const { cx, cy } = canvasTouch(t);
-    // Joystick — capture if touch is within joystick zone
-    if (!JOY.active && Math.hypot(cx - JOY.cx, cy - JOY.cy) <= JOY.baseR * 1.6) {
-      JOY.active = true; JOY.touchId = t.identifier;
-      joyMove(cx, cy);
-      continue;
-    }
-    // Thought bubble tap
+    // Thought bubble tap — check first so a tap on the bubble doesn't also spawn the joystick
     if (!examineOverlay.classList.contains('open') && bubbleBounds && nearbyInteractable) {
       const cam = getCamera();
       const wx = cx + cam.x, wy = cy + cam.y;
       if (wx >= bubbleBounds.wx && wx <= bubbleBounds.wx + bubbleBounds.ww &&
           wy >= bubbleBounds.wy && wy <= bubbleBounds.wy + bubbleBounds.wh) {
         openExamine(nearbyInteractable);
+        continue;
       }
+    }
+    // Joystick — spawn at touch point
+    if (!JOY.active && !examineOverlay.classList.contains('open')) {
+      JOY.cx = cx; JOY.cy = cy;
+      JOY.tx = cx; JOY.ty = cy;
+      JOY.active = true; JOY.touchId = t.identifier;
+      continue;
     }
   }
 }, { passive: false });
