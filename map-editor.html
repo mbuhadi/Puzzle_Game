@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Map Studio — Riad Editor</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cinzel+Decorative:wght@400&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --gold:     #c8a84b;
+  --gold-dim: #7a6030;
+  --bg:       #0e0d0a;
+  --bg2:      #14120e;
+  --bg3:      #1e1a12;
+  --border:   #2e2a1e;
+  --text:     #d4ba88;
+  --dim:      #6a5c3a;
+}
+
+html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
+  font-family: 'Cinzel', serif; }
+
+#app { display: flex; flex-direction: column; height: 100%; }
+
+/* ── Top bar ──────────────────────────────────────────────────────────────── */
+#topbar {
+  height: 42px; flex-shrink: 0;
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 4px; padding: 0 10px;
+}
+.tb-title {
+  font-family: 'Cinzel Decorative', serif; font-size: 12px;
+  color: var(--gold); letter-spacing: 2px; margin-right: 10px; white-space: nowrap;
+}
+.tb-sep { width: 1px; height: 24px; background: var(--border); margin: 0 6px; flex-shrink: 0; }
+
+/* ── Main area ───────────────────────────────────────────────────────────── */
+#main { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+#sidebar {
+  width: 172px; flex-shrink: 0;
+  background: var(--bg2); border-right: 1px solid var(--border);
+  overflow-y: auto; padding: 10px 8px; display: flex; flex-direction: column; gap: 10px;
+}
+#sidebar::-webkit-scrollbar { width: 4px; }
+#sidebar::-webkit-scrollbar-thumb { background: var(--border); }
+
+.sec-title {
+  font-size: 8px; letter-spacing: 2.5px; color: var(--dim);
+  margin-bottom: 5px; padding-left: 1px;
+}
+.divider { height: 1px; background: var(--border); }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+button, .btn-like {
+  background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text); font-family: 'Cinzel', serif; font-size: 11px;
+  padding: 5px 8px; cursor: pointer; border-radius: 3px;
+  letter-spacing: 0.5px; display: inline-block; text-align: center;
+  transition: border-color 0.12s, color 0.12s; white-space: nowrap;
+}
+button:hover, .btn-like:hover { border-color: var(--gold-dim); color: var(--gold); }
+button.active { border-color: var(--gold); color: var(--gold); background: #231d0e; }
+button:disabled { opacity: 0.35; cursor: default; }
+button:disabled:hover { border-color: var(--border); color: var(--text); }
+button.danger:hover { border-color: #7a3030; color: #cc7070; }
+button.play { border-color: #3a6a30; color: #7acc60; font-size: 12px; }
+button.play:hover { border-color: #5a9a48; color: #aaee88; }
+
+.tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.tile-list  { display: flex; flex-direction: column; gap: 3px; }
+.zoom-row   { display: flex; align-items: center; gap: 5px; }
+.zoom-row button { padding: 3px 8px; font-size: 13px; line-height: 1; }
+#zoomLabel { font-size: 10px; color: var(--dim); min-width: 38px; text-align: center; }
+
+.tile-btn {
+  display: flex; align-items: center; gap: 7px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 3px; padding: 4px 7px; cursor: pointer;
+  font-size: 10px; letter-spacing: 0.5px; color: var(--text);
+  transition: border-color 0.12s; width: 100%;
+}
+.tile-btn:hover { border-color: var(--gold-dim); }
+.tile-btn.active { border-color: var(--gold); background: #231d0e; }
+.tile-swatch { width: 13px; height: 13px; border-radius: 2px; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.1); }
+.tile-key { margin-left: auto; font-size: 9px; color: var(--dim); }
+
+.hint-text { font-size: 9px; color: var(--dim); line-height: 1.7; padding-left: 1px; }
+
+/* ── Canvas wrap ─────────────────────────────────────────────────────────── */
+#canvasWrap { flex: 1; overflow: hidden; position: relative; min-width: 0; }
+#editorCanvas { display: block; }
+
+/* ── Status bar ──────────────────────────────────────────────────────────── */
+#statusbar {
+  height: 26px; flex-shrink: 0;
+  background: var(--bg2); border-top: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 12px; gap: 20px;
+  font-size: 10px; color: var(--dim); letter-spacing: 0.5px;
+}
+#statusbar span { font-family: monospace; }
+
+#fileInput { display: none; }
+
+/* Save flash */
+#saveFlash { font-size: 10px; color: #4a9a60; font-family: monospace;
+  opacity: 0; transition: opacity 0.3s; margin-left: 2px; }
+#saveFlash.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Top bar -->
+  <div id="topbar">
+    <span class="tb-title">MAP STUDIO</span>
+    <button onclick="newMap()">New</button>
+    <button onclick="saveLocal(this)">Save</button>
+    <span id="saveFlash">saved ✓</span>
+    <button onclick="loadLocal()">Load</button>
+    <div class="tb-sep"></div>
+    <button onclick="exportJSON()">Export</button>
+    <label class="btn-like">Import<input type="file" id="fileInput" accept=".json" onchange="importJSON(event)"></label>
+    <div class="tb-sep"></div>
+    <button onclick="autoWall()" title="Fill VOID tiles adjacent to floor/water with WALL">Auto-Wall</button>
+    <button class="danger" onclick="clearMap()">Clear</button>
+    <div class="tb-sep"></div>
+    <button class="play" onclick="playMap()">▶ Play Map</button>
+  </div>
+
+  <!-- Main -->
+  <div id="main">
+
+    <!-- Sidebar -->
+    <div id="sidebar">
+
+      <!-- Tools -->
+      <div>
+        <div class="sec-title">TOOLS</div>
+        <div class="tool-grid">
+          <button id="tool-paint" class="active" onclick="setTool('paint')" title="Paint (B)">Paint</button>
+          <button id="tool-erase"               onclick="setTool('erase')" title="Erase (X)">Erase</button>
+          <button id="tool-fill"                onclick="setTool('fill')"  title="Fill (G)">Fill</button>
+          <button id="tool-rect"                onclick="setTool('rect')"  title="Rectangle (R)">Rect</button>
+          <button id="tool-spawn" style="grid-column:span 2" onclick="setTool('spawn')" title="Set Spawn Point (S)">Set Spawn</button>
+        </div>
+        <div class="hint-text" style="margin-top:6px">
+          Right-click → Erase<br>
+          Space + Drag → Pan<br>
+          Scroll → Zoom
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Tiles -->
+      <div>
+        <div class="sec-title">TILE TYPE</div>
+        <div class="tile-list" id="tileList"></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- View -->
+      <div>
+        <div class="sec-title">VIEW</div>
+        <button id="btnGrid" class="active" onclick="toggleGrid()" style="width:100%;margin-bottom:5px">Grid: On</button>
+        <div class="zoom-row">
+          <button onclick="adjustZoom(0.667)" title="Zoom out">−</button>
+          <span id="zoomLabel">12px</span>
+          <button onclick="adjustZoom(1.5)" title="Zoom in">+</button>
+          <button onclick="fitGrid()" title="Fit grid to window" style="font-size:10px;padding:3px 5px">Fit</button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- History -->
+      <div>
+        <div class="sec-title">HISTORY</div>
+        <div class="tool-grid">
+          <button id="btnUndo" onclick="undo()" disabled title="Ctrl+Z">Undo</button>
+          <button id="btnRedo" onclick="redo()" disabled title="Ctrl+Y">Redo</button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Shortcuts -->
+      <div>
+        <div class="sec-title">SHORTCUTS</div>
+        <div class="hint-text">
+          B — Paint<br>
+          X — Erase<br>
+          G — Fill<br>
+          R — Rect<br>
+          S — Spawn<br>
+          0–4 — Tile type<br>
+          Ctrl+Z/Y — Undo/Redo<br>
+          Ctrl+S — Save
+        </div>
+      </div>
+
+    </div><!-- /sidebar -->
+
+    <!-- Canvas -->
+    <div id="canvasWrap">
+      <canvas id="editorCanvas"></canvas>
+    </div>
+
+  </div><!-- /main -->
+
+  <!-- Status bar -->
+  <div id="statusbar">
+    <span id="stCell">col —, row —</span>
+    <span id="stTile">—</span>
+    <span id="stZoom">zoom 12×</span>
+    <span id="stSpawn">spawn: not set</span>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+// ── Constants ─────────────────────────────────────────────────────────────────
+const GRID_W = 72, GRID_H = 60;
+const T = { VOID: 0, FLOOR: 1, WALL: 2, WATER: 3, COURTYARD: 4 };
+const TILE_COLORS = ['#1a1410', '#c8a86a', '#8a6a40', '#2a6898', '#d4ba88'];
+const TILE_NAMES  = ['Void', 'Floor', 'Wall', 'Water', 'Courtyard'];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let grid = makeGrid();
+let spawn = null;           // {col, row}
+let zoom = 12;
+let panX = 0, panY = 0;
+let tool = 'paint';
+let selTile = T.FLOOR;
+let showGrid = true;
+
+// History — stores post-operation snapshots
+const MAX_HIST = 60;
+let history = [];
+let histIdx  = -1;
+
+// Input state
+let painting   = false;
+let paintErase = false;   // right-click = erase
+let strokeMade = false;
+let lastCell   = null;
+let isPanning  = false;
+let panAnchor  = null;
+let spaceHeld  = false;
+let rectStart  = null;
+let hoverCell  = null;
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('editorCanvas');
+const ctx    = canvas.getContext('2d');
+const wrap   = document.getElementById('canvasWrap');
+
+// ── Grid helpers ──────────────────────────────────────────────────────────────
+function makeGrid() {
+  return Array.from({ length: GRID_H }, () => new Array(GRID_W).fill(T.VOID));
+}
+function cloneGrid(g) {
+  return (g || grid).map(r => r.slice());
+}
+function inBounds(c, r) {
+  return c >= 0 && c < GRID_W && r >= 0 && r < GRID_H;
+}
+
+// ── Canvas resize ─────────────────────────────────────────────────────────────
+function resizeCanvas() {
+  canvas.width  = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  render();
+}
+
+// ── Coordinate mapping ────────────────────────────────────────────────────────
+function canvasToCell(cx, cy) {
+  return {
+    col: Math.floor((cx - panX) / zoom),
+    row: Math.floor((cy - panY) / zoom),
+  };
+}
+function cellXY(col, row) {
+  return { x: col * zoom + panX, y: row * zoom + panY };
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render() {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // Background
+  ctx.fillStyle = '#080705';
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid world shadow
+  const gx = panX, gy = panY, gw = GRID_W * zoom, gh = GRID_H * zoom;
+  ctx.save();
+  ctx.shadowColor = 'rgba(200,168,75,0.18)';
+  ctx.shadowBlur  = 24;
+  ctx.fillStyle   = '#1a1410';
+  ctx.fillRect(gx, gy, gw, gh);
+  ctx.shadowBlur  = 0;
+  ctx.restore();
+
+  // Tiles (frustum-culled)
+  const c0 = Math.max(0, Math.floor(-panX / zoom));
+  const r0 = Math.max(0, Math.floor(-panY / zoom));
+  const c1 = Math.min(GRID_W - 1, Math.floor((W - panX) / zoom));
+  const r1 = Math.min(GRID_H - 1, Math.floor((H - panY) / zoom));
+
+  for (let r = r0; r <= r1; r++) {
+    for (let c = c0; c <= c1; c++) {
+      const t = grid[r][c];
+      if (t === T.VOID) continue; // background handles void colour
+      const x = c * zoom + panX, y = r * zoom + panY;
+      ctx.fillStyle = TILE_COLORS[t];
+      ctx.fillRect(x, y, zoom, zoom);
+    }
+  }
+
+  // Grid lines
+  if (showGrid && zoom >= 6) {
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(200,168,75,0.1)';
+    ctx.lineWidth = 0.5;
+    for (let c = c0; c <= c1 + 1; c++) {
+      const x = c * zoom + panX;
+      ctx.moveTo(x, Math.max(0, gy));
+      ctx.lineTo(x, Math.min(H, gy + gh));
+    }
+    for (let r = r0; r <= r1 + 1; r++) {
+      const y = r * zoom + panY;
+      ctx.moveTo(Math.max(0, gx), y);
+      ctx.lineTo(Math.min(W, gx + gw), y);
+    }
+    ctx.stroke();
+  }
+
+  // Grid border
+  ctx.strokeStyle = '#c8a84b';
+  ctx.lineWidth   = 1.5;
+  ctx.strokeRect(gx + 0.75, gy + 0.75, gw - 1.5, gh - 1.5);
+
+  // Rect preview
+  if (tool === 'rect' && rectStart && hoverCell) {
+    const cc0 = Math.min(rectStart.col, hoverCell.col);
+    const rr0 = Math.min(rectStart.row, hoverCell.row);
+    const cc1 = Math.max(rectStart.col, hoverCell.col);
+    const rr1 = Math.max(rectStart.row, hoverCell.row);
+    ctx.fillStyle   = TILE_COLORS[paintErase ? T.VOID : selTile] + 'aa';
+    ctx.strokeStyle = TILE_COLORS[paintErase ? T.VOID : selTile];
+    ctx.lineWidth   = 1;
+    for (let rr = rr0; rr <= rr1; rr++) {
+      for (let cc = cc0; cc <= cc1; cc++) {
+        if (!inBounds(cc, rr)) continue;
+        const { x, y } = cellXY(cc, rr);
+        ctx.fillRect(x, y, zoom, zoom);
+      }
+    }
+    const { x: rx, y: ry } = cellXY(cc0, rr0);
+    ctx.strokeRect(rx, ry, (cc1 - cc0 + 1) * zoom, (rr1 - rr0 + 1) * zoom);
+  }
+
+  // Spawn marker
+  if (spawn) {
+    const { x, y } = cellXY(spawn.col, spawn.row);
+    const cx_ = x + zoom / 2, cy_ = y + zoom / 2;
+    const rad = Math.max(3, zoom * 0.36);
+    ctx.save();
+    ctx.shadowColor = '#44ff88';
+    ctx.shadowBlur  = zoom < 8 ? 4 : 10;
+    ctx.fillStyle   = '#88ffaa';
+    ctx.beginPath(); ctx.arc(cx_, cy_, rad, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#22cc66'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.restore();
+    if (zoom >= 10) {
+      ctx.fillStyle = '#003310';
+      ctx.font = `bold ${Math.max(7, Math.floor(zoom * 0.38))}px monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('S', cx_, cy_);
+    }
+  }
+
+  // Hover highlight
+  if (hoverCell && inBounds(hoverCell.col, hoverCell.row) && !isPanning) {
+    const { x, y } = cellXY(hoverCell.col, hoverCell.row);
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    ctx.lineWidth   = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, zoom - 1, zoom - 1);
+  }
+}
+
+// ── History ───────────────────────────────────────────────────────────────────
+function snapshot() {
+  return { grid: cloneGrid(), spawn: spawn ? { ...spawn } : null };
+}
+
+function pushHistory() {
+  history = history.slice(0, histIdx + 1);
+  history.push(snapshot());
+  if (history.length > MAX_HIST) history.shift();
+  histIdx = history.length - 1;
+  updateHistBtns();
+}
+
+function restoreSnapshot(s) {
+  grid  = s.grid.map(r => r.slice());
+  spawn = s.spawn ? { ...s.spawn } : null;
+}
+
+function undo() {
+  if (histIdx <= 0) return;
+  histIdx--;
+  restoreSnapshot(history[histIdx]);
+  render(); updateStatus(); updateHistBtns();
+}
+
+function redo() {
+  if (histIdx >= history.length - 1) return;
+  histIdx++;
+  restoreSnapshot(history[histIdx]);
+  render(); updateStatus(); updateHistBtns();
+}
+
+function updateHistBtns() {
+  document.getElementById('btnUndo').disabled = histIdx <= 0;
+  document.getElementById('btnRedo').disabled = histIdx >= history.length - 1;
+}
+
+// ── Painting ──────────────────────────────────────────────────────────────────
+function applyTile(col, row, tileOverride) {
+  if (!inBounds(col, row)) return false;
+  const t = tileOverride !== undefined ? tileOverride : selTile;
+  if (grid[row][col] === t) return false;
+  grid[row][col] = t;
+  return true;
+}
+
+function floodFill(col, row, newTile) {
+  if (!inBounds(col, row)) return;
+  const target = grid[row][col];
+  if (target === newTile) return;
+  const queue = [[col, row]];
+  const seen  = new Set([row * GRID_W + col]);
+  while (queue.length) {
+    const [c, r] = queue.shift();
+    grid[r][c] = newTile;
+    for (const [dc, dr] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nc = c + dc, nr = r + dr;
+      const key = nr * GRID_W + nc;
+      if (inBounds(nc, nr) && !seen.has(key) && grid[nr][nc] === target) {
+        seen.add(key);
+        queue.push([nc, nr]);
+      }
+    }
+  }
+}
+
+// ── Auto-wall ─────────────────────────────────────────────────────────────────
+function autoWall() {
+  const walkable = new Set([T.FLOOR, T.COURTYARD, T.WATER]);
+  let changed = false;
+  for (let r = 0; r < GRID_H; r++) {
+    for (let c = 0; c < GRID_W; c++) {
+      if (grid[r][c] !== T.VOID) continue;
+      for (const [dc, dr] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nc = c + dc, nr = r + dr;
+        if (inBounds(nc, nr) && walkable.has(grid[nr][nc])) {
+          grid[r][c] = T.WALL; changed = true; break;
+        }
+      }
+    }
+  }
+  if (changed) { pushHistory(); render(); }
+}
+
+// ── Map ops ───────────────────────────────────────────────────────────────────
+function clearMap() {
+  if (!confirm('Clear the entire map?')) return;
+  grid = makeGrid(); spawn = null;
+  pushHistory(); render(); updateStatus();
+}
+
+function newMap() {
+  if (!confirm('Start a new blank map? Unsaved changes will be lost.')) return;
+  grid = makeGrid(); spawn = null;
+  history = []; histIdx = -1;
+  fitGrid();
+  pushHistory(); render(); updateStatus(); updateHistBtns();
+}
+
+// ── Tool / tile selection ─────────────────────────────────────────────────────
+function setTool(t) {
+  tool = t; rectStart = null;
+  document.querySelectorAll('[id^="tool-"]').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('tool-' + t);
+  if (btn) btn.classList.add('active');
+  updateCursor();
+}
+
+function selectTile(val) {
+  selTile = val;
+  document.querySelectorAll('.tile-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('tile-' + val);
+  if (btn) btn.classList.add('active');
+}
+
+function updateCursor() {
+  const map = { paint:'crosshair', erase:'cell', fill:'copy', rect:'crosshair', spawn:'pointer' };
+  canvas.style.cursor = spaceHeld ? (isPanning ? 'grabbing' : 'grab') : (map[tool] || 'crosshair');
+}
+
+// ── View ──────────────────────────────────────────────────────────────────────
+function toggleGrid() {
+  showGrid = !showGrid;
+  const btn = document.getElementById('btnGrid');
+  btn.textContent = 'Grid: ' + (showGrid ? 'On' : 'Off');
+  btn.classList.toggle('active', showGrid);
+  render();
+}
+
+function zoomAt(cx, cy, factor) {
+  const raw     = zoom * factor;
+  const newZoom = Math.max(4, Math.min(48, raw < zoom ? Math.floor(raw) : Math.ceil(raw)));
+  if (newZoom === zoom) return;
+  panX = cx - (cx - panX) * (newZoom / zoom);
+  panY = cy - (cy - panY) * (newZoom / zoom);
+  zoom = newZoom;
+  updateZoomLabel();
+  render();
+}
+
+function adjustZoom(factor) {
+  zoomAt(canvas.width / 2, canvas.height / 2, factor);
+}
+
+function fitGrid() {
+  const W = canvas.width  || wrap.clientWidth;
+  const H = canvas.height || wrap.clientHeight;
+  zoom = Math.max(4, Math.min(48, Math.floor(Math.min(W / GRID_W, H / GRID_H))));
+  panX = Math.round((W - GRID_W * zoom) / 2);
+  panY = Math.round((H - GRID_H * zoom) / 2);
+  updateZoomLabel();
+  render();
+}
+
+function updateZoomLabel() {
+  document.getElementById('zoomLabel').textContent = zoom + 'px';
+  document.getElementById('stZoom').textContent    = 'zoom ' + zoom + '×';
+}
+
+// ── Status ────────────────────────────────────────────────────────────────────
+function updateStatus() {
+  const sp = spawn ? `(${spawn.col}, ${spawn.row})` : 'not set';
+  document.getElementById('stSpawn').textContent = 'spawn: ' + sp;
+}
+
+// ── Serialize / deserialize ───────────────────────────────────────────────────
+function toData() {
+  return { grid: cloneGrid(), spawn: spawn ? { ...spawn } : null, name: 'Custom Map' };
+}
+
+function fromData(data) {
+  if (!data || !data.grid) throw new Error('Missing grid');
+  if (data.grid.length !== GRID_H || data.grid[0].length !== GRID_W)
+    throw new Error(`Expected ${GRID_W}×${GRID_H} grid, got ${data.grid[0]?.length}×${data.grid.length}`);
+  grid  = data.grid.map(row => row.map(Number));
+  spawn = data.spawn ? { col: +data.spawn.col, row: +data.spawn.row } : null;
+}
+
+// ── Save / load / export / import / play ──────────────────────────────────────
+function saveLocal(btn) {
+  localStorage.setItem('editorMap', JSON.stringify(toData()));
+  pushHistory(); // sync history to saved state
+  const flash = document.getElementById('saveFlash');
+  flash.classList.add('show');
+  setTimeout(() => flash.classList.remove('show'), 1400);
+}
+
+function loadLocal() {
+  const raw = localStorage.getItem('editorMap');
+  if (!raw) { alert('No saved map found in localStorage.'); return; }
+  try {
+    fromData(JSON.parse(raw));
+    pushHistory();
+    render(); updateStatus();
+  } catch (e) { alert('Error loading: ' + e.message); }
+}
+
+function exportJSON() {
+  const data = toData();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = 'map.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importJSON(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      fromData(JSON.parse(ev.target.result));
+      pushHistory();
+      render(); updateStatus();
+    } catch (err) { alert('Import error: ' + err.message); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+function playMap() {
+  if (!spawn) {
+    alert('Set a spawn point first — use the "Set Spawn" tool, then click a floor tile.');
+    return;
+  }
+  localStorage.setItem('editorMap', JSON.stringify(toData()));
+  window.open('maps.html?custom=1', '_blank');
+}
+
+// ── Mouse events ──────────────────────────────────────────────────────────────
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+canvas.addEventListener('mousedown', e => {
+  const { col, row } = canvasToCell(e.offsetX, e.offsetY);
+
+  // Pan: middle-mouse or space+left
+  if (e.button === 1 || (e.button === 0 && spaceHeld)) {
+    isPanning  = true;
+    panAnchor  = { mx: e.clientX, my: e.clientY, px: panX, py: panY };
+    updateCursor();
+    e.preventDefault(); return;
+  }
+
+  const erasing = e.button === 2;
+
+  if (tool === 'spawn') {
+    if (!inBounds(col, row)) return;
+    spawn = { col, row };
+    pushHistory(); updateStatus(); render(); return;
+  }
+
+  if (tool === 'fill') {
+    if (!inBounds(col, row)) return;
+    floodFill(col, row, erasing ? T.VOID : selTile);
+    pushHistory(); render(); return;
+  }
+
+  if (tool === 'rect') {
+    if (!inBounds(col, row)) return;
+    rectStart  = { col, row };
+    paintErase = erasing;
+    painting   = true; return;
+  }
+
+  // Paint / erase brush
+  painting   = true;
+  paintErase = erasing;
+  strokeMade = false;
+  lastCell   = null;
+
+  if (inBounds(col, row)) {
+    if (applyTile(col, row, erasing ? T.VOID : undefined)) strokeMade = true;
+    lastCell = { col, row };
+    render();
+  }
+});
+
+canvas.addEventListener('mousemove', e => {
+  const { col, row } = canvasToCell(e.offsetX, e.offsetY);
+  hoverCell = { col, row };
+
+  if (isPanning) {
+    panX = panAnchor.px + (e.clientX - panAnchor.mx);
+    panY = panAnchor.py + (e.clientY - panAnchor.my);
+    render(); return;
+  }
+
+  // Update status cell info
+  if (inBounds(col, row)) {
+    document.getElementById('stCell').textContent = `col ${col}, row ${row}`;
+    document.getElementById('stTile').textContent  = TILE_NAMES[grid[row][col]];
+  }
+
+  if (!painting) { render(); return; } // hover highlight
+
+  if (tool === 'rect') { render(); return; } // preview only
+
+  // Brush painting
+  if (lastCell && lastCell.col === col && lastCell.row === row) return;
+  if (inBounds(col, row)) {
+    if (applyTile(col, row, paintErase ? T.VOID : undefined)) strokeMade = true;
+    lastCell = { col, row };
+    render();
+  }
+});
+
+window.addEventListener('mouseup', e => {
+  if (isPanning) {
+    isPanning = false;
+    updateCursor(); return;
+  }
+  if (!painting) return;
+  painting = false;
+
+  if (tool === 'rect' && rectStart && hoverCell) {
+    const cc0 = Math.min(rectStart.col, hoverCell.col);
+    const rr0 = Math.min(rectStart.row, hoverCell.row);
+    const cc1 = Math.max(rectStart.col, hoverCell.col);
+    const rr1 = Math.max(rectStart.row, hoverCell.row);
+    let changed = false;
+    for (let rr = rr0; rr <= rr1; rr++)
+      for (let cc = cc0; cc <= cc1; cc++)
+        if (applyTile(cc, rr, paintErase ? T.VOID : selTile)) changed = true;
+    if (changed) pushHistory();
+    rectStart = null;
+    render(); return;
+  }
+
+  if (strokeMade) pushHistory();
+  render();
+});
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoomAt(e.offsetX, e.offsetY, e.deltaY < 0 ? 1.333 : 0.75);
+}, { passive: false });
+
+canvas.addEventListener('mouseleave', () => { hoverCell = null; render(); });
+
+// ── Keyboard ──────────────────────────────────────────────────────────────────
+window.addEventListener('keydown', e => {
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+  if (e.key === ' ') { spaceHeld = true; updateCursor(); e.preventDefault(); return; }
+
+  if (e.ctrlKey || e.metaKey) {
+    if (e.key === 'z') { e.shiftKey ? redo() : undo(); e.preventDefault(); return; }
+    if (e.key === 'y') { redo(); e.preventDefault(); return; }
+    if (e.key === 's') { saveLocal(); e.preventDefault(); return; }
+    return;
+  }
+
+  const toolMap = { b:'paint', x:'erase', g:'fill', r:'rect', s:'spawn' };
+  if (toolMap[e.key.toLowerCase()]) { setTool(toolMap[e.key.toLowerCase()]); return; }
+
+  if ('01234'.includes(e.key)) selectTile(parseInt(e.key));
+});
+
+window.addEventListener('keyup', e => {
+  if (e.key === ' ') { spaceHeld = false; updateCursor(); }
+});
+
+// ── Tile palette builder ──────────────────────────────────────────────────────
+function buildPalette() {
+  const list = document.getElementById('tileList');
+  Object.entries(T).forEach(([name, val]) => {
+    const btn = document.createElement('div');
+    btn.className = 'tile-btn' + (val === selTile ? ' active' : '');
+    btn.id = 'tile-' + val;
+    btn.onclick = () => selectTile(val);
+    btn.innerHTML =
+      `<span class="tile-swatch" style="background:${TILE_COLORS[val]}"></span>` +
+      `<span>${TILE_NAMES[val]}</span>` +
+      `<span class="tile-key">${val}</span>`;
+    list.appendChild(btn);
+  });
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+buildPalette();
+new ResizeObserver(resizeCanvas).observe(wrap);
+resizeCanvas();
+fitGrid();
+pushHistory(); // save initial empty state
+</script>
+</body>
+</html>

@@ -922,7 +922,39 @@ function applyMap(result, seed) {
   loadPlaced(seed);
 }
 
-applyMap(generateRiad(currentSeed), currentSeed);
+// Check for custom map from the editor
+const _urlParams = new URLSearchParams(location.search);
+if (_urlParams.get('custom') === '1') {
+  const _raw = localStorage.getItem('editorMap');
+  let _loaded = false;
+  if (_raw) {
+    try {
+      const _data = JSON.parse(_raw);
+      if (_data.grid && _data.grid.length === GRID_H && _data.grid[0].length === GRID_W) {
+        const _sp = _data.spawn || { col: 5, row: 5 };
+        const _floorCount = _data.grid.flat().filter(t => t === T.FLOOR || t === T.COURTYARD).length;
+        applyMap({
+          grid: _data.grid.map(row => row.map(Number)),
+          start: { x: _sp.col + 0.5, y: _sp.row + 0.5 },
+          floorCount: _floorCount,
+        }, 'custom');
+        // Hide randomize in custom mode and add an editor link
+        document.getElementById('btnRandomize').style.display = 'none';
+        const _back = document.createElement('a');
+        _back.href = 'map-editor.html';
+        _back.textContent = '← Back to Editor';
+        _back.style.cssText = 'font-size:11px;color:#7a6030;font-family:monospace;text-decoration:none;';
+        _back.onmouseover  = () => _back.style.color = '#c8a84b';
+        _back.onmouseout   = () => _back.style.color = '#7a6030';
+        document.querySelector('.top-bar').appendChild(_back);
+        _loaded = true;
+      }
+    } catch (_e) { /* fall through to normal */ }
+  }
+  if (!_loaded) applyMap(generateRiad(currentSeed), currentSeed);
+} else {
+  applyMap(generateRiad(currentSeed), currentSeed);
+}
 updatePanel();
 canvas.focus();
 requestAnimationFrame(loop);
