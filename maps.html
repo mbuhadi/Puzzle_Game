@@ -63,6 +63,8 @@
     border: 2px solid #2e2a1e;
     border-radius: 4px;
     outline: none;
+    max-width: 100%;
+    touch-action: none;
   }
   #mapCanvas:focus { border-color: #c8a84b; }
   .hint { font-family: monospace; font-size: 11px; color: #3a3530; }
@@ -212,7 +214,7 @@
 
   <div class="map-side">
     <canvas id="mapCanvas" tabindex="0"></canvas>
-    <div class="hint">WASD / Arrow Keys &nbsp;·&nbsp; click canvas to focus</div>
+    <div class="hint">WASD / Arrows &nbsp;·&nbsp; E to examine &nbsp;·&nbsp; joystick on touch</div>
   </div>
 
   <div class="panel">
@@ -453,10 +455,11 @@ const keys   = {};
 const examineOverlay = document.getElementById('examineOverlay');
 const examineFrame   = document.getElementById('examineFrame');
 
-const INTERACT_RADIUS = 1.2;   // tiles — auto-trigger distance
-let activeInteractable = null; // the item currently open
-let exitDir = { x: 0, y: -1 }; // direction to push player on leave
-let exitCooldown = 0;           // timestamp, suppresses re-trigger after leave
+const INTERACT_RADIUS = 1.2;  // tiles — proximity for thought bubble
+let activeInteractable = null;
+let exitDir = { x: 0, y: -1 };
+let nearbyInteractable = null; // updated each frame; drives thought bubble
+let bubbleBounds = null;       // world-pixel rect of thought bubble for tap hit-test
 
 function openExamine(p) {
   for (const k in keys) keys[k] = false;
@@ -474,15 +477,11 @@ function closeExamine() {
   examineOverlay.classList.remove('open');
   examineFrame.src = '';
   if (activeInteractable) {
-    // Push player 2.5 tiles away from the interactable center
     const ix = activeInteractable.col + 0.5, iy = activeInteractable.row + 0.5;
-    const PUSH = 2.5;
-    const tx = ix + exitDir.x * PUSH, ty = iy + exitDir.y * PUSH;
+    const tx = ix + exitDir.x * 2.5, ty = iy + exitDir.y * 2.5;
     if (canMoveTo(tx, ty)) { player.x = tx; player.y = ty; }
     activeInteractable = null;
   }
-  exitCooldown = performance.now() + 600;
-  lastNearbyId = null;
   canvas.focus();
 }
 
@@ -497,26 +496,23 @@ function getNearbyInteractable() {
   return null;
 }
 
-let lastNearbyId = null;
-function updateExaminePrompt() {
-  if (examineOverlay.classList.contains('open')) return;
-  if (performance.now() < exitCooldown) return;
-  const nearby = getNearbyInteractable();
-  const id = nearby ? nearby.id : null;
-  if (id === lastNearbyId) return;
-  lastNearbyId = id;
-  if (id) openExamine(nearby);
+function updateNearby() {
+  if (examineOverlay.classList.contains('open')) { nearbyInteractable = null; return; }
+  nearbyInteractable = getNearbyInteractable();
+  if (!nearbyInteractable) bubbleBounds = null;
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────
 function update(dt) {
   if (drag.active) return;
-  let dx = 0, dy = 0;
+  let dx = JOY.dx, dy = JOY.dy;
   if (keys['ArrowLeft']  || keys['a'] || keys['A']) dx -= 1;
   if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 1;
   if (keys['ArrowUp']    || keys['w'] || keys['W']) dy -= 1;
   if (keys['ArrowDown']  || keys['s'] || keys['S']) dy += 1;
-  if (dx && dy) { dx *= 0.7071; dy *= 0.7071; }
+  // Clamp combined input to unit length
+  const mag = Math.sqrt(dx*dx + dy*dy);
+  if (mag > 1) { dx /= mag; dy /= mag; }
   const steps = Math.max(1, Math.ceil(SPEED * dt / 0.35));
   const sdx = dx * SPEED * dt / steps;
   const sdy = dy * SPEED * dt / steps;
@@ -524,7 +520,7 @@ function update(dt) {
     if (canMoveTo(player.x + sdx, player.y)) player.x += sdx;
     if (canMoveTo(player.x, player.y + sdy)) player.y += sdy;
   }
-  updateExaminePrompt();
+  updateNearby();
 }
 
 // ── Camera ────────────────────────────────────────────────────────────────────
@@ -620,6 +616,90 @@ function drawPlayer(px, py) {
   ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = '#e8c860';
   ctx.beginPath(); ctx.arc(cx-2.5, cy-2.5, 4, 0, Math.PI*2); ctx.fill();
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y);  ctx.arcTo(x+w, y,   x+w, y+r,   r);
+  ctx.lineTo(x+w, y+h-r); ctx.arcTo(x+w, y+h, x+w-r, y+h, r);
+  ctx.lineTo(x+r, y+h);  ctx.arcTo(x,   y+h, x,   y+h-r, r);
+  ctx.lineTo(x, y+r);    ctx.arcTo(x,   y,   x+r, y,     r);
+  ctx.closePath();
+}
+
+// Draws speech bubble in world-pixel space (inside ctx.translate block).
+// Updates bubbleBounds for tap hit-testing.
+function drawThoughtBubble() {
+  if (!nearbyInteractable) { bubbleBounds = null; return; }
+  const S = TILE_PX;
+  const pcx = (player.x - 0.5) * S + S/2;   // player center x (world px)
+  const pcy = (player.y - 0.5) * S;           // player top y (world px)
+
+  const BW = 48, BH = 30, R = 7;
+  const bx = pcx - BW/2, by = pcy - BH - 24;
+  bubbleBounds = { wx: bx, wy: by, ww: BW, wh: BH };
+
+  // Tail dots
+  ctx.fillStyle = '#fffde0';
+  [[pcx-2, pcy-6, 5], [pcx+1, pcy-13, 4], [pcx-1, pcy-19, 3]].forEach(([x,y,r]) => {
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+  });
+  // Bubble fill
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.45)';
+  ctx.shadowBlur = 8;
+  ctx.fillStyle = '#fffde0';
+  roundRect(bx, by, BW, BH, R); ctx.fill();
+  ctx.restore();
+  // Bubble border
+  ctx.strokeStyle = '#c8a84b'; ctx.lineWidth = 1.5;
+  roundRect(bx, by, BW, BH, R); ctx.stroke();
+  // "[E]" label
+  ctx.fillStyle = '#7a5a10';
+  ctx.font = 'bold 12px monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('[E]', bx + BW/2, by + BH/2);
+}
+
+// ── Virtual joystick ──────────────────────────────────────────────────────────
+const JOY = {
+  cx: 78, cy: VIEWPORT_H - 78,  // base center in canvas (screen) coords
+  baseR: 50, thumbR: 22,
+  active: false, touchId: null,
+  tx: 78, ty: VIEWPORT_H - 78,
+  dx: 0, dy: 0,
+};
+
+function joyReset() {
+  JOY.active = false; JOY.touchId = null;
+  JOY.tx = JOY.cx; JOY.ty = JOY.cy;
+  JOY.dx = 0; JOY.dy = 0;
+}
+function joyMove(cx, cy) {
+  const dx = cx - JOY.cx, dy = cy - JOY.cy;
+  const dist = Math.hypot(dx, dy);
+  const clamped = Math.min(dist, JOY.baseR);
+  JOY.tx = JOY.cx + (dist > 0 ? (dx/dist)*clamped : 0);
+  JOY.ty = JOY.cy + (dist > 0 ? (dy/dist)*clamped : 0);
+  JOY.dx = dist > 5 ? dx/dist : 0;
+  JOY.dy = dist > 5 ? dy/dist : 0;
+}
+
+function drawJoystick() {
+  const j = JOY;
+  ctx.save();
+  // Base ring
+  ctx.globalAlpha = 0.22;
+  ctx.strokeStyle = '#c8a84b'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(j.cx, j.cy, j.baseR, 0, Math.PI*2); ctx.stroke();
+  ctx.fillStyle = '#3a2a10';
+  ctx.beginPath(); ctx.arc(j.cx, j.cy, j.baseR, 0, Math.PI*2); ctx.fill();
+  // Thumb
+  ctx.globalAlpha = j.active ? 0.85 : 0.45;
+  ctx.fillStyle = '#c8a84b';
+  ctx.beginPath(); ctx.arc(j.tx, j.ty, j.thumbR, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
 }
 
 // ── Drag and drop ─────────────────────────────────────────────────────────────
@@ -745,7 +825,10 @@ function render() {
     drawPlacedItem(p.col*TILE_PX, p.row*TILE_PX, p.id, drag.active && drag.id === p.id);
 
   drawPlayer((player.x - 0.5)*TILE_PX, (player.y - 0.5)*TILE_PX);
+  drawThoughtBubble();   // world space — drawn above player, inside translate
   ctx.restore();
+
+  drawJoystick();        // screen space — fixed overlay on canvas
 }
 
 // ── Game loop ─────────────────────────────────────────────────────────────────
@@ -762,11 +845,66 @@ function loop(ts) {
 canvas.addEventListener('keydown', e => {
   keys[e.key] = true;
   e.preventDefault();
+  if ((e.key === 'e' || e.key === 'E') && !examineOverlay.classList.contains('open')) {
+    if (nearbyInteractable) openExamine(nearbyInteractable);
+  }
   if (e.key === 'Escape') closeExamine();
 });
 canvas.addEventListener('keyup',  e => { keys[e.key] = false; });
 canvas.addEventListener('blur',   ()  => { for (const k in keys) keys[k] = false; });
 window.addEventListener('blur',   ()  => { for (const k in keys) keys[k] = false; });
+
+// ── Touch input (joystick + thought-bubble tap) ───────────────────────────────
+function canvasTouch(touch) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    cx: (touch.clientX - rect.left) * (VIEWPORT_W / rect.width),
+    cy: (touch.clientY - rect.top)  * (VIEWPORT_H / rect.height),
+  };
+}
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    const { cx, cy } = canvasTouch(t);
+    // Joystick — capture if touch is within joystick zone
+    if (!JOY.active && Math.hypot(cx - JOY.cx, cy - JOY.cy) <= JOY.baseR * 1.6) {
+      JOY.active = true; JOY.touchId = t.identifier;
+      joyMove(cx, cy);
+      continue;
+    }
+    // Thought bubble tap
+    if (!examineOverlay.classList.contains('open') && bubbleBounds && nearbyInteractable) {
+      const cam = getCamera();
+      const wx = cx + cam.x, wy = cy + cam.y;
+      if (wx >= bubbleBounds.wx && wx <= bubbleBounds.wx + bubbleBounds.ww &&
+          wy >= bubbleBounds.wy && wy <= bubbleBounds.wy + bubbleBounds.wh) {
+        openExamine(nearbyInteractable);
+      }
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier === JOY.touchId) {
+      const { cx, cy } = canvasTouch(t);
+      joyMove(cx, cy);
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches)
+    if (t.identifier === JOY.touchId) joyReset();
+}, { passive: false });
+
+canvas.addEventListener('touchcancel', e => {
+  for (const t of e.changedTouches)
+    if (t.identifier === JOY.touchId) joyReset();
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 canvas.width  = VIEWPORT_W;
