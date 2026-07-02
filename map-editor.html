@@ -113,6 +113,51 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
 
 #fileInput { display: none; }
 
+/* ── Tileset picker overlay ─────────────────────────────────────────────── */
+#tsOverlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.82);
+  z-index: 500; display: none; align-items: center; justify-content: center;
+}
+#tsOverlay.open { display: flex; }
+#tsBox {
+  display: flex; flex-direction: column;
+  width: 600px; max-width: 94vw; height: 84vh;
+  background: var(--bg2); border: 1px solid var(--gold-dim);
+  border-radius: 6px; overflow: hidden;
+}
+#tsHead {
+  flex-shrink: 0; display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+  font-size: 10px; letter-spacing: 1.5px; color: var(--dim);
+}
+#tsSel { font-family: monospace; color: var(--gold); margin-left: auto; }
+#tsScroll {
+  flex: 1; overflow: auto; position: relative;
+  background:
+    repeating-conic-gradient(#171512 0% 25%, #1d1a15 0% 50%) 0 0 / 32px 32px;
+}
+#tsScroll img {
+  display: block; width: 512px;              /* 2× the sheet's 256px width */
+  image-rendering: pixelated; user-select: none;
+}
+#tsRect {
+  position: absolute; pointer-events: none; display: none;
+  border: 2px solid var(--gold);
+  background: rgba(200,168,75,0.18);
+}
+#tsFoot {
+  flex-shrink: 0; display: flex; gap: 8px; justify-content: flex-end;
+  padding: 8px 12px; border-top: 1px solid var(--border);
+}
+
+/* Brush preview in sidebar */
+#brushWrap { display: none; margin-top: 6px; text-align: center; }
+#brushWrap.show { display: block; }
+#brushPreview {
+  image-rendering: pixelated; border: 1px solid var(--gold-dim);
+  border-radius: 3px; background: #171512; max-width: 100%;
+}
+
 /* Save flash */
 #saveFlash { font-size: 10px; color: #4a9a60; font-family: monospace;
   opacity: 0; transition: opacity 0.3s; margin-left: 2px; }
@@ -177,7 +222,12 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
       <!-- Objects -->
       <div>
         <div class="sec-title">OBJECTS</div>
-        <div class="tile-list" id="objList"></div>
+        <button onclick="openTileset()" style="width:100%;margin-bottom:6px" title="Pick a sprite from the Modern Interiors sheet">Browse Tileset…</button>
+        <div id="brushWrap">
+          <canvas id="brushPreview"></canvas>
+          <div class="hint-text" id="brushLabel"></div>
+        </div>
+        <div class="tile-list" id="objList" style="margin-top:6px"></div>
         <div class="sec-title" style="margin-top:8px">COLLISION</div>
         <div class="tool-grid">
           <button id="solid-yes" class="active" onclick="setObjSolid(true)"  title="Player must walk around it">Solid</button>
@@ -250,6 +300,24 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
 
   </div><!-- /main -->
 
+  <!-- Tileset picker -->
+  <div id="tsOverlay">
+    <div id="tsBox">
+      <div id="tsHead">
+        INTERIORS TILESET — click &amp; drag to select tiles
+        <span id="tsSel">no selection</span>
+      </div>
+      <div id="tsScroll">
+        <img id="tsImg" src="assets/Interiors_16x16.png" draggable="false" alt="tileset">
+        <div id="tsRect"></div>
+      </div>
+      <div id="tsFoot">
+        <button onclick="tsCancel()">Cancel</button>
+        <button id="tsUseBtn" onclick="tsUse()" disabled>Use Selection</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Status bar -->
   <div id="statusbar">
     <span id="stCell">col —, row —</span>
@@ -299,6 +367,7 @@ let panX = 0, panY = 0;
 let tool = 'paint';
 let selTile = T.FLOOR;
 let selObj = 'palm';
+let selSprite = null;       // {sx, sy, sw, sh} in sheet tiles — overrides selObj when set
 let objSolid = true;
 let selInter = INTERACTABLE_IDS[0].id;
 let showGrid = true;
@@ -324,6 +393,12 @@ const canvas = document.getElementById('editorCanvas');
 const ctx    = canvas.getContext('2d');
 const wrap   = document.getElementById('canvasWrap');
 
+// ── Tileset sheet (Modern Interiors, 16px tiles) ──────────────────────────────
+const SHEET_TILE = 16;
+const sheetImg = new Image();
+sheetImg.onload = () => render();
+sheetImg.src = 'assets/Interiors_16x16.png';
+
 // ── Grid helpers ──────────────────────────────────────────────────────────────
 function makeGrid() {
   return Array.from({ length: GRID_H }, () => new Array(GRID_W).fill(T.VOID));
@@ -334,8 +409,18 @@ function cloneGrid(g) {
 function inBounds(c, r) {
   return c >= 0 && c < GRID_W && r >= 0 && r < GRID_H;
 }
+// Footprint helpers — sprite objects can span several tiles (sw×sh)
+function objW(o) { return o.sw || 1; }
+function objH(o) { return o.sh || 1; }
+function objCovers(o, col, row) {
+  return col >= o.col && col < o.col + objW(o) &&
+         row >= o.row && row < o.row + objH(o);
+}
+// Topmost (most recently placed) object covering a cell
 function objAt(col, row) {
-  return objects.findIndex(o => o.col === col && o.row === row);
+  for (let i = objects.length - 1; i >= 0; i--)
+    if (objCovers(objects[i], col, row)) return i;
+  return -1;
 }
 function interAt(col, row) {
   return interactables.findIndex(p => p.col === col && p.row === row);
@@ -423,8 +508,22 @@ function render() {
 
   // Objects layer (above tiles)
   for (const o of objects) {
-    if (o.col < c0 || o.col > c1 || o.row < r0 || o.row > r1) continue;
+    if (o.col + objW(o) - 1 < c0 || o.col > c1 || o.row + objH(o) - 1 < r0 || o.row > r1) continue;
     drawEditorObject(o);
+  }
+
+  // Ghost preview of the sprite brush under the cursor
+  if (tool === 'object' && selSprite && hoverCell && !painting && !isPanning &&
+      inBounds(hoverCell.col, hoverCell.row) && sheetImg.complete && sheetImg.naturalWidth) {
+    const { x, y } = cellXY(hoverCell.col, hoverCell.row);
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(sheetImg,
+      selSprite.sx * SHEET_TILE, selSprite.sy * SHEET_TILE,
+      selSprite.sw * SHEET_TILE, selSprite.sh * SHEET_TILE,
+      x, y, selSprite.sw * zoom, selSprite.sh * zoom);
+    ctx.restore();
   }
 
   // Interactables layer
@@ -502,7 +601,23 @@ function render() {
 function drawEditorObject(o) {
   const { x, y } = cellXY(o.col, o.row);
   const S = zoom, t = OBJ_TYPES[o.type] || OBJ_TYPES.rock;
+  const fw = objW(o) * S, fh = objH(o) * S;
   ctx.save();
+  if (o.sw) {
+    // Sprite from the tileset sheet
+    if (sheetImg.complete && sheetImg.naturalWidth) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(sheetImg,
+        o.sx * SHEET_TILE, o.sy * SHEET_TILE, o.sw * SHEET_TILE, o.sh * SHEET_TILE,
+        x, y, fw, fh);
+    } else {
+      ctx.fillStyle = 'rgba(200,168,75,0.35)';
+      ctx.fillRect(x, y, fw, fh);
+    }
+    drawCollisionOutline(o, x, y, fw, fh);
+    ctx.restore();
+    return;
+  }
   switch (o.type) {
     case 'palm':
       ctx.fillStyle = '#7a5a30';
@@ -542,18 +657,21 @@ function drawEditorObject(o) {
       ctx.fillStyle = t.color;
       ctx.beginPath(); ctx.arc(x + S / 2, y + S / 2, S * 0.3, 0, Math.PI * 2); ctx.fill();
   }
-  // Collision indicator: red outline = solid, dashed white = walk-over
+  drawCollisionOutline(o, x, y, fw, fh);
+  ctx.restore();
+}
+
+// Red outline = solid, dashed white = walk-over
+function drawCollisionOutline(o, x, y, fw, fh) {
+  ctx.lineWidth = 1;
   if (o.solid) {
     ctx.strokeStyle = 'rgba(230,110,90,0.75)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 1, y + 1, S - 2, S - 2);
   } else {
     ctx.strokeStyle = 'rgba(255,255,255,0.45)';
-    ctx.lineWidth = 1;
     ctx.setLineDash([3, 2]);
-    ctx.strokeRect(x + 1, y + 1, S - 2, S - 2);
   }
-  ctx.restore();
+  ctx.strokeRect(x + 1, y + 1, fw - 2, fh - 2);
+  ctx.setLineDash([]);
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
@@ -752,8 +870,11 @@ function fromData(data) {
   spawn = data.spawn ? { col: +data.spawn.col, row: +data.spawn.row } : null;
   objects = Array.isArray(data.objects)
     ? data.objects
-        .filter(o => OBJ_TYPES[o.type] && inBounds(+o.col, +o.row))
-        .map(o => ({ col: +o.col, row: +o.row, type: o.type, solid: !!o.solid }))
+        .filter(o => inBounds(+o.col, +o.row) &&
+                     (OBJ_TYPES[o.type] || (o.sw > 0 && o.sh > 0 && o.sx >= 0 && o.sy >= 0)))
+        .map(o => o.sw
+          ? { col: +o.col, row: +o.row, sx: +o.sx, sy: +o.sy, sw: +o.sw, sh: +o.sh, solid: !!o.solid }
+          : { col: +o.col, row: +o.row, type: o.type, solid: !!o.solid })
     : [];
   interactables = Array.isArray(data.interactables)
     ? data.interactables
@@ -812,8 +933,8 @@ function playMap() {
     alert('Set a spawn point first — use the "Set Spawn" tool, then click a floor tile.');
     return;
   }
-  const so = objAt(spawn.col, spawn.row);
-  if (so !== -1 && objects[so].solid) {
+  const spawnBlocked = objects.some(o => o.solid && objCovers(o, spawn.col, spawn.row));
+  if (spawnBlocked) {
     alert('The spawn point is inside a solid object — the player would be stuck. Move the spawn or make the object walkable.');
     return;
   }
@@ -850,10 +971,20 @@ canvas.addEventListener('mousedown', e => {
       if (i !== -1) { objects.splice(i, 1); pushHistory(); render(); }
       return;
     }
-    if (grid[row][col] === T.VOID) return;   // objects sit on top of tiles
-    const i = objAt(col, row);
-    if (i !== -1) objects.splice(i, 1);      // replace object already there
-    objects.push({ col, row, type: selObj, solid: objSolid });
+    if (selSprite) {
+      // Whole footprint must be on non-void tiles
+      const { sw, sh } = selSprite;
+      for (let r = row; r < row + sh; r++)
+        for (let c = col; c < col + sw; c++)
+          if (!inBounds(c, r) || grid[r][c] === T.VOID) return;
+      // Sprites may layer (rug under a table) — just add on top
+      objects.push({ col, row, sx: selSprite.sx, sy: selSprite.sy, sw, sh, solid: objSolid });
+    } else {
+      if (grid[row][col] === T.VOID) return;   // objects sit on top of tiles
+      const i = objects.findIndex(o => !o.sw && o.col === col && o.row === row);
+      if (i !== -1) objects.splice(i, 1);      // replace built-in object already there
+      objects.push({ col, row, type: selObj, solid: objSolid });
+    }
     pushHistory(); render(); return;
   }
 
@@ -920,7 +1051,8 @@ canvas.addEventListener('mousemove', e => {
     const oi = objAt(col, row);
     if (oi !== -1) {
       const o = objects[oi];
-      info += ` · ${OBJ_TYPES[o.type].name} (${o.solid ? 'solid' : 'walkable'})`;
+      const name = o.sw ? `Sprite ${o.sw}×${o.sh}` : OBJ_TYPES[o.type].name;
+      info += ` · ${name} (${o.solid ? 'solid' : 'walkable'})`;
     }
     const ii = interAt(col, row);
     if (ii !== -1) info += ' · ' + interactables[ii].id;
@@ -978,6 +1110,11 @@ window.addEventListener('keydown', e => {
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
+  if (tsOverlay.classList.contains('open')) {
+    if (e.key === 'Escape') tsCancel();
+    return;
+  }
+
   if (e.key === ' ') { spaceHeld = true; updateCursor(); e.preventDefault(); return; }
 
   if (e.ctrlKey || e.metaKey) {
@@ -1030,10 +1167,88 @@ function buildObjPalette() {
 
 function selectObj(key) {
   selObj = key;
+  selSprite = null;                    // back to a built-in shape brush
+  updateBrushPreview();
   setObjSolid(OBJ_TYPES[key].solid);  // reset toggle to the type's default
   document.querySelectorAll('#objList .tile-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('obj-' + key).classList.add('active');
   setTool('object');
+}
+
+// ── Tileset picker ────────────────────────────────────────────────────────────
+const tsOverlay = document.getElementById('tsOverlay');
+const tsScroll  = document.getElementById('tsScroll');
+const tsImgEl   = document.getElementById('tsImg');
+const tsRect    = document.getElementById('tsRect');
+let tsStart = null;   // {tx, ty} sheet-tile coords where drag began
+let tsPick  = null;   // pending {sx, sy, sw, sh}
+
+function openTileset() { tsOverlay.classList.add('open'); }
+function tsCancel()    { tsOverlay.classList.remove('open'); tsStart = null; }
+
+// Sheet-tile coordinate under the mouse (img is displayed at 2× natural size)
+function tsTileAt(e) {
+  const r = tsImgEl.getBoundingClientRect();
+  const scale = r.width / tsImgEl.naturalWidth;
+  const tx = Math.floor((e.clientX - r.left) / (SHEET_TILE * scale));
+  const ty = Math.floor((e.clientY - r.top)  / (SHEET_TILE * scale));
+  return {
+    tx: Math.max(0, Math.min(Math.floor(tsImgEl.naturalWidth  / SHEET_TILE) - 1, tx)),
+    ty: Math.max(0, Math.min(Math.floor(tsImgEl.naturalHeight / SHEET_TILE) - 1, ty)),
+  };
+}
+
+function tsUpdateRect(a, b) {
+  const sx = Math.min(a.tx, b.tx), sy = Math.min(a.ty, b.ty);
+  const sw = Math.abs(a.tx - b.tx) + 1, sh = Math.abs(a.ty - b.ty) + 1;
+  tsPick = { sx, sy, sw, sh };
+  const scale = tsImgEl.getBoundingClientRect().width / tsImgEl.naturalWidth;
+  const px = SHEET_TILE * scale;
+  tsRect.style.display = 'block';
+  tsRect.style.left   = (sx * px) + 'px';
+  tsRect.style.top    = (sy * px) + 'px';
+  tsRect.style.width  = (sw * px) + 'px';
+  tsRect.style.height = (sh * px) + 'px';
+  document.getElementById('tsSel').textContent = `${sw}×${sh} tiles`;
+  document.getElementById('tsUseBtn').disabled = false;
+}
+
+tsScroll.addEventListener('mousedown', e => {
+  if (e.target !== tsImgEl) return;
+  e.preventDefault();
+  tsStart = tsTileAt(e);
+  tsUpdateRect(tsStart, tsStart);
+});
+tsScroll.addEventListener('mousemove', e => {
+  if (!tsStart) return;
+  tsUpdateRect(tsStart, tsTileAt(e));
+});
+window.addEventListener('mouseup', () => { tsStart = null; });
+
+function tsUse() {
+  if (!tsPick) return;
+  selSprite = { ...tsPick };
+  updateBrushPreview();
+  document.querySelectorAll('#objList .tile-btn').forEach(b => b.classList.remove('active'));
+  tsOverlay.classList.remove('open');
+  setTool('object');
+}
+
+function updateBrushPreview() {
+  const wrapEl = document.getElementById('brushWrap');
+  if (!selSprite) { wrapEl.classList.remove('show'); return; }
+  wrapEl.classList.add('show');
+  const cv = document.getElementById('brushPreview');
+  const { sx, sy, sw, sh } = selSprite;
+  const scale = Math.max(1, Math.min(3, Math.floor(96 / (Math.max(sw, sh) * SHEET_TILE))));
+  cv.width  = sw * SHEET_TILE * scale;
+  cv.height = sh * SHEET_TILE * scale;
+  const g = cv.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  if (sheetImg.complete && sheetImg.naturalWidth)
+    g.drawImage(sheetImg, sx * SHEET_TILE, sy * SHEET_TILE, sw * SHEET_TILE, sh * SHEET_TILE,
+                0, 0, cv.width, cv.height);
+  document.getElementById('brushLabel').textContent = `${sw}×${sh} sprite brush`;
 }
 
 function setObjSolid(v) {

@@ -235,6 +235,7 @@
 </div>
 
 <a href="index.html">← Back to Home</a>
+<div style="font-family:monospace;font-size:10px;color:#3a3530;">interior art: Modern Interiors by LimeZu (limezu.itch.io)</div>
 
 <div id="dragGhost"></div>
 
@@ -277,13 +278,23 @@ const ALL = [
 const PLACED = [];
 
 // ── Objects (decor layer from the map editor) ─────────────────────────────────
-const OBJECTS   = [];        // {col, row, type, solid}
+// Built-in: {col, row, type, solid} · Tileset sprite: {col, row, sx, sy, sw, sh, solid}
+const OBJECTS   = [];
 const OBJ_SOLID = new Set(); // cell keys (row*GRID_W+col) that block movement
+
+const SHEET_TILE = 16;
+const SHEET = new Image();
+SHEET.src = 'assets/Interiors_16x16.png';
 
 function rebuildObjSolid() {
   OBJ_SOLID.clear();
-  for (const o of OBJECTS)
-    if (o.solid) OBJ_SOLID.add(o.row * GRID_W + o.col);
+  for (const o of OBJECTS) {
+    if (!o.solid) continue;
+    const w = o.sw || 1, h = o.sh || 1;
+    for (let r = o.row; r < o.row + h; r++)
+      for (let c = o.col; c < o.col + w; c++)
+        OBJ_SOLID.add(r * GRID_W + c);
+  }
 }
 
 // ── Seed / persistence ────────────────────────────────────────────────────────
@@ -598,6 +609,16 @@ function drawTile(t, px, py) {
 
 function drawObject(o, px, py) {
   const S = TILE_PX;
+  if (o.sw) {
+    // Tileset sprite, drawn at 2× (16px sheet tiles → 32px map tiles)
+    if (SHEET.complete && SHEET.naturalWidth) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(SHEET,
+        o.sx * SHEET_TILE, o.sy * SHEET_TILE, o.sw * SHEET_TILE, o.sh * SHEET_TILE,
+        px, py, o.sw * S, o.sh * S);
+    }
+    return;
+  }
   switch (o.type) {
     case 'palm': {
       // Trunk with shadow edge
@@ -1043,7 +1064,10 @@ if (_urlParams.get('custom') === '1') {
         if (Array.isArray(_data.objects)) {
           for (const o of _data.objects) {
             const col = +o.col, row = +o.row;
-            if (col >= 0 && col < GRID_W && row >= 0 && row < GRID_H)
+            if (col < 0 || col >= GRID_W || row < 0 || row >= GRID_H) continue;
+            if (o.sw > 0 && o.sh > 0)
+              OBJECTS.push({ col, row, sx: +o.sx, sy: +o.sy, sw: +o.sw, sh: +o.sh, solid: !!o.solid });
+            else
               OBJECTS.push({ col, row, type: String(o.type), solid: !!o.solid });
           }
         }
