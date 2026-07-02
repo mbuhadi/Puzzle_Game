@@ -88,6 +88,14 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
 .tile-swatch { width: 13px; height: 13px; border-radius: 2px; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.1); }
 .tile-key { margin-left: auto; font-size: 9px; color: var(--dim); }
 
+.pi-id-ed { font-family: monospace; font-size: 11px; color: var(--gold); flex: 1; }
+.tile-btn .dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: #4a7c59; margin-left: auto; flex-shrink: 0; visibility: hidden;
+}
+.tile-btn.placed .dot { visibility: visible; }
+.tile-btn.placed .pi-id-ed { opacity: 0.45; }
+
 .hint-text { font-size: 9px; color: var(--dim); line-height: 1.7; padding-left: 1px; }
 
 /* ── Canvas wrap ─────────────────────────────────────────────────────────── */
@@ -145,6 +153,8 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
           <button id="tool-erase"               onclick="setTool('erase')" title="Erase (X)">Erase</button>
           <button id="tool-fill"                onclick="setTool('fill')"  title="Fill (G)">Fill</button>
           <button id="tool-rect"                onclick="setTool('rect')"  title="Rectangle (R)">Rect</button>
+          <button id="tool-object"              onclick="setTool('object')" title="Place Object (O)">Object</button>
+          <button id="tool-inter"               onclick="setTool('inter')" title="Place Interactable (I)">Interact</button>
           <button id="tool-spawn" style="grid-column:span 2" onclick="setTool('spawn')" title="Set Spawn Point (S)">Set Spawn</button>
         </div>
         <div class="hint-text" style="margin-top:6px">
@@ -160,6 +170,31 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
       <div>
         <div class="sec-title">TILE TYPE</div>
         <div class="tile-list" id="tileList"></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Objects -->
+      <div>
+        <div class="sec-title">OBJECTS</div>
+        <div class="tile-list" id="objList"></div>
+        <div class="sec-title" style="margin-top:8px">COLLISION</div>
+        <div class="tool-grid">
+          <button id="solid-yes" class="active" onclick="setObjSolid(true)"  title="Player must walk around it">Solid</button>
+          <button id="solid-no"                 onclick="setObjSolid(false)" title="Player can walk over it">Walkable</button>
+        </div>
+        <div class="hint-text" style="margin-top:5px">
+          Left-click → place<br>
+          Right-click → remove
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Interactables -->
+      <div>
+        <div class="sec-title">INTERACTABLES</div>
+        <div class="tile-list" id="interList"></div>
       </div>
 
       <div class="divider"></div>
@@ -197,6 +232,8 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
           X — Erase<br>
           G — Fill<br>
           R — Rect<br>
+          O — Object<br>
+          I — Interactable<br>
           S — Spawn<br>
           0–4 — Tile type<br>
           Ctrl+Z/Y — Undo/Redo<br>
@@ -230,13 +267,40 @@ const T = { VOID: 0, FLOOR: 1, WALL: 2, WATER: 3, COURTYARD: 4 };
 const TILE_COLORS = ['#1a1410', '#c8a86a', '#8a6a40', '#2a6898', '#d4ba88'];
 const TILE_NAMES  = ['Void', 'Floor', 'Wall', 'Water', 'Courtyard'];
 
+// Decorative objects — a layer above the tile map. `solid` is the default
+// collision for each type; the COLLISION toggle overrides it per placement.
+const OBJ_TYPES = {
+  palm:  { name: 'Palm Tree', color: '#3a9a50', solid: true  },
+  pot:   { name: 'Clay Pot',  color: '#b06a30', solid: true  },
+  rock:  { name: 'Rock',      color: '#8a8478', solid: true  },
+  crate: { name: 'Crate',     color: '#9a7a40', solid: true  },
+  bush:  { name: 'Bush',      color: '#5a8a3a', solid: false },
+  rug:   { name: 'Rug',       color: '#a03848', solid: false },
+};
+
+// Must stay in sync with the ALL list in maps.html
+const INTERACTABLE_IDS = [
+  { id:'p1g1s', puzzle:1 }, { id:'p1p1s', puzzle:1 },
+  { id:'p2g1s', puzzle:2 }, { id:'p2g2s', puzzle:2 },
+  { id:'p3g1s', puzzle:3 }, { id:'p3g2s', puzzle:3 }, { id:'p3g3s', puzzle:3 },
+  { id:'p4g1s', puzzle:4 },
+  { id:'p5g1s', puzzle:5 },
+  { id:'p6g1s', puzzle:6 }, { id:'p6p1s', puzzle:6 },
+  { id:'p7g1s', puzzle:7 }, { id:'p7g2s', puzzle:7 }, { id:'p7p1s', puzzle:7 },
+];
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let grid = makeGrid();
 let spawn = null;           // {col, row}
+let objects = [];           // {col, row, type, solid}
+let interactables = [];     // {id, col, row}
 let zoom = 12;
 let panX = 0, panY = 0;
 let tool = 'paint';
 let selTile = T.FLOOR;
+let selObj = 'palm';
+let objSolid = true;
+let selInter = INTERACTABLE_IDS[0].id;
 let showGrid = true;
 
 // History — stores post-operation snapshots
@@ -269,6 +333,21 @@ function cloneGrid(g) {
 }
 function inBounds(c, r) {
   return c >= 0 && c < GRID_W && r >= 0 && r < GRID_H;
+}
+function objAt(col, row) {
+  return objects.findIndex(o => o.col === col && o.row === row);
+}
+function interAt(col, row) {
+  return interactables.findIndex(p => p.col === col && p.row === row);
+}
+// Drop objects/interactables whose underlying tile was erased to VOID
+function pruneDetached() {
+  let changed = false;
+  for (let i = objects.length - 1; i >= 0; i--)
+    if (grid[objects[i].row][objects[i].col] === T.VOID) { objects.splice(i, 1); changed = true; }
+  for (let i = interactables.length - 1; i >= 0; i--)
+    if (grid[interactables[i].row][interactables[i].col] === T.VOID) { interactables.splice(i, 1); changed = true; }
+  if (changed) updateInterList();
 }
 
 // ── Canvas resize ─────────────────────────────────────────────────────────────
@@ -342,6 +421,29 @@ function render() {
     ctx.stroke();
   }
 
+  // Objects layer (above tiles)
+  for (const o of objects) {
+    if (o.col < c0 || o.col > c1 || o.row < r0 || o.row > r1) continue;
+    drawEditorObject(o);
+  }
+
+  // Interactables layer
+  for (const p of interactables) {
+    if (p.col < c0 || p.col > c1 || p.row < r0 || p.row > r1) continue;
+    const { x, y } = cellXY(p.col, p.row);
+    ctx.fillStyle = 'rgba(40,180,90,0.30)';
+    ctx.fillRect(x + 1, y + 1, zoom - 2, zoom - 2);
+    ctx.strokeStyle = 'rgba(80,220,120,0.9)';
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(x + 1, y + 1, zoom - 2, zoom - 2);
+    if (zoom >= 12) {
+      ctx.fillStyle = '#88ffb8';
+      ctx.font = `bold ${Math.max(5, Math.floor(zoom * 0.24))}px monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(p.id, x + zoom / 2, y + zoom / 2);
+    }
+  }
+
   // Grid border
   ctx.strokeStyle = '#c8a84b';
   ctx.lineWidth   = 1.5;
@@ -396,12 +498,76 @@ function render() {
   }
 }
 
+// ── Object drawing (editor-scale glyphs) ──────────────────────────────────────
+function drawEditorObject(o) {
+  const { x, y } = cellXY(o.col, o.row);
+  const S = zoom, t = OBJ_TYPES[o.type] || OBJ_TYPES.rock;
+  ctx.save();
+  switch (o.type) {
+    case 'palm':
+      ctx.fillStyle = '#7a5a30';
+      ctx.fillRect(x + S * 0.42, y + S * 0.45, S * 0.16, S * 0.42);
+      ctx.fillStyle = t.color;
+      ctx.beginPath(); ctx.ellipse(x + S / 2, y + S * 0.34, S * 0.36, S * 0.24, 0, 0, Math.PI * 2); ctx.fill();
+      break;
+    case 'bush':
+      ctx.fillStyle = t.color;
+      ctx.beginPath(); ctx.arc(x + S / 2, y + S * 0.55, S * 0.32, 0, Math.PI * 2); ctx.fill();
+      break;
+    case 'rock':
+      ctx.fillStyle = t.color;
+      ctx.beginPath(); ctx.ellipse(x + S / 2, y + S * 0.58, S * 0.34, S * 0.26, 0, 0, Math.PI * 2); ctx.fill();
+      break;
+    case 'pot':
+      ctx.fillStyle = t.color;
+      ctx.fillRect(x + S * 0.30, y + S * 0.30, S * 0.40, S * 0.52);
+      ctx.fillRect(x + S * 0.24, y + S * 0.22, S * 0.52, S * 0.12);
+      break;
+    case 'crate':
+      ctx.fillStyle = t.color;
+      ctx.fillRect(x + S * 0.18, y + S * 0.18, S * 0.64, S * 0.64);
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x + S * 0.18, y + S * 0.18); ctx.lineTo(x + S * 0.82, y + S * 0.82);
+      ctx.moveTo(x + S * 0.82, y + S * 0.18); ctx.lineTo(x + S * 0.18, y + S * 0.82);
+      ctx.stroke();
+      break;
+    case 'rug':
+      ctx.fillStyle = t.color;
+      ctx.fillRect(x + S * 0.12, y + S * 0.18, S * 0.76, S * 0.64);
+      ctx.strokeStyle = '#e8c860'; ctx.lineWidth = 1;
+      ctx.strokeRect(x + S * 0.20, y + S * 0.26, S * 0.60, S * 0.48);
+      break;
+    default:
+      ctx.fillStyle = t.color;
+      ctx.beginPath(); ctx.arc(x + S / 2, y + S / 2, S * 0.3, 0, Math.PI * 2); ctx.fill();
+  }
+  // Collision indicator: red outline = solid, dashed white = walk-over
+  if (o.solid) {
+    ctx.strokeStyle = 'rgba(230,110,90,0.75)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 1, y + 1, S - 2, S - 2);
+  } else {
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 2]);
+    ctx.strokeRect(x + 1, y + 1, S - 2, S - 2);
+  }
+  ctx.restore();
+}
+
 // ── History ───────────────────────────────────────────────────────────────────
 function snapshot() {
-  return { grid: cloneGrid(), spawn: spawn ? { ...spawn } : null };
+  return {
+    grid: cloneGrid(),
+    spawn: spawn ? { ...spawn } : null,
+    objects: objects.map(o => ({ ...o })),
+    interactables: interactables.map(p => ({ ...p })),
+  };
 }
 
 function pushHistory() {
+  pruneDetached();
   history = history.slice(0, histIdx + 1);
   history.push(snapshot());
   if (history.length > MAX_HIST) history.shift();
@@ -412,6 +578,9 @@ function pushHistory() {
 function restoreSnapshot(s) {
   grid  = s.grid.map(r => r.slice());
   spawn = s.spawn ? { ...s.spawn } : null;
+  objects       = (s.objects       || []).map(o => ({ ...o }));
+  interactables = (s.interactables || []).map(p => ({ ...p }));
+  updateInterList();
 }
 
 function undo() {
@@ -484,12 +653,14 @@ function autoWall() {
 function clearMap() {
   if (!confirm('Clear the entire map?')) return;
   grid = makeGrid(); spawn = null;
+  objects = []; interactables = []; updateInterList();
   pushHistory(); render(); updateStatus();
 }
 
 function newMap() {
   if (!confirm('Start a new blank map? Unsaved changes will be lost.')) return;
   grid = makeGrid(); spawn = null;
+  objects = []; interactables = []; updateInterList();
   history = []; histIdx = -1;
   fitGrid();
   pushHistory(); render(); updateStatus(); updateHistBtns();
@@ -512,7 +683,8 @@ function selectTile(val) {
 }
 
 function updateCursor() {
-  const map = { paint:'crosshair', erase:'cell', fill:'copy', rect:'crosshair', spawn:'pointer' };
+  const map = { paint:'crosshair', erase:'cell', fill:'copy', rect:'crosshair', spawn:'pointer',
+                object:'copy', inter:'copy' };
   canvas.style.cursor = spaceHeld ? (isPanning ? 'grabbing' : 'grab') : (map[tool] || 'crosshair');
 }
 
@@ -563,7 +735,13 @@ function updateStatus() {
 
 // ── Serialize / deserialize ───────────────────────────────────────────────────
 function toData() {
-  return { grid: cloneGrid(), spawn: spawn ? { ...spawn } : null, name: 'Custom Map' };
+  return {
+    grid: cloneGrid(),
+    spawn: spawn ? { ...spawn } : null,
+    objects: objects.map(o => ({ ...o })),
+    interactables: interactables.map(p => ({ ...p })),
+    name: 'Custom Map',
+  };
 }
 
 function fromData(data) {
@@ -572,12 +750,23 @@ function fromData(data) {
     throw new Error(`Expected ${GRID_W}×${GRID_H} grid, got ${data.grid[0]?.length}×${data.grid.length}`);
   grid  = data.grid.map(row => row.map(Number));
   spawn = data.spawn ? { col: +data.spawn.col, row: +data.spawn.row } : null;
+  objects = Array.isArray(data.objects)
+    ? data.objects
+        .filter(o => OBJ_TYPES[o.type] && inBounds(+o.col, +o.row))
+        .map(o => ({ col: +o.col, row: +o.row, type: o.type, solid: !!o.solid }))
+    : [];
+  interactables = Array.isArray(data.interactables)
+    ? data.interactables
+        .filter(p => INTERACTABLE_IDS.some(x => x.id === p.id) && inBounds(+p.col, +p.row))
+        .map(p => ({ id: p.id, col: +p.col, row: +p.row }))
+    : [];
+  updateInterList();
 }
 
 // ── Save / load / export / import / play ──────────────────────────────────────
 function saveLocal(btn) {
+  pushHistory(); // prune + sync history to saved state
   localStorage.setItem('editorMap', JSON.stringify(toData()));
-  pushHistory(); // sync history to saved state
   const flash = document.getElementById('saveFlash');
   flash.classList.add('show');
   setTimeout(() => flash.classList.remove('show'), 1400);
@@ -623,6 +812,11 @@ function playMap() {
     alert('Set a spawn point first — use the "Set Spawn" tool, then click a floor tile.');
     return;
   }
+  const so = objAt(spawn.col, spawn.row);
+  if (so !== -1 && objects[so].solid) {
+    alert('The spawn point is inside a solid object — the player would be stuck. Move the spawn or make the object walkable.');
+    return;
+  }
   localStorage.setItem('editorMap', JSON.stringify(toData()));
   window.open('maps.html?custom=1', '_blank');
 }
@@ -647,6 +841,40 @@ canvas.addEventListener('mousedown', e => {
     if (!inBounds(col, row)) return;
     spawn = { col, row };
     pushHistory(); updateStatus(); render(); return;
+  }
+
+  if (tool === 'object') {
+    if (!inBounds(col, row)) return;
+    if (erasing) {
+      const i = objAt(col, row);
+      if (i !== -1) { objects.splice(i, 1); pushHistory(); render(); }
+      return;
+    }
+    if (grid[row][col] === T.VOID) return;   // objects sit on top of tiles
+    const i = objAt(col, row);
+    if (i !== -1) objects.splice(i, 1);      // replace object already there
+    objects.push({ col, row, type: selObj, solid: objSolid });
+    pushHistory(); render(); return;
+  }
+
+  if (tool === 'inter') {
+    if (!inBounds(col, row)) return;
+    if (erasing) {
+      const i = interAt(col, row);
+      if (i !== -1) { interactables.splice(i, 1); updateInterList(); pushHistory(); render(); }
+      return;
+    }
+    const t = grid[row][col];
+    if (t !== T.FLOOR && t !== T.COURTYARD && t !== T.WALL) return; // same rule as maps.html
+    const at = interAt(col, row);
+    if (at !== -1) interactables.splice(at, 1);
+    const ex = interactables.findIndex(p => p.id === selInter);
+    if (ex !== -1) interactables.splice(ex, 1);  // each id placed once — move it
+    interactables.push({ id: selInter, col, row });
+    // Auto-advance to the next unplaced interactable
+    const next = INTERACTABLE_IDS.find(x => !interactables.some(p => p.id === x.id));
+    if (next) selInter = next.id;
+    updateInterList(); pushHistory(); render(); return;
   }
 
   if (tool === 'fill') {
@@ -688,7 +916,15 @@ canvas.addEventListener('mousemove', e => {
   // Update status cell info
   if (inBounds(col, row)) {
     document.getElementById('stCell').textContent = `col ${col}, row ${row}`;
-    document.getElementById('stTile').textContent  = TILE_NAMES[grid[row][col]];
+    let info = TILE_NAMES[grid[row][col]];
+    const oi = objAt(col, row);
+    if (oi !== -1) {
+      const o = objects[oi];
+      info += ` · ${OBJ_TYPES[o.type].name} (${o.solid ? 'solid' : 'walkable'})`;
+    }
+    const ii = interAt(col, row);
+    if (ii !== -1) info += ' · ' + interactables[ii].id;
+    document.getElementById('stTile').textContent = info;
   }
 
   if (!painting) { render(); return; } // hover highlight
@@ -751,7 +987,7 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  const toolMap = { b:'paint', x:'erase', g:'fill', r:'rect', s:'spawn' };
+  const toolMap = { b:'paint', x:'erase', g:'fill', r:'rect', s:'spawn', o:'object', i:'inter' };
   if (toolMap[e.key.toLowerCase()]) { setTool(toolMap[e.key.toLowerCase()]); return; }
 
   if ('01234'.includes(e.key)) selectTile(parseInt(e.key));
@@ -777,8 +1013,67 @@ function buildPalette() {
   });
 }
 
+// ── Object palette ────────────────────────────────────────────────────────────
+function buildObjPalette() {
+  const list = document.getElementById('objList');
+  Object.entries(OBJ_TYPES).forEach(([key, t]) => {
+    const btn = document.createElement('div');
+    btn.className = 'tile-btn' + (key === selObj ? ' active' : '');
+    btn.id = 'obj-' + key;
+    btn.onclick = () => selectObj(key);
+    btn.innerHTML =
+      `<span class="tile-swatch" style="background:${t.color}"></span>` +
+      `<span>${t.name}</span>`;
+    list.appendChild(btn);
+  });
+}
+
+function selectObj(key) {
+  selObj = key;
+  setObjSolid(OBJ_TYPES[key].solid);  // reset toggle to the type's default
+  document.querySelectorAll('#objList .tile-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('obj-' + key).classList.add('active');
+  setTool('object');
+}
+
+function setObjSolid(v) {
+  objSolid = v;
+  document.getElementById('solid-yes').classList.toggle('active', v);
+  document.getElementById('solid-no').classList.toggle('active', !v);
+}
+
+// ── Interactable palette ──────────────────────────────────────────────────────
+function buildInterPalette() {
+  const list = document.getElementById('interList');
+  INTERACTABLE_IDS.forEach(({ id }) => {
+    const btn = document.createElement('div');
+    btn.className = 'tile-btn' + (id === selInter ? ' active' : '');
+    btn.id = 'inter-' + id;
+    btn.onclick = () => selectInter(id);
+    btn.innerHTML = `<span class="pi-id-ed">${id}</span><span class="dot"></span>`;
+    list.appendChild(btn);
+  });
+}
+
+function selectInter(id) {
+  selInter = id;
+  updateInterList();
+  setTool('inter');
+}
+
+function updateInterList() {
+  INTERACTABLE_IDS.forEach(({ id }) => {
+    const btn = document.getElementById('inter-' + id);
+    if (!btn) return;
+    btn.classList.toggle('placed', interactables.some(p => p.id === id));
+    btn.classList.toggle('active', id === selInter);
+  });
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 buildPalette();
+buildObjPalette();
+buildInterPalette();
 new ResizeObserver(resizeCanvas).observe(wrap);
 resizeCanvas();
 fitGrid();

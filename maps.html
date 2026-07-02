@@ -276,6 +276,16 @@ const ALL = [
 
 const PLACED = [];
 
+// ── Objects (decor layer from the map editor) ─────────────────────────────────
+const OBJECTS   = [];        // {col, row, type, solid}
+const OBJ_SOLID = new Set(); // cell keys (row*GRID_W+col) that block movement
+
+function rebuildObjSolid() {
+  OBJ_SOLID.clear();
+  for (const o of OBJECTS)
+    if (o.solid) OBJ_SOLID.add(o.row * GRID_W + o.col);
+}
+
 // ── Seed / persistence ────────────────────────────────────────────────────────
 const DEFAULT_SEED = 0x4b3c2a;
 let currentSeed = parseInt(localStorage.getItem('map1seed')) || DEFAULT_SEED;
@@ -436,6 +446,7 @@ function generateRiad(seed) {
 // ── Collision ─────────────────────────────────────────────────────────────────
 function walkable(col, row) {
   if (row < 0 || row >= GRID_H || col < 0 || col >= GRID_W) return false;
+  if (OBJ_SOLID.has(row * GRID_W + col)) return false;
   const t = mapGrid[row][col];
   return t === T.FLOOR || t === T.COURTYARD;
 }
@@ -581,6 +592,91 @@ function drawTile(t, px, py) {
       ctx.fillStyle = 'rgba(200,240,255,0.25)';
       ctx.fillRect(px+6, py+5, 4, 2);
       break;
+    }
+  }
+}
+
+function drawObject(o, px, py) {
+  const S = TILE_PX;
+  switch (o.type) {
+    case 'palm': {
+      // Trunk with shadow edge
+      ctx.fillStyle = '#7a5a30'; ctx.fillRect(px + S/2 - 2, py + S/2 - 2, 4, S/2 - 2);
+      ctx.fillStyle = '#5a4020'; ctx.fillRect(px + S/2,     py + S/2 - 2, 2, S/2 - 2);
+      // Fronds — layered ellipses
+      ctx.fillStyle = '#2e7a3e';
+      ctx.beginPath(); ctx.ellipse(px + S/2, py + S/3, 12, 7, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#3a9a50';
+      ctx.beginPath(); ctx.ellipse(px + S/2, py + S/3 - 2, 9, 5, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#54b868';
+      ctx.fillRect(px + S/2 - 5, py + S/3 - 5, 4, 2);
+      break;
+    }
+    case 'bush': {
+      ctx.fillStyle = '#3a6a28';
+      ctx.beginPath(); ctx.arc(px + S/2, py + S/2 + 3, 11, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#5a8a3a';
+      ctx.beginPath(); ctx.arc(px + S/2 - 4, py + S/2, 7, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(px + S/2 + 5, py + S/2 + 1, 6, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#78a858';
+      ctx.fillRect(px + S/2 - 6, py + S/2 - 4, 3, 2);
+      break;
+    }
+    case 'rock': {
+      ctx.fillStyle = 'rgba(0,0,0,0.2)';
+      ctx.beginPath(); ctx.ellipse(px + S/2 + 1, py + S/2 + 8, 11, 4, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#6e6a60';
+      ctx.beginPath(); ctx.ellipse(px + S/2, py + S/2 + 2, 11, 9, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#8a8478';
+      ctx.beginPath(); ctx.ellipse(px + S/2 - 2, py + S/2, 8, 6, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#a8a296';
+      ctx.fillRect(px + S/2 - 6, py + S/2 - 4, 4, 2);
+      break;
+    }
+    case 'pot': {
+      ctx.fillStyle = 'rgba(0,0,0,0.2)';
+      ctx.beginPath(); ctx.ellipse(px + S/2 + 1, py + S - 5, 9, 3, 0, 0, Math.PI*2); ctx.fill();
+      // Body
+      ctx.fillStyle = '#b06a30';
+      ctx.beginPath();
+      ctx.moveTo(px + 10, py + 10);
+      ctx.quadraticCurveTo(px + 4, py + S/2 + 2, px + 11, py + S - 5);
+      ctx.lineTo(px + S - 11, py + S - 5);
+      ctx.quadraticCurveTo(px + S - 4, py + S/2 + 2, px + S - 10, py + 10);
+      ctx.closePath(); ctx.fill();
+      // Rim + highlight
+      ctx.fillStyle = '#8a4c20'; ctx.fillRect(px + 9, py + 8, S - 18, 4);
+      ctx.fillStyle = '#d08a48'; ctx.fillRect(px + 11, py + 14, 3, 8);
+      break;
+    }
+    case 'crate': {
+      ctx.fillStyle = '#9a7a40'; ctx.fillRect(px + 4, py + 4, S - 8, S - 8);
+      ctx.fillStyle = '#7a5c28'; ctx.fillRect(px + 4, py + S - 10, S - 8, 6);
+      ctx.strokeStyle = '#5a4018'; ctx.lineWidth = 2;
+      ctx.strokeRect(px + 5, py + 5, S - 10, S - 10);
+      ctx.beginPath();
+      ctx.moveTo(px + 6, py + 6); ctx.lineTo(px + S - 6, py + S - 6);
+      ctx.moveTo(px + S - 6, py + 6); ctx.lineTo(px + 6, py + S - 6);
+      ctx.stroke();
+      break;
+    }
+    case 'rug': {
+      ctx.fillStyle = '#a03848'; ctx.fillRect(px + 3, py + 5, S - 6, S - 10);
+      ctx.strokeStyle = '#e8c860'; ctx.lineWidth = 1.5;
+      ctx.strokeRect(px + 5.5, py + 7.5, S - 11, S - 15);
+      // Centre diamond
+      ctx.fillStyle = '#e8c860';
+      ctx.beginPath();
+      ctx.moveTo(px + S/2, py + S/2 - 5);
+      ctx.lineTo(px + S/2 + 5, py + S/2);
+      ctx.lineTo(px + S/2, py + S/2 + 5);
+      ctx.lineTo(px + S/2 - 5, py + S/2);
+      ctx.closePath(); ctx.fill();
+      break;
+    }
+    default: {
+      ctx.fillStyle = '#8a8478';
+      ctx.beginPath(); ctx.arc(px + S/2, py + S/2, 9, 0, Math.PI*2); ctx.fill();
     }
   }
 }
@@ -811,6 +907,10 @@ function render() {
     for (let c = c0; c < c1; c++)
       drawTile(mapGrid[r][c], c*TILE_PX, r*TILE_PX);
 
+  // Objects layer (above tiles, below interactables and player)
+  for (const o of OBJECTS)
+    drawObject(o, o.col*TILE_PX, o.row*TILE_PX);
+
   // Hover highlight during drag (green = valid, red = invalid)
   if (drag.active && hoverTile) {
     const { col, row } = hoverTile;
@@ -938,6 +1038,26 @@ if (_urlParams.get('custom') === '1') {
           start: { x: _sp.col + 0.5, y: _sp.row + 0.5 },
           floorCount: _floorCount,
         }, 'custom');
+        // Objects from the editor (solid ones block movement)
+        OBJECTS.length = 0;
+        if (Array.isArray(_data.objects)) {
+          for (const o of _data.objects) {
+            const col = +o.col, row = +o.row;
+            if (col >= 0 && col < GRID_W && row >= 0 && row < GRID_H)
+              OBJECTS.push({ col, row, type: String(o.type), solid: !!o.solid });
+          }
+        }
+        rebuildObjSolid();
+        // Interactables placed in the editor override any saved placement —
+        // the editor is the source of truth for its own map
+        if (Array.isArray(_data.interactables) && _data.interactables.length) {
+          PLACED.length = 0;
+          for (const p of _data.interactables) {
+            const col = +p.col, row = +p.row;
+            if (ALL.some(x => x.id === p.id) && col >= 0 && col < GRID_W && row >= 0 && row < GRID_H)
+              PLACED.push({ id: p.id, col, row });
+          }
+        }
         // Hide randomize in custom mode and add an editor link
         document.getElementById('btnRandomize').style.display = 'none';
         const _back = document.createElement('a');
