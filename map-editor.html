@@ -235,7 +235,8 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
         </div>
         <div class="hint-text" style="margin-top:5px">
           Left-click → place<br>
-          Right-click → remove
+          Right-click → remove<br>
+          Right-click / Esc → drop sprite brush
         </div>
       </div>
 
@@ -965,6 +966,12 @@ canvas.addEventListener('mousedown', e => {
   }
 
   if (tool === 'object') {
+    if (erasing && selSprite) {
+      // Right-click cancels the sprite brush (checked before inBounds so it
+      // works anywhere on the canvas)
+      clearSpriteBrush();
+      return;
+    }
     if (!inBounds(col, row)) return;
     if (erasing) {
       const i = objAt(col, row);
@@ -1115,6 +1122,8 @@ window.addEventListener('keydown', e => {
     return;
   }
 
+  if (e.key === 'Escape' && selSprite) { clearSpriteBrush(); return; }
+
   if (e.key === ' ') { spaceHeld = true; updateCursor(); e.preventDefault(); return; }
 
   if (e.ctrlKey || e.metaKey) {
@@ -1224,6 +1233,12 @@ tsScroll.addEventListener('mousemove', e => {
   tsUpdateRect(tsStart, tsTileAt(e));
 });
 window.addEventListener('mouseup', () => { tsStart = null; });
+
+function clearSpriteBrush() {
+  selSprite = null;
+  updateBrushPreview();
+  render();
+}
 
 function tsUse() {
   if (!tsPick) return;
