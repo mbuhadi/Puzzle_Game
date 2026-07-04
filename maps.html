@@ -836,22 +836,18 @@ function drawThoughtBubble() {
   ctx.fillText('?', bx + BW/2, by + BH/2 + 0.5);
 }
 
-// Small "E" key badge, anchored at a bottom-right corner (world px)
+// "[E]" prompt in the same green as the interactable frame, centered on a
+// bottom-right corner (world px)
 function drawInteractBadge(cornerX, cornerY) {
-  const B = 14;
-  const x = cornerX - B + 4, y = cornerY - B + 4;   // overlap the corner a little
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.5)';
-  ctx.shadowBlur  = 4;
-  ctx.fillStyle = '#fffde0';
-  roundRect(x, y, B, B, 3); ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = '#c8a84b'; ctx.lineWidth = 1.5;
-  roundRect(x, y, B, B, 3); ctx.stroke();
-  ctx.fillStyle = '#7a5a10';
-  ctx.font = 'bold 10px monospace';
+  ctx.font = 'bold 11px monospace';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('E', x + B/2, y + B/2 + 0.5);
+  const w = ctx.measureText('[E]').width + 8;
+  // dark backing pill so the green text stays readable over sprites
+  ctx.fillStyle = 'rgba(8,16,10,0.8)';
+  roundRect(cornerX - w / 2, cornerY - 8, w, 16, 4); ctx.fill();
+  ctx.fillStyle = 'rgb(80,220,120)';   // matches the frame stroke colour
+  ctx.fillText('[E]', cornerX, cornerY + 0.5);
   ctx.restore();
 }
 
