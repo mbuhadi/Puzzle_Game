@@ -658,8 +658,9 @@ function drawObject(o, px, py) {
         o.sx * SHEET_TILE, o.sy * SHEET_TILE, o.sw * SHEET_TILE, o.sh * SHEET_TILE,
         px, py, o.sw * S, o.sh * S);
     }
-    // Attached interactable → pulsing green outline so players spot it
-    if (o.inter) {
+    // Attached interactable → frame + E prompt appear only in interact range
+    if (o.inter && nearbyInteractable && nearbyInteractable.id === o.inter &&
+        !examineOverlay.classList.contains('open')) {
       const pulse = 0.45 + 0.35 * Math.sin(performance.now() / 400);
       ctx.save();
       ctx.shadowColor = '#44ff88';
@@ -668,6 +669,7 @@ function drawObject(o, px, py) {
       ctx.lineWidth   = 2;
       ctx.strokeRect(px + 1, py + 1, o.sw * S - 2, o.sh * S - 2);
       ctx.restore();
+      drawInteractBadge(px + o.sw * S, py + o.sh * S);
     }
     return;
   }
@@ -775,6 +777,9 @@ function drawPlacedItem(px, py, id, dimmed) {
   ctx.textBaseline = 'middle';
   ctx.fillText(id, px+S/2, py+S/2);
   ctx.globalAlpha = 1;
+  if (!dimmed && nearbyInteractable && nearbyInteractable.id === id &&
+      !examineOverlay.classList.contains('open'))
+    drawInteractBadge(px + S, py + S);
 }
 
 function drawPlayer(px, py) {
@@ -824,11 +829,30 @@ function drawThoughtBubble() {
   // Bubble border
   ctx.strokeStyle = '#c8a84b'; ctx.lineWidth = 1.5;
   roundRect(bx, by, BW, BH, R); ctx.stroke();
-  // "[E]" label
+  // "?" label — curiosity, not instruction (the E prompt sits on the object)
   ctx.fillStyle = '#7a5a10';
-  ctx.font = 'bold 12px monospace';
+  ctx.font = 'bold 15px monospace';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('[E]', bx + BW/2, by + BH/2);
+  ctx.fillText('?', bx + BW/2, by + BH/2 + 0.5);
+}
+
+// Small "E" key badge, anchored at a bottom-right corner (world px)
+function drawInteractBadge(cornerX, cornerY) {
+  const B = 14;
+  const x = cornerX - B + 4, y = cornerY - B + 4;   // overlap the corner a little
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur  = 4;
+  ctx.fillStyle = '#fffde0';
+  roundRect(x, y, B, B, 3); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#c8a84b'; ctx.lineWidth = 1.5;
+  roundRect(x, y, B, B, 3); ctx.stroke();
+  ctx.fillStyle = '#7a5a10';
+  ctx.font = 'bold 10px monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('E', x + B/2, y + B/2 + 0.5);
+  ctx.restore();
 }
 
 // ── Virtual joystick ──────────────────────────────────────────────────────────
