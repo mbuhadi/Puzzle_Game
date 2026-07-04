@@ -199,8 +199,7 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
           <button id="tool-fill"                onclick="setTool('fill')"  title="Fill (G)">Fill</button>
           <button id="tool-rect"                onclick="setTool('rect')"  title="Rectangle (R)">Rect</button>
           <button id="tool-object"              onclick="setTool('object')" title="Place Object (O)">Object</button>
-          <button id="tool-inter"               onclick="setTool('inter')" title="Place Interactable (I)">Interact</button>
-          <button id="tool-spawn" style="grid-column:span 2" onclick="setTool('spawn')" title="Set Spawn Point (S)">Set Spawn</button>
+          <button id="tool-spawn"               onclick="setTool('spawn')" title="Set Spawn Point (S)">Set Spawn</button>
         </div>
         <div class="hint-text" style="margin-top:6px">
           Right-click → Erase<br>
@@ -227,7 +226,6 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
           <canvas id="brushPreview"></canvas>
           <div class="hint-text" id="brushLabel"></div>
         </div>
-        <div class="tile-list" id="objList" style="margin-top:6px"></div>
         <div class="sec-title" style="margin-top:8px">COLLISION</div>
         <div class="tool-grid">
           <button id="solid-yes" class="active" onclick="setObjSolid(true)"  title="Player must walk around it">Solid</button>
@@ -242,9 +240,12 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
 
       <div class="divider"></div>
 
-      <!-- Interactables -->
+      <!-- Interactable attachment -->
       <div>
-        <div class="sec-title">INTERACTABLES</div>
+        <div class="sec-title">INTERACTABLE</div>
+        <div class="hint-text" style="margin-bottom:5px">
+          Optional — attaches to the<br>next object you place
+        </div>
         <div class="tile-list" id="interList"></div>
       </div>
 
@@ -284,7 +285,7 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
           G — Fill<br>
           R — Rect<br>
           O — Object<br>
-          I — Interactable<br>
+          T — Tileset<br>
           S — Spawn<br>
           0–4 — Tile type<br>
           Ctrl+Z/Y — Undo/Redo<br>
@@ -321,6 +322,7 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
 
   <!-- Status bar -->
   <div id="statusbar">
+    <span id="stName" style="color:#c8a84b">Custom Map</span>
     <span id="stCell">col —, row —</span>
     <span id="stTile">—</span>
     <span id="stZoom">zoom 12×</span>
@@ -336,17 +338,6 @@ const T = { VOID: 0, FLOOR: 1, WALL: 2, WATER: 3, COURTYARD: 4 };
 const TILE_COLORS = ['#1a1410', '#c8a86a', '#8a6a40', '#2a6898', '#d4ba88'];
 const TILE_NAMES  = ['Void', 'Floor', 'Wall', 'Water', 'Courtyard'];
 
-// Decorative objects — a layer above the tile map. `solid` is the default
-// collision for each type; the COLLISION toggle overrides it per placement.
-const OBJ_TYPES = {
-  palm:  { name: 'Palm Tree', color: '#3a9a50', solid: true  },
-  pot:   { name: 'Clay Pot',  color: '#b06a30', solid: true  },
-  rock:  { name: 'Rock',      color: '#8a8478', solid: true  },
-  crate: { name: 'Crate',     color: '#9a7a40', solid: true  },
-  bush:  { name: 'Bush',      color: '#5a8a3a', solid: false },
-  rug:   { name: 'Rug',       color: '#a03848', solid: false },
-};
-
 // Must stay in sync with the ALL list in maps.html
 const INTERACTABLE_IDS = [
   { id:'p1g1s', puzzle:1 }, { id:'p1p1s', puzzle:1 },
@@ -361,16 +352,15 @@ const INTERACTABLE_IDS = [
 // ── State ─────────────────────────────────────────────────────────────────────
 let grid = makeGrid();
 let spawn = null;           // {col, row}
-let objects = [];           // {col, row, type, solid}
-let interactables = [];     // {id, col, row}
+let mapName = 'Custom Map';
+let objects = [];           // {col, row, sx, sy, sw, sh, solid, inter?}
 let zoom = 12;
 let panX = 0, panY = 0;
 let tool = 'paint';
 let selTile = T.FLOOR;
-let selObj = 'palm';
-let selSprite = null;       // {sx, sy, sw, sh} in sheet tiles — overrides selObj when set
+let selSprite = null;       // {sx, sy, sw, sh} in sheet tiles — the object brush
 let objSolid = true;
-let selInter = INTERACTABLE_IDS[0].id;
+let selInter = null;        // interactable id to attach to the next placed object
 let showGrid = true;
 
 // History — stores post-operation snapshots
@@ -423,16 +413,11 @@ function objAt(col, row) {
     if (objCovers(objects[i], col, row)) return i;
   return -1;
 }
-function interAt(col, row) {
-  return interactables.findIndex(p => p.col === col && p.row === row);
-}
-// Drop objects/interactables whose underlying tile was erased to VOID
+// Drop objects whose anchor tile was erased to VOID
 function pruneDetached() {
   let changed = false;
   for (let i = objects.length - 1; i >= 0; i--)
     if (grid[objects[i].row][objects[i].col] === T.VOID) { objects.splice(i, 1); changed = true; }
-  for (let i = interactables.length - 1; i >= 0; i--)
-    if (grid[interactables[i].row][interactables[i].col] === T.VOID) { interactables.splice(i, 1); changed = true; }
   if (changed) updateInterList();
 }
 
@@ -527,23 +512,6 @@ function render() {
     ctx.restore();
   }
 
-  // Interactables layer
-  for (const p of interactables) {
-    if (p.col < c0 || p.col > c1 || p.row < r0 || p.row > r1) continue;
-    const { x, y } = cellXY(p.col, p.row);
-    ctx.fillStyle = 'rgba(40,180,90,0.30)';
-    ctx.fillRect(x + 1, y + 1, zoom - 2, zoom - 2);
-    ctx.strokeStyle = 'rgba(80,220,120,0.9)';
-    ctx.lineWidth = 1.2;
-    ctx.strokeRect(x + 1, y + 1, zoom - 2, zoom - 2);
-    if (zoom >= 12) {
-      ctx.fillStyle = '#88ffb8';
-      ctx.font = `bold ${Math.max(5, Math.floor(zoom * 0.24))}px monospace`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(p.id, x + zoom / 2, y + zoom / 2);
-    }
-  }
-
   // Grid border
   ctx.strokeStyle = '#c8a84b';
   ctx.lineWidth   = 1.5;
@@ -601,64 +569,31 @@ function render() {
 // ── Object drawing (editor-scale glyphs) ──────────────────────────────────────
 function drawEditorObject(o) {
   const { x, y } = cellXY(o.col, o.row);
-  const S = zoom, t = OBJ_TYPES[o.type] || OBJ_TYPES.rock;
-  const fw = objW(o) * S, fh = objH(o) * S;
+  const fw = objW(o) * zoom, fh = objH(o) * zoom;
   ctx.save();
-  if (o.sw) {
-    // Sprite from the tileset sheet
-    if (sheetImg.complete && sheetImg.naturalWidth) {
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(sheetImg,
-        o.sx * SHEET_TILE, o.sy * SHEET_TILE, o.sw * SHEET_TILE, o.sh * SHEET_TILE,
-        x, y, fw, fh);
-    } else {
-      ctx.fillStyle = 'rgba(200,168,75,0.35)';
-      ctx.fillRect(x, y, fw, fh);
-    }
-    drawCollisionOutline(o, x, y, fw, fh);
-    ctx.restore();
-    return;
-  }
-  switch (o.type) {
-    case 'palm':
-      ctx.fillStyle = '#7a5a30';
-      ctx.fillRect(x + S * 0.42, y + S * 0.45, S * 0.16, S * 0.42);
-      ctx.fillStyle = t.color;
-      ctx.beginPath(); ctx.ellipse(x + S / 2, y + S * 0.34, S * 0.36, S * 0.24, 0, 0, Math.PI * 2); ctx.fill();
-      break;
-    case 'bush':
-      ctx.fillStyle = t.color;
-      ctx.beginPath(); ctx.arc(x + S / 2, y + S * 0.55, S * 0.32, 0, Math.PI * 2); ctx.fill();
-      break;
-    case 'rock':
-      ctx.fillStyle = t.color;
-      ctx.beginPath(); ctx.ellipse(x + S / 2, y + S * 0.58, S * 0.34, S * 0.26, 0, 0, Math.PI * 2); ctx.fill();
-      break;
-    case 'pot':
-      ctx.fillStyle = t.color;
-      ctx.fillRect(x + S * 0.30, y + S * 0.30, S * 0.40, S * 0.52);
-      ctx.fillRect(x + S * 0.24, y + S * 0.22, S * 0.52, S * 0.12);
-      break;
-    case 'crate':
-      ctx.fillStyle = t.color;
-      ctx.fillRect(x + S * 0.18, y + S * 0.18, S * 0.64, S * 0.64);
-      ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(x + S * 0.18, y + S * 0.18); ctx.lineTo(x + S * 0.82, y + S * 0.82);
-      ctx.moveTo(x + S * 0.82, y + S * 0.18); ctx.lineTo(x + S * 0.18, y + S * 0.82);
-      ctx.stroke();
-      break;
-    case 'rug':
-      ctx.fillStyle = t.color;
-      ctx.fillRect(x + S * 0.12, y + S * 0.18, S * 0.76, S * 0.64);
-      ctx.strokeStyle = '#e8c860'; ctx.lineWidth = 1;
-      ctx.strokeRect(x + S * 0.20, y + S * 0.26, S * 0.60, S * 0.48);
-      break;
-    default:
-      ctx.fillStyle = t.color;
-      ctx.beginPath(); ctx.arc(x + S / 2, y + S / 2, S * 0.3, 0, Math.PI * 2); ctx.fill();
+  if (sheetImg.complete && sheetImg.naturalWidth) {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(sheetImg,
+      o.sx * SHEET_TILE, o.sy * SHEET_TILE, o.sw * SHEET_TILE, o.sh * SHEET_TILE,
+      x, y, fw, fh);
+  } else {
+    ctx.fillStyle = 'rgba(200,168,75,0.35)';
+    ctx.fillRect(x, y, fw, fh);
   }
   drawCollisionOutline(o, x, y, fw, fh);
+  // Interactable badge — green corner marker + id label
+  if (o.inter) {
+    ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(80,220,120,0.95)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x + 1.5, y + 1.5, fw - 3, fh - 3);
+    if (zoom >= 12) {
+      ctx.fillStyle = '#88ffb8';
+      ctx.font = `bold ${Math.max(6, Math.floor(zoom * 0.28))}px monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(o.inter, x + fw / 2, y - Math.max(4, zoom * 0.2));
+    }
+  }
   ctx.restore();
 }
 
@@ -681,7 +616,6 @@ function snapshot() {
     grid: cloneGrid(),
     spawn: spawn ? { ...spawn } : null,
     objects: objects.map(o => ({ ...o })),
-    interactables: interactables.map(p => ({ ...p })),
   };
 }
 
@@ -692,13 +626,13 @@ function pushHistory() {
   if (history.length > MAX_HIST) history.shift();
   histIdx = history.length - 1;
   updateHistBtns();
+  saveDraft();   // keep the working draft current so nothing is lost on navigation
 }
 
 function restoreSnapshot(s) {
   grid  = s.grid.map(r => r.slice());
   spawn = s.spawn ? { ...s.spawn } : null;
-  objects       = (s.objects       || []).map(o => ({ ...o }));
-  interactables = (s.interactables || []).map(p => ({ ...p }));
+  objects = (s.objects || []).map(o => ({ ...o }));
   updateInterList();
 }
 
@@ -706,14 +640,14 @@ function undo() {
   if (histIdx <= 0) return;
   histIdx--;
   restoreSnapshot(history[histIdx]);
-  render(); updateStatus(); updateHistBtns();
+  render(); updateStatus(); updateHistBtns(); saveDraft();
 }
 
 function redo() {
   if (histIdx >= history.length - 1) return;
   histIdx++;
   restoreSnapshot(history[histIdx]);
-  render(); updateStatus(); updateHistBtns();
+  render(); updateStatus(); updateHistBtns(); saveDraft();
 }
 
 function updateHistBtns() {
@@ -772,14 +706,14 @@ function autoWall() {
 function clearMap() {
   if (!confirm('Clear the entire map?')) return;
   grid = makeGrid(); spawn = null;
-  objects = []; interactables = []; updateInterList();
+  objects = []; updateInterList();
   pushHistory(); render(); updateStatus();
 }
 
 function newMap() {
   if (!confirm('Start a new blank map? Unsaved changes will be lost.')) return;
-  grid = makeGrid(); spawn = null;
-  objects = []; interactables = []; updateInterList();
+  grid = makeGrid(); spawn = null; mapName = 'Custom Map';
+  objects = []; updateInterList();
   history = []; histIdx = -1;
   fitGrid();
   pushHistory(); render(); updateStatus(); updateHistBtns();
@@ -803,7 +737,7 @@ function selectTile(val) {
 
 function updateCursor() {
   const map = { paint:'crosshair', erase:'cell', fill:'copy', rect:'crosshair', spawn:'pointer',
-                object:'copy', inter:'copy' };
+                object:'copy' };
   canvas.style.cursor = spaceHeld ? (isPanning ? 'grabbing' : 'grab') : (map[tool] || 'crosshair');
 }
 
@@ -850,6 +784,7 @@ function updateZoomLabel() {
 function updateStatus() {
   const sp = spawn ? `(${spawn.col}, ${spawn.row})` : 'not set';
   document.getElementById('stSpawn').textContent = 'spawn: ' + sp;
+  document.getElementById('stName').textContent  = mapName;
 }
 
 // ── Serialize / deserialize ───────────────────────────────────────────────────
@@ -858,8 +793,7 @@ function toData() {
     grid: cloneGrid(),
     spawn: spawn ? { ...spawn } : null,
     objects: objects.map(o => ({ ...o })),
-    interactables: interactables.map(p => ({ ...p })),
-    name: 'Custom Map',
+    name: mapName,
   };
 }
 
@@ -869,26 +803,32 @@ function fromData(data) {
     throw new Error(`Expected ${GRID_W}×${GRID_H} grid, got ${data.grid[0]?.length}×${data.grid.length}`);
   grid  = data.grid.map(row => row.map(Number));
   spawn = data.spawn ? { col: +data.spawn.col, row: +data.spawn.row } : null;
+  mapName = (typeof data.name === 'string' && data.name.trim()) ? data.name.trim() : 'Custom Map';
+  // Legacy shape objects (palm/pot/…) are no longer supported and get dropped
+  const seenInter = new Set();
   objects = Array.isArray(data.objects)
     ? data.objects
-        .filter(o => inBounds(+o.col, +o.row) &&
-                     (OBJ_TYPES[o.type] || (o.sw > 0 && o.sh > 0 && o.sx >= 0 && o.sy >= 0)))
-        .map(o => o.sw
-          ? { col: +o.col, row: +o.row, sx: +o.sx, sy: +o.sy, sw: +o.sw, sh: +o.sh, solid: !!o.solid }
-          : { col: +o.col, row: +o.row, type: o.type, solid: !!o.solid })
-    : [];
-  interactables = Array.isArray(data.interactables)
-    ? data.interactables
-        .filter(p => INTERACTABLE_IDS.some(x => x.id === p.id) && inBounds(+p.col, +p.row))
-        .map(p => ({ id: p.id, col: +p.col, row: +p.row }))
+        .filter(o => inBounds(+o.col, +o.row) && o.sw > 0 && o.sh > 0 && o.sx >= 0 && o.sy >= 0)
+        .map(o => {
+          const obj = { col: +o.col, row: +o.row, sx: +o.sx, sy: +o.sy, sw: +o.sw, sh: +o.sh, solid: !!o.solid };
+          if (typeof o.inter === 'string' &&
+              INTERACTABLE_IDS.some(x => x.id === o.inter) && !seenInter.has(o.inter)) {
+            obj.inter = o.inter;
+            seenInter.add(o.inter);
+          }
+          return obj;
+        })
     : [];
   updateInterList();
 }
 
 // ── Save / load / export / import / play ──────────────────────────────────────
-function saveLocal(btn) {
-  pushHistory(); // prune + sync history to saved state
+function saveDraft() {
   localStorage.setItem('editorMap', JSON.stringify(toData()));
+}
+
+function saveLocal(btn) {
+  pushHistory(); // prunes, snapshots, and persists the draft
   const flash = document.getElementById('saveFlash');
   flash.classList.add('show');
   setTimeout(() => flash.classList.remove('show'), 1400);
@@ -975,43 +915,24 @@ canvas.addEventListener('mousedown', e => {
     if (!inBounds(col, row)) return;
     if (erasing) {
       const i = objAt(col, row);
-      if (i !== -1) { objects.splice(i, 1); pushHistory(); render(); }
+      if (i !== -1) { objects.splice(i, 1); updateInterList(); pushHistory(); render(); }
       return;
     }
-    if (selSprite) {
-      // Whole footprint must be on non-void tiles
-      const { sw, sh } = selSprite;
-      for (let r = row; r < row + sh; r++)
-        for (let c = col; c < col + sw; c++)
-          if (!inBounds(c, r) || grid[r][c] === T.VOID) return;
-      // Sprites may layer (rug under a table) — just add on top
-      objects.push({ col, row, sx: selSprite.sx, sy: selSprite.sy, sw, sh, solid: objSolid });
-    } else {
-      if (grid[row][col] === T.VOID) return;   // objects sit on top of tiles
-      const i = objects.findIndex(o => !o.sw && o.col === col && o.row === row);
-      if (i !== -1) objects.splice(i, 1);      // replace built-in object already there
-      objects.push({ col, row, type: selObj, solid: objSolid });
+    if (!selSprite) { openTileset(); return; }   // no brush yet — pick one
+    // Whole footprint must be on non-void tiles
+    const { sw, sh } = selSprite;
+    for (let r = row; r < row + sh; r++)
+      for (let c = col; c < col + sw; c++)
+        if (!inBounds(c, r) || grid[r][c] === T.VOID) return;
+    const obj = { col, row, sx: selSprite.sx, sy: selSprite.sy, sw, sh, solid: objSolid };
+    if (selInter) {
+      // Each interactable id lives on exactly one object — steal it if reused
+      for (const o of objects) if (o.inter === selInter) delete o.inter;
+      obj.inter = selInter;
+      selInter = null;   // one-shot: reset to None after attaching
     }
-    pushHistory(); render(); return;
-  }
-
-  if (tool === 'inter') {
-    if (!inBounds(col, row)) return;
-    if (erasing) {
-      const i = interAt(col, row);
-      if (i !== -1) { interactables.splice(i, 1); updateInterList(); pushHistory(); render(); }
-      return;
-    }
-    const t = grid[row][col];
-    if (t !== T.FLOOR && t !== T.COURTYARD && t !== T.WALL) return; // same rule as maps.html
-    const at = interAt(col, row);
-    if (at !== -1) interactables.splice(at, 1);
-    const ex = interactables.findIndex(p => p.id === selInter);
-    if (ex !== -1) interactables.splice(ex, 1);  // each id placed once — move it
-    interactables.push({ id: selInter, col, row });
-    // Auto-advance to the next unplaced interactable
-    const next = INTERACTABLE_IDS.find(x => !interactables.some(p => p.id === x.id));
-    if (next) selInter = next.id;
+    // Sprites may layer (rug under a table) — just add on top
+    objects.push(obj);
     updateInterList(); pushHistory(); render(); return;
   }
 
@@ -1058,11 +979,9 @@ canvas.addEventListener('mousemove', e => {
     const oi = objAt(col, row);
     if (oi !== -1) {
       const o = objects[oi];
-      const name = o.sw ? `Sprite ${o.sw}×${o.sh}` : OBJ_TYPES[o.type].name;
-      info += ` · ${name} (${o.solid ? 'solid' : 'walkable'})`;
+      info += ` · Sprite ${o.sw}×${o.sh} (${o.solid ? 'solid' : 'walkable'})`;
+      if (o.inter) info += ' · ' + o.inter;
     }
-    const ii = interAt(col, row);
-    if (ii !== -1) info += ' · ' + interactables[ii].id;
     document.getElementById('stTile').textContent = info;
   }
 
@@ -1133,8 +1052,10 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  const toolMap = { b:'paint', x:'erase', g:'fill', r:'rect', s:'spawn', o:'object', i:'inter' };
+  const toolMap = { b:'paint', x:'erase', g:'fill', r:'rect', s:'spawn', o:'object' };
   if (toolMap[e.key.toLowerCase()]) { setTool(toolMap[e.key.toLowerCase()]); return; }
+
+  if (e.key.toLowerCase() === 't') { openTileset(); return; }
 
   if ('01234'.includes(e.key)) selectTile(parseInt(e.key));
 });
@@ -1157,31 +1078,6 @@ function buildPalette() {
       `<span class="tile-key">${val}</span>`;
     list.appendChild(btn);
   });
-}
-
-// ── Object palette ────────────────────────────────────────────────────────────
-function buildObjPalette() {
-  const list = document.getElementById('objList');
-  Object.entries(OBJ_TYPES).forEach(([key, t]) => {
-    const btn = document.createElement('div');
-    btn.className = 'tile-btn' + (key === selObj ? ' active' : '');
-    btn.id = 'obj-' + key;
-    btn.onclick = () => selectObj(key);
-    btn.innerHTML =
-      `<span class="tile-swatch" style="background:${t.color}"></span>` +
-      `<span>${t.name}</span>`;
-    list.appendChild(btn);
-  });
-}
-
-function selectObj(key) {
-  selObj = key;
-  selSprite = null;                    // back to a built-in shape brush
-  updateBrushPreview();
-  setObjSolid(OBJ_TYPES[key].solid);  // reset toggle to the type's default
-  document.querySelectorAll('#objList .tile-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('obj-' + key).classList.add('active');
-  setTool('object');
 }
 
 // ── Tileset picker ────────────────────────────────────────────────────────────
@@ -1244,7 +1140,6 @@ function tsUse() {
   if (!tsPick) return;
   selSprite = { ...tsPick };
   updateBrushPreview();
-  document.querySelectorAll('#objList .tile-btn').forEach(b => b.classList.remove('active'));
   tsOverlay.classList.remove('open');
   setTool('object');
 }
@@ -1272,12 +1167,18 @@ function setObjSolid(v) {
   document.getElementById('solid-no').classList.toggle('active', !v);
 }
 
-// ── Interactable palette ──────────────────────────────────────────────────────
+// ── Interactable attachment list ──────────────────────────────────────────────
 function buildInterPalette() {
   const list = document.getElementById('interList');
+  const none = document.createElement('div');
+  none.className = 'tile-btn active';
+  none.id = 'inter-none';
+  none.onclick = () => selectInter(null);
+  none.innerHTML = `<span class="pi-id-ed" style="color:var(--dim)">none</span>`;
+  list.appendChild(none);
   INTERACTABLE_IDS.forEach(({ id }) => {
     const btn = document.createElement('div');
-    btn.className = 'tile-btn' + (id === selInter ? ' active' : '');
+    btn.className = 'tile-btn';
     btn.id = 'inter-' + id;
     btn.onclick = () => selectInter(id);
     btn.innerHTML = `<span class="pi-id-ed">${id}</span><span class="dot"></span>`;
@@ -1288,26 +1189,39 @@ function buildInterPalette() {
 function selectInter(id) {
   selInter = id;
   updateInterList();
-  setTool('inter');
+  if (id) setTool('object');   // attaching implies placing an object next
 }
 
 function updateInterList() {
+  const noneBtn = document.getElementById('inter-none');
+  if (noneBtn) noneBtn.classList.toggle('active', selInter === null);
   INTERACTABLE_IDS.forEach(({ id }) => {
     const btn = document.getElementById('inter-' + id);
     if (!btn) return;
-    btn.classList.toggle('placed', interactables.some(p => p.id === id));
+    btn.classList.toggle('placed', objects.some(o => o.inter === id));
     btn.classList.toggle('active', id === selInter);
   });
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 buildPalette();
-buildObjPalette();
 buildInterPalette();
+
+// Auto-load the working draft so Play Map → Back to Editor keeps your work
+try {
+  const draft = localStorage.getItem('editorMap');
+  if (draft) fromData(JSON.parse(draft));
+} catch (e) {
+  // Corrupted draft — keep a copy so the autosave below can't destroy it
+  localStorage.setItem('editorMap_backup', localStorage.getItem('editorMap') || '');
+  grid = makeGrid(); spawn = null; objects = [];
+}
+
 new ResizeObserver(resizeCanvas).observe(wrap);
 resizeCanvas();
 fitGrid();
-pushHistory(); // save initial empty state
+pushHistory(); // baseline history state (also persists the draft)
+updateStatus();
 </script>
 </body>
 </html>

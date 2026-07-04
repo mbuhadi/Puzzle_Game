@@ -193,6 +193,28 @@
 
   a { font-size: 12px; color: #4a4540; font-family: sans-serif; text-decoration: none; margin-top: 4px; }
   a:hover { color: #c8a84b; }
+
+  /* ── My Maps library ─────────────────────────────────────────────── */
+  .maps-lib {
+    width: 100%; max-width: 820px;
+    background: #0e0d0a; border: 1px solid #2e2a1e; border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .lib-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 4px; border-bottom: 1px solid #1a1814;
+  }
+  .lib-row:last-child { border-bottom: none; }
+  .lib-name {
+    font-family: 'Cinzel', serif; font-size: 13px; color: #c8a84b;
+    flex: 1; cursor: pointer; letter-spacing: 1px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .lib-name:hover { color: #e8c860; }
+  .lib-date { font-family: monospace; font-size: 9px; color: #4a4540; flex-shrink: 0; }
+  .lib-btn { padding: 3px 10px; font-size: 10px; flex-shrink: 0; }
+  .lib-danger { color: #9a5a50; border-color: #3a2420; }
+  .lib-danger:hover { border-color: #9a5a50; background: #1a1210; }
 </style>
 </head>
 <body>
@@ -206,7 +228,8 @@
     &nbsp;|&nbsp; Area: <span id="sqftLabel">…</span>
   </div>
   <button class="bar-btn" id="btnRandomize">Randomize</button>
-  <button class="bar-btn" id="btnSave">Save Map</button>
+  <button class="bar-btn" id="btnSave">Save Placements</button>
+  <button class="bar-btn" id="btnSaveLib" title="Save this map with a name so you can replay or edit it later">Save to My Maps</button>
   <span id="saveConfirm">saved ✓</span>
 </div>
 
@@ -232,6 +255,14 @@
   <div class="legend-item"><div class="swatch" style="background:#3a7aaa;"></div>Pond</div>
   <div class="legend-item"><div class="swatch" style="background:#8a6a40;"></div>Wall</div>
   <div class="legend-item"><div class="swatch" style="background:#c8a84b;border-radius:50%;"></div>Player</div>
+</div>
+
+<div class="maps-lib">
+  <div class="panel-title">MY MAPS</div>
+  <div id="libList"></div>
+  <div class="panel-foot" id="libEmpty" style="display:none">
+    no saved maps yet — play a map and hit “Save to My Maps”
+  </div>
 </div>
 
 <a href="index.html">← Back to Home</a>
@@ -511,6 +542,16 @@ document.getElementById('examineLeave').addEventListener('click', closeExamine);
 
 // ── Nearby interactable detection ─────────────────────────────────────────────
 function getNearbyInteractable() {
+  // Objects with an attached interactable (footprint-aware radius)
+  for (const o of OBJECTS) {
+    if (!o.inter) continue;
+    const w = o.sw || 1, h = o.sh || 1;
+    const cx = o.col + w / 2, cy = o.row + h / 2;
+    const dx = player.x - cx, dy = player.y - cy;
+    const r = INTERACT_RADIUS + (Math.max(w, h) - 1) * 0.5;
+    if (Math.sqrt(dx*dx + dy*dy) < r) return { id: o.inter, col: cx - 0.5, row: cy - 0.5 };
+  }
+  // Standalone markers (legacy / drag-and-drop panel)
   for (const p of PLACED) {
     const dx = player.x - (p.col + 0.5), dy = player.y - (p.row + 0.5);
     if (Math.sqrt(dx*dx + dy*dy) < INTERACT_RADIUS) return p;
@@ -616,6 +657,17 @@ function drawObject(o, px, py) {
       ctx.drawImage(SHEET,
         o.sx * SHEET_TILE, o.sy * SHEET_TILE, o.sw * SHEET_TILE, o.sh * SHEET_TILE,
         px, py, o.sw * S, o.sh * S);
+    }
+    // Attached interactable → pulsing green outline so players spot it
+    if (o.inter) {
+      const pulse = 0.45 + 0.35 * Math.sin(performance.now() / 400);
+      ctx.save();
+      ctx.shadowColor = '#44ff88';
+      ctx.shadowBlur  = 10 * pulse;
+      ctx.strokeStyle = `rgba(80,220,120,${pulse.toFixed(3)})`;
+      ctx.lineWidth   = 2;
+      ctx.strokeRect(px + 1, py + 1, o.sw * S - 2, o.sh * S - 2);
+      ctx.restore();
     }
     return;
   }
@@ -901,7 +953,7 @@ function updatePanel() {
     lbl.textContent = `PUZZLE ${puzzle}`;
     grp.appendChild(lbl);
     for (const id of ids) {
-      const isPlaced = PLACED.some(p => p.id === id);
+      const isPlaced = PLACED.some(p => p.id === id) || OBJECTS.some(o => o.inter === id);
       const el = document.createElement('div');
       el.className = 'pi-item' + (isPlaced ? ' is-placed' : '');
       el.innerHTML = `<span class="pi-handle">⠿</span><span class="pi-id">${id}</span><span class="pi-dot"></span>`;
@@ -1043,76 +1095,198 @@ function applyMap(result, seed) {
   loadPlaced(seed);
 }
 
-// Check for custom map from the editor
-const _urlParams = new URLSearchParams(location.search);
-if (_urlParams.get('custom') === '1') {
-  const _raw = localStorage.getItem('editorMap');
-  let _loaded = false;
-  if (_raw) {
-    try {
-      const _data = JSON.parse(_raw);
-      if (_data.grid && _data.grid.length === GRID_H && _data.grid[0].length === GRID_W) {
-        const _sp = _data.spawn || { col: 5, row: 5 };
-        const _floorCount = _data.grid.flat().filter(t => t === T.FLOOR || t === T.COURTYARD).length;
-        applyMap({
-          grid: _data.grid.map(row => row.map(Number)),
-          start: { x: _sp.col + 0.5, y: _sp.row + 0.5 },
-          floorCount: _floorCount,
-        }, 'custom');
-        // Objects from the editor (solid ones block movement)
-        OBJECTS.length = 0;
-        if (Array.isArray(_data.objects)) {
-          for (const o of _data.objects) {
-            const col = +o.col, row = +o.row;
-            if (col < 0 || col >= GRID_W || row < 0 || row >= GRID_H) continue;
-            if (o.sw > 0 && o.sh > 0)
-              OBJECTS.push({ col, row, sx: +o.sx, sy: +o.sy, sw: +o.sw, sh: +o.sh, solid: !!o.solid });
-            else
-              OBJECTS.push({ col, row, type: String(o.type), solid: !!o.solid });
-          }
-        }
-        rebuildObjSolid();
-        // Interactables placed in the editor override any saved placement —
-        // the editor is the source of truth for its own map
-        if (Array.isArray(_data.interactables) && _data.interactables.length) {
-          PLACED.length = 0;
-          for (const p of _data.interactables) {
-            const col = +p.col, row = +p.row;
-            if (ALL.some(x => x.id === p.id) && col >= 0 && col < GRID_W && row >= 0 && row < GRID_H)
-              PLACED.push({ id: p.id, col, row });
-          }
-        }
-        // Hide randomize in custom mode and add an editor link
-        document.getElementById('btnRandomize').style.display = 'none';
-        const _back = document.createElement('a');
-        _back.href = 'map-editor.html';
-        _back.textContent = '← Back to Editor';
-        _back.style.cssText = 'font-size:11px;color:#7a6030;font-family:monospace;text-decoration:none;';
-        _back.onmouseover  = () => _back.style.color = '#c8a84b';
-        _back.onmouseout   = () => _back.style.color = '#7a6030';
-        document.querySelector('.top-bar').appendChild(_back);
-        _loaded = true;
-      }
-    } catch (_e) { /* fall through to normal */ }
-  }
-  if (!_loaded) applyMap(generateRiad(currentSeed), currentSeed);
-} else {
-  applyMap(generateRiad(currentSeed), currentSeed);
+// ── Playing custom maps (from the editor draft or My Maps) ────────────────────
+let currentMapData = null;   // snapshot of the map being played, for library saves
+let _customUiDone = false;
+
+function enterCustomUI() {
+  if (_customUiDone) return;
+  _customUiDone = true;
+  document.getElementById('btnRandomize').style.display = 'none';
+  const _back = document.createElement('a');
+  _back.href = 'map-editor.html';
+  _back.textContent = '← Back to Editor';
+  _back.style.cssText = 'font-size:11px;color:#7a6030;font-family:monospace;text-decoration:none;';
+  _back.onmouseover  = () => _back.style.color = '#c8a84b';
+  _back.onmouseout   = () => _back.style.color = '#7a6030';
+  document.querySelector('.top-bar').appendChild(_back);
 }
-updatePanel();
+
+function loadCustomData(_data) {
+  if (!_data || !_data.grid || _data.grid.length !== GRID_H || _data.grid[0].length !== GRID_W)
+    return false;
+  const _sp = _data.spawn || { col: 5, row: 5 };
+  const _grid = _data.grid.map(row => row.map(Number));
+  const _floorCount = _grid.flat().filter(t => t === T.FLOOR || t === T.COURTYARD).length;
+  applyMap({
+    grid: _grid,
+    start: { x: +_sp.col + 0.5, y: +_sp.row + 0.5 },
+    floorCount: _floorCount,
+  }, 'custom');
+  // Objects from the editor (solid ones block movement); objects can carry an
+  // attached interactable id in `inter`
+  OBJECTS.length = 0;
+  if (Array.isArray(_data.objects)) {
+    for (const o of _data.objects) {
+      const col = +o.col, row = +o.row;
+      if (col < 0 || col >= GRID_W || row < 0 || row >= GRID_H) continue;
+      let obj;
+      if (o.sw > 0 && o.sh > 0)
+        obj = { col, row, sx: +o.sx, sy: +o.sy, sw: +o.sw, sh: +o.sh, solid: !!o.solid };
+      else
+        obj = { col, row, type: String(o.type), solid: !!o.solid };
+      if (typeof o.inter === 'string' && ALL.some(x => x.id === o.inter)) obj.inter = o.inter;
+      OBJECTS.push(obj);
+    }
+  }
+  rebuildObjSolid();
+  // The editor is the source of truth for the map's interactables. Standalone
+  // markers (legacy maps / riads saved with dragged placements) still load;
+  // otherwise the stale per-map placement save is cleared.
+  PLACED.length = 0;
+  if (Array.isArray(_data.interactables)) {
+    for (const p of _data.interactables) {
+      const col = +p.col, row = +p.row;
+      if (ALL.some(x => x.id === p.id) && col >= 0 && col < GRID_W && row >= 0 && row < GRID_H)
+        PLACED.push({ id: p.id, col, row });
+    }
+  }
+  currentMapData = {
+    grid: _grid,
+    spawn: { col: +_sp.col, row: +_sp.row },
+    name: (typeof _data.name === 'string' && _data.name.trim()) ? _data.name.trim() : 'Custom Map',
+  };
+  document.querySelector('h1').textContent = currentMapData.name;
+  enterCustomUI();
+  updatePanel();
+  return true;
+}
+
+function loadProcedural(seed) {
+  const result = generateRiad(seed);
+  applyMap(result, seed);
+  currentMapData = {
+    grid: result.grid,
+    spawn: { col: Math.floor(result.start.x), row: Math.floor(result.start.y) },
+    name: 'Riad ' + (seed >>> 0).toString(16),
+  };
+  updatePanel();
+}
+
+// ── My Maps library (localStorage) ────────────────────────────────────────────
+const LIB_KEY = 'mapLibrary';
+function loadLibrary() {
+  try { return JSON.parse(localStorage.getItem(LIB_KEY)) || {}; } catch (e) { return {}; }
+}
+function saveLibrary(lib) { localStorage.setItem(LIB_KEY, JSON.stringify(lib)); }
+
+function renderLibrary() {
+  const lib   = loadLibrary();
+  const list  = document.getElementById('libList');
+  const names = Object.keys(lib).sort((a, b) => (lib[b].updated || 0) - (lib[a].updated || 0));
+  list.innerHTML = '';
+  document.getElementById('libEmpty').style.display = names.length ? 'none' : 'block';
+  for (const name of names) {
+    const row = document.createElement('div');
+    row.className = 'lib-row';
+    const nameEl = document.createElement('span');
+    nameEl.className = 'lib-name';
+    nameEl.textContent = name;
+    nameEl.title = 'Play this map';
+    nameEl.onclick = () => playLib(name);
+    const dateEl = document.createElement('span');
+    dateEl.className = 'lib-date';
+    dateEl.textContent = lib[name].updated ? new Date(lib[name].updated).toLocaleDateString() : '';
+    row.append(nameEl, dateEl);
+    const mkBtn = (label, fn, danger) => {
+      const b = document.createElement('button');
+      b.className = 'bar-btn lib-btn' + (danger ? ' lib-danger' : '');
+      b.textContent = label;
+      b.onclick = fn;
+      row.appendChild(b);
+    };
+    mkBtn('Play',   () => playLib(name));
+    mkBtn('Edit',   () => editLib(name));
+    mkBtn('Delete', () => deleteLib(name), true);
+    list.appendChild(row);
+  }
+}
+
+function playLib(name) {
+  const lib = loadLibrary();
+  if (!lib[name]) return;
+  if (!loadCustomData(lib[name].data)) alert('This saved map is corrupted or has the wrong grid size.');
+  canvas.focus();
+}
+
+function editLib(name) {
+  const lib = loadLibrary();
+  if (!lib[name]) return;
+  if (!confirm(`Open "${name}" in Map Studio?\nThis replaces the current editor draft.`)) return;
+  localStorage.setItem('editorMap', JSON.stringify(lib[name].data));
+  location.href = 'map-editor.html';
+}
+
+function deleteLib(name) {
+  if (!confirm(`Delete map "${name}"? This cannot be undone.`)) return;
+  const lib = loadLibrary();
+  delete lib[name];
+  saveLibrary(lib);
+  renderLibrary();
+}
+
+function saveToLibrary() {
+  if (!currentMapData) return;
+  const name = prompt('Save map as:', currentMapData.name || 'My Map');
+  if (!name || !name.trim()) return;
+  const clean = name.trim();
+  const lib = loadLibrary();
+  if (lib[clean] && !confirm(`"${clean}" already exists. Overwrite it?`)) return;
+  lib[clean] = {
+    updated: Date.now(),
+    data: {
+      grid: currentMapData.grid,
+      spawn: currentMapData.spawn,
+      objects: OBJECTS.map(o => ({ ...o })),
+      interactables: PLACED.map(p => ({ id: p.id, col: p.col, row: p.row })),
+      name: clean,
+    },
+  };
+  saveLibrary(lib);
+  currentMapData.name = clean;
+  if (_customUiDone) document.querySelector('h1').textContent = clean;
+  renderLibrary();
+  const el = document.getElementById('saveConfirm');
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+// ── Startup: editor draft (?custom=1) or procedural riad ──────────────────────
+const _urlParams = new URLSearchParams(location.search);
+let _started = false;
+if (_urlParams.get('custom') === '1') {
+  try { _started = loadCustomData(JSON.parse(localStorage.getItem('editorMap'))); }
+  catch (_e) { /* fall through to normal */ }
+}
+if (!_started) loadProcedural(currentSeed);
+renderLibrary();
 canvas.focus();
 requestAnimationFrame(loop);
 
 document.getElementById('btnRandomize').addEventListener('click', () => {
   currentSeed = Date.now() | 0;
   localStorage.setItem('map1seed', currentSeed);
-  applyMap(generateRiad(currentSeed), currentSeed);
-  updatePanel();
+  loadProcedural(currentSeed);
   canvas.focus();
 });
 
 document.getElementById('btnSave').addEventListener('click', () => {
   savePlaced();
+  canvas.focus();
+});
+
+document.getElementById('btnSaveLib').addEventListener('click', () => {
+  saveToLibrary();
   canvas.focus();
 });
 </script>
