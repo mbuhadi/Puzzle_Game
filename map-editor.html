@@ -306,7 +306,9 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
   <div id="tsOverlay">
     <div id="tsBox">
       <div id="tsHead">
-        INTERIORS TILESET — click &amp; drag to select tiles
+        <button class="ts-tab active" data-sheet="interiors" onclick="tsSelectSheet('interiors')">Modern Interiors</button>
+        <button class="ts-tab" data-sheet="retro" onclick="tsSelectSheet('retro')">Retro Interior</button>
+        <span>— click &amp; drag to select</span>
         <span id="tsSel">no selection</span>
       </div>
       <div id="tsScroll">
@@ -384,11 +386,21 @@ const canvas = document.getElementById('editorCanvas');
 const ctx    = canvas.getContext('2d');
 const wrap   = document.getElementById('canvasWrap');
 
-// ── Tileset sheet (Modern Interiors, 16px tiles) ──────────────────────────────
+// ── Tileset sheets (16px tiles) ───────────────────────────────────────────────
 const SHEET_TILE = 16;
-const sheetImg = new Image();
-sheetImg.onload = () => render();
-sheetImg.src = 'assets/Interiors_16x16.png';
+const SHEETS = {
+  interiors: { name: 'Modern Interiors', src: 'assets/Interiors_16x16.png' },
+  retro:     { name: 'Retro Interior',   src: 'assets/Retro_Interior_16x16.png' },
+};
+const SHEET_IMGS = {};
+for (const key in SHEETS) {
+  const im = new Image();
+  im.onload = () => render();
+  im.src = SHEETS[key].src;
+  SHEET_IMGS[key] = im;
+}
+// Objects saved before multi-sheet support have no `sheet` field → interiors
+function sheetOf(o) { return SHEET_IMGS[o.sheet] || SHEET_IMGS.interiors; }
 
 // ── Grid helpers ──────────────────────────────────────────────────────────────
 function makeGrid() {
@@ -500,12 +512,13 @@ function render() {
 
   // Ghost preview of the sprite brush under the cursor
   if (tool === 'object' && selSprite && hoverCell && !painting && !isPanning &&
-      inBounds(hoverCell.col, hoverCell.row) && sheetImg.complete && sheetImg.naturalWidth) {
+      inBounds(hoverCell.col, hoverCell.row) &&
+      sheetOf(selSprite).complete && sheetOf(selSprite).naturalWidth) {
     const { x, y } = cellXY(hoverCell.col, hoverCell.row);
     ctx.save();
     ctx.globalAlpha = 0.55;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(sheetImg,
+    ctx.drawImage(sheetOf(selSprite),
       selSprite.sx * SHEET_TILE, selSprite.sy * SHEET_TILE,
       selSprite.sw * SHEET_TILE, selSprite.sh * SHEET_TILE,
       x, y, selSprite.sw * zoom, selSprite.sh * zoom);
@@ -570,10 +583,11 @@ function render() {
 function drawEditorObject(o) {
   const { x, y } = cellXY(o.col, o.row);
   const fw = objW(o) * zoom, fh = objH(o) * zoom;
+  const sheet = sheetOf(o);
   ctx.save();
-  if (sheetImg.complete && sheetImg.naturalWidth) {
+  if (sheet.complete && sheet.naturalWidth) {
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(sheetImg,
+    ctx.drawImage(sheet,
       o.sx * SHEET_TILE, o.sy * SHEET_TILE, o.sw * SHEET_TILE, o.sh * SHEET_TILE,
       x, y, fw, fh);
   } else {
@@ -810,7 +824,8 @@ function fromData(data) {
     ? data.objects
         .filter(o => inBounds(+o.col, +o.row) && o.sw > 0 && o.sh > 0 && o.sx >= 0 && o.sy >= 0)
         .map(o => {
-          const obj = { col: +o.col, row: +o.row, sx: +o.sx, sy: +o.sy, sw: +o.sw, sh: +o.sh, solid: !!o.solid };
+          const obj = { col: +o.col, row: +o.row, sheet: SHEETS[o.sheet] ? o.sheet : 'interiors',
+                        sx: +o.sx, sy: +o.sy, sw: +o.sw, sh: +o.sh, solid: !!o.solid };
           if (typeof o.inter === 'string' &&
               INTERACTABLE_IDS.some(x => x.id === o.inter) && !seenInter.has(o.inter)) {
             obj.inter = o.inter;
@@ -924,7 +939,8 @@ canvas.addEventListener('mousedown', e => {
     for (let r = row; r < row + sh; r++)
       for (let c = col; c < col + sw; c++)
         if (!inBounds(c, r) || grid[r][c] === T.VOID) return;
-    const obj = { col, row, sx: selSprite.sx, sy: selSprite.sy, sw, sh, solid: objSolid };
+    const obj = { col, row, sheet: selSprite.sheet || 'interiors',
+                  sx: selSprite.sx, sy: selSprite.sy, sw, sh, solid: objSolid };
     if (selInter) {
       // Each interactable id lives on exactly one object — steal it if reused
       for (const o of objects) if (o.inter === selInter) delete o.inter;
@@ -1087,9 +1103,23 @@ const tsImgEl   = document.getElementById('tsImg');
 const tsRect    = document.getElementById('tsRect');
 let tsStart = null;   // {tx, ty} sheet-tile coords where drag began
 let tsPick  = null;   // pending {sx, sy, sw, sh}
+let tsSheet = 'interiors';   // which sheet tab is active
 
 function openTileset() { tsOverlay.classList.add('open'); }
 function tsCancel()    { tsOverlay.classList.remove('open'); tsStart = null; }
+
+function tsSelectSheet(key) {
+  if (!SHEETS[key] || key === tsSheet) return;
+  tsSheet = key;
+  tsImgEl.src = SHEETS[key].src;
+  tsStart = null; tsPick = null;
+  tsRect.style.display = 'none';
+  tsScroll.scrollTop = 0;
+  document.getElementById('tsSel').textContent = 'no selection';
+  document.getElementById('tsUseBtn').disabled = true;
+  document.querySelectorAll('.ts-tab').forEach(b =>
+    b.classList.toggle('active', b.dataset.sheet === key));
+}
 
 // Sheet-tile coordinate under the mouse (img is displayed at 2× natural size)
 function tsTileAt(e) {
@@ -1138,7 +1168,7 @@ function clearSpriteBrush() {
 
 function tsUse() {
   if (!tsPick) return;
-  selSprite = { ...tsPick };
+  selSprite = { ...tsPick, sheet: tsSheet };
   updateBrushPreview();
   tsOverlay.classList.remove('open');
   setTool('object');
@@ -1155,10 +1185,12 @@ function updateBrushPreview() {
   cv.height = sh * SHEET_TILE * scale;
   const g = cv.getContext('2d');
   g.imageSmoothingEnabled = false;
-  if (sheetImg.complete && sheetImg.naturalWidth)
-    g.drawImage(sheetImg, sx * SHEET_TILE, sy * SHEET_TILE, sw * SHEET_TILE, sh * SHEET_TILE,
+  const sheet = sheetOf(selSprite);
+  if (sheet.complete && sheet.naturalWidth)
+    g.drawImage(sheet, sx * SHEET_TILE, sy * SHEET_TILE, sw * SHEET_TILE, sh * SHEET_TILE,
                 0, 0, cv.width, cv.height);
-  document.getElementById('brushLabel').textContent = `${sw}×${sh} sprite brush`;
+  const packName = (SHEETS[selSprite.sheet] || SHEETS.interiors).name;
+  document.getElementById('brushLabel').textContent = `${sw}×${sh} · ${packName}`;
 }
 
 function setObjSolid(v) {

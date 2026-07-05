@@ -314,8 +314,12 @@ const OBJECTS   = [];
 const OBJ_SOLID = new Set(); // cell keys (row*GRID_W+col) that block movement
 
 const SHEET_TILE = 16;
-const SHEET = new Image();
-SHEET.src = 'assets/Interiors_16x16.png';
+const SHEET_IMGS = {
+  interiors: new Image(),
+  retro:     new Image(),
+};
+SHEET_IMGS.interiors.src = 'assets/Interiors_16x16.png';
+SHEET_IMGS.retro.src     = 'assets/Retro_Interior_16x16.png';
 
 function rebuildObjSolid() {
   OBJ_SOLID.clear();
@@ -652,9 +656,10 @@ function drawObject(o, px, py) {
   const S = TILE_PX;
   if (o.sw) {
     // Tileset sprite, drawn at 2× (16px sheet tiles → 32px map tiles)
-    if (SHEET.complete && SHEET.naturalWidth) {
+    const sheet = SHEET_IMGS[o.sheet] || SHEET_IMGS.interiors;
+    if (sheet.complete && sheet.naturalWidth) {
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(SHEET,
+      ctx.drawImage(sheet,
         o.sx * SHEET_TILE, o.sy * SHEET_TILE, o.sw * SHEET_TILE, o.sh * SHEET_TILE,
         px, py, o.sw * S, o.sh * S);
     }
@@ -1151,10 +1156,12 @@ function loadCustomData(_data) {
       const col = +o.col, row = +o.row;
       if (col < 0 || col >= GRID_W || row < 0 || row >= GRID_H) continue;
       let obj;
-      if (o.sw > 0 && o.sh > 0)
+      if (o.sw > 0 && o.sh > 0) {
         obj = { col, row, sx: +o.sx, sy: +o.sy, sw: +o.sw, sh: +o.sh, solid: !!o.solid };
-      else
+        if (typeof o.sheet === 'string') obj.sheet = o.sheet;
+      } else {
         obj = { col, row, type: String(o.type), solid: !!o.solid };
+      }
       if (typeof o.inter === 'string' && ALL.some(x => x.id === o.inter)) obj.inter = o.inter;
       OBJECTS.push(obj);
     }
