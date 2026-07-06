@@ -162,6 +162,51 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
 #saveFlash { font-size: 10px; color: #4a9a60; font-family: monospace;
   opacity: 0; transition: opacity 0.3s; margin-left: 2px; }
 #saveFlash.show { opacity: 1; }
+
+/* ── My Maps panel ──────────────────────────────────────────────────────── */
+#mapsOverlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.82);
+  z-index: 500; display: none; align-items: center; justify-content: center;
+}
+#mapsOverlay.open { display: flex; }
+#mapsBox {
+  display: flex; flex-direction: column;
+  width: 500px; max-width: 94vw; max-height: 86vh;
+  background: var(--bg2); border: 1px solid var(--gold-dim);
+  border-radius: 6px; overflow: hidden;
+}
+#mapsHead {
+  flex-shrink: 0; display: flex; align-items: center;
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+  font-size: 10px; letter-spacing: 1.5px; color: var(--dim);
+}
+#mapsHead button { margin-left: auto; }
+#mapsBody {
+  flex: 1; overflow-y: auto; padding: 12px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.mp-row { display: flex; gap: 6px; align-items: center; }
+.mp-row input {
+  flex: 1; min-width: 0;
+  background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text); font-family: monospace; font-size: 11px;
+  padding: 5px 7px; border-radius: 3px;
+}
+.mp-row input:focus { outline: none; border-color: var(--gold-dim); }
+.mp-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 2px; border-bottom: 1px solid #1a1814;
+}
+.mp-item:last-child { border-bottom: none; }
+.mp-item-name {
+  flex: 1; font-size: 12px; color: var(--gold); cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  letter-spacing: 1px;
+}
+.mp-item-name:hover { color: #e8c860; }
+.mp-item-date { font-family: monospace; font-size: 9px; color: var(--dim); flex-shrink: 0; }
+.mp-item button { padding: 3px 9px; font-size: 10px; }
+#mpStatus { font-size: 10px; font-family: monospace; min-height: 14px; margin-top: 5px; }
 </style>
 </head>
 <body>
@@ -171,9 +216,9 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
   <div id="topbar">
     <span class="tb-title">MAP STUDIO</span>
     <button onclick="newMap()">New</button>
-    <button onclick="saveLocal(this)">Save</button>
+    <button onclick="saveLocal(this)" title="Saves the working draft in this browser (also autosaved after every edit)">Save</button>
     <span id="saveFlash">saved ✓</span>
-    <button onclick="loadLocal()">Load</button>
+    <button onclick="openMapsPanel()" title="Save/load named maps — in this browser or on the website (GitHub repo)">My Maps…</button>
     <div class="tb-sep"></div>
     <button onclick="exportJSON()">Export</button>
     <label class="btn-like">Import<input type="file" id="fileInput" accept=".json" onchange="importJSON(event)"></label>
@@ -318,6 +363,48 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
       <div id="tsFoot">
         <button onclick="tsCancel()">Cancel</button>
         <button id="tsUseBtn" onclick="tsUse()" disabled>Use Selection</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- My Maps panel -->
+  <div id="mapsOverlay">
+    <div id="mapsBox">
+      <div id="mapsHead">MY MAPS<button onclick="closeMapsPanel()">Close</button></div>
+      <div id="mapsBody">
+
+        <div>
+          <div class="sec-title">SAVE CURRENT MAP</div>
+          <div class="mp-row">
+            <input id="mpName" type="text" placeholder="map name…" maxlength="40">
+            <button onclick="mpSaveLocal()" title="Saves in this browser only">Save Here</button>
+            <button onclick="mpSaveCloud()" title="Commits the map to the GitHub repo — loadable from any device">Save to Website</button>
+          </div>
+          <div id="mpStatus"></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div>
+          <div class="sec-title">SAVED IN THIS BROWSER</div>
+          <div class="hint-text" style="margin-bottom:5px">
+            Only exists on this PC + browser. Shared with the “My Maps” list on the game page.
+          </div>
+          <div id="mpLocalList"></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div>
+          <div class="sec-title">SAVED ON THE WEBSITE</div>
+          <div class="hint-text" style="margin-bottom:5px">
+            Stored in the GitHub repo (<span style="color:var(--gold)">maps/</span> folder) —
+            load these from any PC.
+          </div>
+          <div id="mpCloudList" style="margin-bottom:8px"></div>
+          <div id="mpCloudAuth"></div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -849,14 +936,273 @@ function saveLocal(btn) {
   setTimeout(() => flash.classList.remove('show'), 1400);
 }
 
-function loadLocal() {
-  const raw = localStorage.getItem('editorMap');
-  if (!raw) { alert('No saved map found in localStorage.'); return; }
+// ── My Maps panel — named saves, per-browser and on the website ──────────────
+// "Website" saves are committed to the GitHub repo behind the site via the
+// GitHub contents API, so they can be loaded from any PC. Reading a public
+// repo needs no auth; writing needs a fine-grained token pasted once per
+// browser (kept in localStorage, never leaves this machine except to GitHub).
+const GH = { owner: 'mbuhadi', repo: 'Puzzle_Game', dir: 'maps' };
+const LIB_KEY = 'mapLibrary';   // same key as the "My Maps" list in maps.html
+
+const mapsOverlay = document.getElementById('mapsOverlay');
+
+function loadLibrary() {
+  try { return JSON.parse(localStorage.getItem(LIB_KEY)) || {}; } catch (e) { return {}; }
+}
+function saveLibrary(lib) { localStorage.setItem(LIB_KEY, JSON.stringify(lib)); }
+
+function openMapsPanel() {
+  document.getElementById('mpName').value = mapName !== 'Custom Map' ? mapName : '';
+  mpStatus('');
+  mapsOverlay.classList.add('open');
+  renderLocalList();
+  renderCloudAuth();
+  refreshCloudList();
+}
+function closeMapsPanel() { mapsOverlay.classList.remove('open'); }
+
+function mpStatus(msg, ok) {
+  const el = document.getElementById('mpStatus');
+  el.textContent = msg || '';
+  el.style.color = ok ? '#4a9a60' : '#cc7070';
+}
+
+function mkMpBtn(label, fn, danger) {
+  const b = document.createElement('button');
+  if (danger) b.className = 'danger';
+  b.textContent = label;
+  b.onclick = fn;
+  return b;
+}
+
+function mpListRow(name, dateText, onLoad, onDelete) {
+  const row = document.createElement('div');
+  row.className = 'mp-item';
+  const nm = document.createElement('span');
+  nm.className = 'mp-item-name';
+  nm.textContent = name;
+  nm.title = 'Load this map';
+  nm.onclick = onLoad;
+  const dt = document.createElement('span');
+  dt.className = 'mp-item-date';
+  dt.textContent = dateText || '';
+  row.append(nm, dt, mkMpBtn('Load', onLoad), mkMpBtn('Delete', onDelete, true));
+  return row;
+}
+
+function mpLoadData(data, label) {
+  if (!confirm(`Load "${label}"? It replaces the map currently open in the editor.`)) return;
   try {
-    fromData(JSON.parse(raw));
-    pushHistory();
-    render(); updateStatus();
-  } catch (e) { alert('Error loading: ' + e.message); }
+    fromData(data);
+    pushHistory(); render(); updateStatus();
+    closeMapsPanel();
+  } catch (e) { mpStatus('Error loading: ' + e.message); }
+}
+
+// ── Local (this browser) library ──────────────────────────────────────────────
+function renderLocalList() {
+  const lib   = loadLibrary();
+  const list  = document.getElementById('mpLocalList');
+  const names = Object.keys(lib).sort((a, b) => (lib[b].updated || 0) - (lib[a].updated || 0));
+  list.innerHTML = '';
+  if (!names.length) {
+    list.innerHTML = '<div class="hint-text">nothing saved in this browser yet</div>';
+    return;
+  }
+  for (const name of names) {
+    const dateText = lib[name].updated ? new Date(lib[name].updated).toLocaleDateString() : '';
+    list.appendChild(mpListRow(name, dateText,
+      () => mpLoadData(loadLibrary()[name]?.data, name),
+      () => mpDeleteLocal(name)));
+  }
+}
+
+function mpSaveLocal() {
+  const name = document.getElementById('mpName').value.trim();
+  if (!name) { mpStatus('Enter a map name first.'); return; }
+  const lib = loadLibrary();
+  if (lib[name] && !confirm(`"${name}" already exists in this browser. Overwrite it?`)) return;
+  mapName = name;
+  lib[name] = { updated: Date.now(), data: toData() };
+  saveLibrary(lib);
+  saveDraft(); updateStatus(); renderLocalList();
+  mpStatus(`Saved "${name}" in this browser ✓`, true);
+}
+
+function mpDeleteLocal(name) {
+  if (!confirm(`Delete "${name}" from this browser? This cannot be undone.`)) return;
+  const lib = loadLibrary();
+  delete lib[name];
+  saveLibrary(lib);
+  renderLocalList();
+}
+
+// ── Website (GitHub repo) saves ───────────────────────────────────────────────
+function ghToken() { return localStorage.getItem('ghToken') || ''; }
+function ghApi(path) {
+  return `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${path}`;
+}
+function ghHeaders() {
+  const h = { Accept: 'application/vnd.github+json' };
+  if (ghToken()) h.Authorization = 'Bearer ' + ghToken();
+  return h;
+}
+async function ghErrMsg(resp) {
+  try { return (await resp.json()).message || resp.statusText; }
+  catch (e) { return resp.statusText || ('HTTP ' + resp.status); }
+}
+function b64EncodeUtf8(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+function b64DecodeUtf8(b64) {
+  const bin = atob(b64.replace(/\s/g, ''));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function slugify(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'map';
+}
+
+function renderCloudAuth() {
+  const el = document.getElementById('mpCloudAuth');
+  if (ghToken()) {
+    el.innerHTML =
+      `<div class="mp-row">
+         <span class="hint-text" style="color:#4a9a60">GitHub token connected ✓ — saving enabled</span>
+         <button onclick="mpForgetToken()">Disconnect</button>
+       </div>`;
+  } else {
+    el.innerHTML =
+      `<div class="hint-text" style="margin-bottom:5px">
+         Loading needs no setup. To <b style="color:var(--text)">save</b> from this browser, paste a
+         GitHub token once:<br>
+         GitHub → Settings → Developer settings → Fine-grained tokens → Generate new token.<br>
+         Repository access: <b style="color:var(--text)">only ${GH.owner}/${GH.repo}</b> ·
+         Permissions: <b style="color:var(--text)">Contents — Read and write</b>.<br>
+         The token is stored in this browser only.
+       </div>
+       <div class="mp-row">
+         <input id="mpToken" type="password" placeholder="github_pat_…" autocomplete="off">
+         <button onclick="mpConnect()">Connect</button>
+       </div>`;
+  }
+}
+
+async function mpConnect() {
+  const t = document.getElementById('mpToken').value.trim();
+  if (!t) { mpStatus('Paste a token first.'); return; }
+  localStorage.setItem('ghToken', t);
+  mpStatus('Checking token…', true);
+  try {
+    const r = await fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}`, { headers: ghHeaders() });
+    if (!r.ok) throw new Error(await ghErrMsg(r));
+  } catch (e) {
+    localStorage.removeItem('ghToken');
+    mpStatus('Token rejected: ' + e.message + ' — check its repository access and permissions.');
+    return;
+  }
+  renderCloudAuth();
+  refreshCloudList();
+  mpStatus('Connected ✓ — you can now save to the website.', true);
+}
+
+function mpForgetToken() {
+  localStorage.removeItem('ghToken');
+  renderCloudAuth();
+}
+
+async function refreshCloudList() {
+  const list = document.getElementById('mpCloudList');
+  list.innerHTML = '<div class="hint-text">loading maps from the website…</div>';
+  try {
+    const r = await fetch(ghApi(GH.dir), { headers: ghHeaders(), cache: 'no-store' });
+    if (r.status === 404) {   // maps/ folder doesn't exist until the first save
+      list.innerHTML = '<div class="hint-text">no maps on the website yet</div>';
+      return;
+    }
+    if (!r.ok) throw new Error(await ghErrMsg(r));
+    const files = (await r.json()).filter(f => f.type === 'file' && f.name.endsWith('.json'));
+    list.innerHTML = files.length ? '' : '<div class="hint-text">no maps on the website yet</div>';
+    for (const f of files)
+      list.appendChild(mpListRow(f.name.replace(/\.json$/, ''), '',
+        () => mpLoadCloud(f.name),
+        () => mpDeleteCloud(f.name)));
+  } catch (e) {
+    list.innerHTML = '';
+    const err = document.createElement('div');
+    err.className = 'hint-text';
+    err.style.color = '#cc7070';
+    err.textContent = 'Couldn’t reach GitHub: ' + e.message;
+    list.appendChild(err);
+  }
+}
+
+async function mpSaveCloud() {
+  const name = document.getElementById('mpName').value.trim();
+  if (!name) { mpStatus('Enter a map name first.'); return; }
+  if (!ghToken()) {
+    mpStatus('Connect a GitHub token below first — saving writes to the repo.');
+    return;
+  }
+  const path = GH.dir + '/' + slugify(name) + '.json';
+  mpStatus('Saving to the website…', true);
+  try {
+    let sha;
+    const head = await fetch(ghApi(path), { headers: ghHeaders(), cache: 'no-store' });
+    if (head.ok) {
+      sha = (await head.json()).sha;
+      if (!confirm(`"${slugify(name)}" already exists on the website. Overwrite it?`)) {
+        mpStatus(''); return;
+      }
+    }
+    mapName = name;
+    const payload = JSON.stringify({ updated: Date.now(), data: toData() });
+    const body = { message: `Save map "${name}" from Map Studio`, content: b64EncodeUtf8(payload) };
+    if (sha) body.sha = sha;
+    const r = await fetch(ghApi(path), { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(await ghErrMsg(r));
+    saveDraft(); updateStatus();
+    mpStatus(`Saved "${name}" to the website ✓ — load it from any PC.`, true);
+    refreshCloudList();
+  } catch (e) { mpStatus('Save to website failed: ' + e.message); }
+}
+
+async function mpLoadCloud(fileName) {
+  mpStatus('Loading…', true);
+  try {
+    const r = await fetch(ghApi(GH.dir + '/' + fileName), { headers: ghHeaders(), cache: 'no-store' });
+    if (!r.ok) throw new Error(await ghErrMsg(r));
+    const meta   = await r.json();
+    const parsed = JSON.parse(b64DecodeUtf8(meta.content));
+    mpStatus('');
+    // Accept both the panel's {updated, data} wrapper and a bare exported map
+    mpLoadData(parsed.data || parsed, fileName.replace(/\.json$/, ''));
+  } catch (e) { mpStatus('Load from website failed: ' + e.message); }
+}
+
+async function mpDeleteCloud(fileName) {
+  if (!ghToken()) {
+    mpStatus('Connect a GitHub token below first — deleting writes to the repo.');
+    return;
+  }
+  if (!confirm(`Delete "${fileName}" from the website? This cannot be undone.`)) return;
+  try {
+    const head = await fetch(ghApi(GH.dir + '/' + fileName), { headers: ghHeaders(), cache: 'no-store' });
+    if (!head.ok) throw new Error(await ghErrMsg(head));
+    const sha = (await head.json()).sha;
+    const r = await fetch(ghApi(GH.dir + '/' + fileName), {
+      method: 'DELETE', headers: ghHeaders(),
+      body: JSON.stringify({ message: `Delete map ${fileName} from Map Studio`, sha }),
+    });
+    if (!r.ok) throw new Error(await ghErrMsg(r));
+    mpStatus('Deleted ✓', true);
+    refreshCloudList();
+  } catch (e) { mpStatus('Delete failed: ' + e.message); }
 }
 
 function exportJSON() {
@@ -1051,6 +1397,11 @@ canvas.addEventListener('mouseleave', () => { hoverCell = null; render(); });
 window.addEventListener('keydown', e => {
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+  if (mapsOverlay.classList.contains('open')) {
+    if (e.key === 'Escape') closeMapsPanel();
+    return;
+  }
 
   if (tsOverlay.classList.contains('open')) {
     if (e.key === 'Escape') tsCancel();
