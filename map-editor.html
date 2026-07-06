@@ -71,30 +71,22 @@ button.play { border-color: #3a6a30; color: #7acc60; font-size: 12px; }
 button.play:hover { border-color: #5a9a48; color: #aaee88; }
 
 .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
-.tile-list  { display: flex; flex-direction: column; gap: 3px; }
+
+/* Dropdowns (tile type, interactable) */
+select {
+  width: 100%; background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text); font-family: 'Cinzel', serif; font-size: 11px;
+  padding: 5px 6px; border-radius: 3px; cursor: pointer;
+}
+select:focus { outline: none; border-color: var(--gold-dim); }
+#interSelect { font-family: monospace; font-size: 11px; }
+.tile-select-row { display: flex; align-items: center; gap: 6px; }
+.tile-select-row select { flex: 1; }
 .zoom-row   { display: flex; align-items: center; gap: 5px; }
 .zoom-row button { padding: 3px 8px; font-size: 13px; line-height: 1; }
 #zoomLabel { font-size: 10px; color: var(--dim); min-width: 38px; text-align: center; }
 
-.tile-btn {
-  display: flex; align-items: center; gap: 7px;
-  background: var(--bg3); border: 1px solid var(--border);
-  border-radius: 3px; padding: 4px 7px; cursor: pointer;
-  font-size: 10px; letter-spacing: 0.5px; color: var(--text);
-  transition: border-color 0.12s; width: 100%;
-}
-.tile-btn:hover { border-color: var(--gold-dim); }
-.tile-btn.active { border-color: var(--gold); background: #231d0e; }
-.tile-swatch { width: 13px; height: 13px; border-radius: 2px; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.1); }
-.tile-key { margin-left: auto; font-size: 9px; color: var(--dim); }
-
-.pi-id-ed { font-family: monospace; font-size: 11px; color: var(--gold); flex: 1; }
-.tile-btn .dot {
-  width: 5px; height: 5px; border-radius: 50%;
-  background: #4a7c59; margin-left: auto; flex-shrink: 0; visibility: hidden;
-}
-.tile-btn.placed .dot { visibility: visible; }
-.tile-btn.placed .pi-id-ed { opacity: 0.45; }
+.tile-swatch { width: 15px; height: 15px; border-radius: 2px; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.1); }
 
 .hint-text { font-size: 9px; color: var(--dim); line-height: 1.7; padding-left: 1px; }
 
@@ -226,14 +218,13 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
         <div class="sec-title">TOOLS</div>
         <div class="tool-grid">
           <button id="tool-paint" class="active" onclick="setTool('paint')" title="Paint (B)">Paint</button>
-          <button id="tool-erase"               onclick="setTool('erase')" title="Erase (X)">Erase</button>
           <button id="tool-fill"                onclick="setTool('fill')"  title="Fill (G)">Fill</button>
           <button id="tool-rect"                onclick="setTool('rect')"  title="Rectangle (R)">Rect</button>
-          <button id="tool-object"              onclick="setTool('object')" title="Place Object (O)">Object</button>
           <button id="tool-spawn"               onclick="setTool('spawn')" title="Set Spawn Point (S)">Set Spawn</button>
         </div>
         <div class="hint-text" style="margin-top:6px">
-          Right-click → Erase<br>
+          Right-click → erase tile<br>
+          &nbsp;&nbsp;(or remove object)<br>
           Space + Drag → Pan<br>
           Scroll → Zoom
         </div>
@@ -244,7 +235,10 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
       <!-- Tiles -->
       <div>
         <div class="sec-title">TILE TYPE</div>
-        <div class="tile-list" id="tileList"></div>
+        <div class="tile-select-row">
+          <span id="tileSwatch" class="tile-swatch"></span>
+          <select id="tileSelect" onchange="selectTile(+this.value); this.blur()"></select>
+        </div>
       </div>
 
       <div class="divider"></div>
@@ -277,7 +271,7 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
         <div class="hint-text" style="margin-bottom:5px">
           Optional — attaches to the<br>next object you place
         </div>
-        <div class="tile-list" id="interList"></div>
+        <select id="interSelect" onchange="selectInter(this.value || null); this.blur()"></select>
       </div>
 
       <div class="divider"></div>
@@ -312,10 +306,8 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
         <div class="sec-title">SHORTCUTS</div>
         <div class="hint-text">
           B — Paint<br>
-          X — Erase<br>
           G — Fill<br>
           R — Rect<br>
-          O — Object<br>
           T — Tileset<br>
           S — Spawn<br>
           0–4 — Tile type<br>
@@ -806,14 +798,12 @@ function setTool(t) {
 
 function selectTile(val) {
   selTile = val;
-  document.querySelectorAll('.tile-btn').forEach(b => b.classList.remove('active'));
-  const btn = document.getElementById('tile-' + val);
-  if (btn) btn.classList.add('active');
+  document.getElementById('tileSelect').value = val;
+  document.getElementById('tileSwatch').style.background = TILE_COLORS[val];
 }
 
 function updateCursor() {
-  const map = { paint:'crosshair', erase:'cell', fill:'copy', rect:'crosshair', spawn:'pointer',
-                object:'copy' };
+  const map = { paint:'crosshair', fill:'copy', rect:'crosshair', spawn:'pointer', object:'copy' };
   canvas.style.cursor = spaceHeld ? (isPanning ? 'grabbing' : 'grab') : (map[tool] || 'crosshair');
 }
 
@@ -1244,7 +1234,15 @@ canvas.addEventListener('mousedown', e => {
     painting   = true; return;
   }
 
-  // Paint / erase brush
+  // Paint brush — right-click removes the object on top first, then erases tiles
+  if (erasing && inBounds(col, row)) {
+    const oi = objAt(col, row);
+    if (oi !== -1) {
+      objects.splice(oi, 1);
+      updateInterList(); pushHistory(); render();
+      return;
+    }
+  }
   painting   = true;
   paintErase = erasing;
   strokeMade = false;
@@ -1329,7 +1327,7 @@ canvas.addEventListener('mouseleave', () => { hoverCell = null; render(); });
 // ── Keyboard ──────────────────────────────────────────────────────────────────
 window.addEventListener('keydown', e => {
   const tag = document.activeElement?.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
   // An open overlay dialog captures the keyboard; Escape closes it
   const openOverlay = document.querySelector('.overlay.open');
@@ -1349,7 +1347,7 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  const toolMap = { b:'paint', x:'erase', g:'fill', r:'rect', s:'spawn', o:'object' };
+  const toolMap = { b:'paint', g:'fill', r:'rect', s:'spawn' };
   if (toolMap[e.key.toLowerCase()]) { setTool(toolMap[e.key.toLowerCase()]); return; }
 
   if (e.key.toLowerCase() === 't') { openTileset(); return; }
@@ -1363,18 +1361,14 @@ window.addEventListener('keyup', e => {
 
 // ── Tile palette builder ──────────────────────────────────────────────────────
 function buildPalette() {
-  const list = document.getElementById('tileList');
-  Object.entries(T).forEach(([name, val]) => {
-    const btn = document.createElement('div');
-    btn.className = 'tile-btn' + (val === selTile ? ' active' : '');
-    btn.id = 'tile-' + val;
-    btn.onclick = () => selectTile(val);
-    btn.innerHTML =
-      `<span class="tile-swatch" style="background:${TILE_COLORS[val]}"></span>` +
-      `<span>${TILE_NAMES[val]}</span>` +
-      `<span class="tile-key">${val}</span>`;
-    list.appendChild(btn);
+  const sel = document.getElementById('tileSelect');
+  Object.values(T).forEach(val => {
+    const opt = document.createElement('option');
+    opt.value = val;
+    opt.textContent = `${TILE_NAMES[val]}  (key ${val})`;
+    sel.appendChild(opt);
   });
+  selectTile(selTile);   // sync the dropdown and swatch to the initial choice
 }
 
 // ── Tileset picker ────────────────────────────────────────────────────────────
@@ -1444,6 +1438,7 @@ window.addEventListener('mouseup', () => { tsStart = null; });
 function clearSpriteBrush() {
   selSprite = null;
   updateBrushPreview();
+  setTool('paint');   // the Object tool has no button — dropping the brush leaves it
   render();
 }
 
@@ -1480,45 +1475,30 @@ function setObjSolid(v) {
   document.getElementById('solid-no').classList.toggle('active', !v);
 }
 
-// ── Interactable attachment list ──────────────────────────────────────────────
-function buildInterPalette() {
-  const list = document.getElementById('interList');
-  const none = document.createElement('div');
-  none.className = 'tile-btn active';
-  none.id = 'inter-none';
-  none.onclick = () => selectInter(null);
-  none.innerHTML = `<span class="pi-id-ed" style="color:var(--dim)">none</span>`;
-  list.appendChild(none);
-  INTERACTABLE_IDS.forEach(({ id }) => {
-    const btn = document.createElement('div');
-    btn.className = 'tile-btn';
-    btn.id = 'inter-' + id;
-    btn.onclick = () => selectInter(id);
-    btn.innerHTML = `<span class="pi-id-ed">${id}</span><span class="dot"></span>`;
-    list.appendChild(btn);
-  });
-}
-
+// ── Interactable attachment dropdown ──────────────────────────────────────────
 function selectInter(id) {
   selInter = id;
   updateInterList();
   if (id) setTool('object');   // attaching implies placing an object next
 }
 
+// Rebuilds the dropdown options so placed ids are marked, and shows the
+// current selection (selInter resets to none after each placement)
 function updateInterList() {
-  const noneBtn = document.getElementById('inter-none');
-  if (noneBtn) noneBtn.classList.toggle('active', selInter === null);
+  const sel = document.getElementById('interSelect');
+  sel.innerHTML = '<option value="">none</option>';
   INTERACTABLE_IDS.forEach(({ id }) => {
-    const btn = document.getElementById('inter-' + id);
-    if (!btn) return;
-    btn.classList.toggle('placed', objects.some(o => o.inter === id));
-    btn.classList.toggle('active', id === selInter);
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = id + (objects.some(o => o.inter === id) ? ' ● placed' : '');
+    sel.appendChild(opt);
   });
+  sel.value = selInter || '';
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 buildPalette();
-buildInterPalette();
+updateInterList();
 
 // Auto-load the working draft so Play Map → Back to Editor keeps your work
 try {
