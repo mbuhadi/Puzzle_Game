@@ -191,7 +191,6 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
   letter-spacing: 1px;
 }
 .mp-item-name:hover { color: #e8c860; }
-.mp-item-date { font-family: monospace; font-size: 9px; color: var(--dim); flex-shrink: 0; }
 .mp-item button { padding: 3px 9px; font-size: 10px; }
 #mpStatus { font-size: 10px; font-family: monospace; min-height: 14px; margin-top: 5px; }
 </style>
@@ -364,20 +363,9 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
           <div class="sec-title">SAVE CURRENT MAP</div>
           <div class="mp-row">
             <input id="mpName" type="text" placeholder="map name…" maxlength="40">
-            <button onclick="mpSaveLocal()" title="Saves in this browser only">Save Here</button>
             <button onclick="mpSaveCloud()" title="Commits the map to the GitHub repo — loadable from any device">Save to Website</button>
           </div>
           <div id="mpStatus"></div>
-        </div>
-
-        <div class="divider"></div>
-
-        <div>
-          <div class="sec-title">SAVED IN THIS BROWSER</div>
-          <div class="hint-text" style="margin-bottom:5px">
-            Only exists on this PC + browser. Shared with the “My Maps” list on the game page.
-          </div>
-          <div id="mpLocalList"></div>
         </div>
 
         <div class="divider"></div>
@@ -923,26 +911,19 @@ function saveLocal(btn) {
   setTimeout(() => flash.classList.remove('show'), 1400);
 }
 
-// ── My Maps panel — named saves, per-browser and on the website ──────────────
-// "Website" saves are committed to the GitHub repo behind the site via the
-// GitHub contents API, so they can be loaded from any PC. Reading a public
-// repo needs no auth; writing needs a fine-grained token pasted once per
+// ── My Maps panel — named saves stored on the website ────────────────────────
+// Maps are committed to the GitHub repo behind the site via the GitHub
+// contents API, so they can be loaded from any PC. Reading a public repo
+// needs no auth; writing needs a fine-grained token pasted once per
 // browser (kept in localStorage, never leaves this machine except to GitHub).
 const GH = { owner: 'mbuhadi', repo: 'Puzzle_Game', dir: 'maps' };
-const LIB_KEY = 'mapLibrary';   // same key as the "My Maps" list in maps.html
 
 const mapsOverlay = document.getElementById('mapsOverlay');
-
-function loadLibrary() {
-  try { return JSON.parse(localStorage.getItem(LIB_KEY)) || {}; } catch (e) { return {}; }
-}
-function saveLibrary(lib) { localStorage.setItem(LIB_KEY, JSON.stringify(lib)); }
 
 function openMapsPanel() {
   document.getElementById('mpName').value = mapName !== 'Custom Map' ? mapName : '';
   mpStatus('');
   mapsOverlay.classList.add('open');
-  renderLocalList();
   renderCloudAuth();
   refreshCloudList();
 }
@@ -962,7 +943,7 @@ function mkMpBtn(label, fn, danger) {
   return b;
 }
 
-function mpListRow(name, dateText, onLoad, onDelete) {
+function mpListRow(name, onLoad, onDelete) {
   const row = document.createElement('div');
   row.className = 'mp-item';
   const nm = document.createElement('span');
@@ -970,10 +951,7 @@ function mpListRow(name, dateText, onLoad, onDelete) {
   nm.textContent = name;
   nm.title = 'Load this map';
   nm.onclick = onLoad;
-  const dt = document.createElement('span');
-  dt.className = 'mp-item-date';
-  dt.textContent = dateText || '';
-  row.append(nm, dt, mkMpBtn('Load', onLoad), mkMpBtn('Delete', onDelete, true));
+  row.append(nm, mkMpBtn('Load', onLoad), mkMpBtn('Delete', onDelete, true));
   return row;
 }
 
@@ -984,44 +962,6 @@ function mpLoadData(data, label) {
     pushHistory(); render(); updateStatus();
     closeMapsPanel();
   } catch (e) { mpStatus('Error loading: ' + e.message); }
-}
-
-// ── Local (this browser) library ──────────────────────────────────────────────
-function renderLocalList() {
-  const lib   = loadLibrary();
-  const list  = document.getElementById('mpLocalList');
-  const names = Object.keys(lib).sort((a, b) => (lib[b].updated || 0) - (lib[a].updated || 0));
-  list.innerHTML = '';
-  if (!names.length) {
-    list.innerHTML = '<div class="hint-text">nothing saved in this browser yet</div>';
-    return;
-  }
-  for (const name of names) {
-    const { updated, data } = lib[name];
-    list.appendChild(mpListRow(name, updated ? new Date(updated).toLocaleDateString() : '',
-      () => mpLoadData(data, name),
-      () => mpDeleteLocal(name)));
-  }
-}
-
-function mpSaveLocal() {
-  const name = document.getElementById('mpName').value.trim();
-  if (!name) { mpStatus('Enter a map name first.'); return; }
-  const lib = loadLibrary();
-  if (lib[name] && !confirm(`"${name}" already exists in this browser. Overwrite it?`)) return;
-  mapName = name;
-  lib[name] = { updated: Date.now(), data: toData() };
-  saveLibrary(lib);
-  saveDraft(); updateStatus(); renderLocalList();
-  mpStatus(`Saved "${name}" in this browser ✓`, true);
-}
-
-function mpDeleteLocal(name) {
-  if (!confirm(`Delete "${name}" from this browser? This cannot be undone.`)) return;
-  const lib = loadLibrary();
-  delete lib[name];
-  saveLibrary(lib);
-  renderLocalList();
 }
 
 // ── Website (GitHub repo) saves ───────────────────────────────────────────────
@@ -1121,7 +1061,7 @@ async function refreshCloudList() {
     const files = (await r.json()).filter(f => f.type === 'file' && f.name.endsWith('.json'));
     list.innerHTML = files.length ? '' : '<div class="hint-text">no maps on the website yet</div>';
     for (const f of files)
-      list.appendChild(mpListRow(f.name.replace(/\.json$/, ''), '',
+      list.appendChild(mpListRow(f.name.replace(/\.json$/, ''),
         () => mpLoadCloud(f.name),
         () => mpDeleteCloud(f.name)));
   } catch (e) {
