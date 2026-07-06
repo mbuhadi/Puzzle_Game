@@ -975,7 +975,7 @@ function mpListRow(name, onLoad, onDelete) {
   nm.textContent = name;
   nm.title = 'Load this map';
   nm.onclick = onLoad;
-  row.append(nm, mkMpBtn('Load', onLoad), mkMpBtn('Delete', onDelete, true));
+  row.append(mkMpBtn('Delete', onDelete, true), nm, mkMpBtn('Load', onLoad));
   return row;
 }
 
