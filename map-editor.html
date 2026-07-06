@@ -72,7 +72,7 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
 
 .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 
-/* Dropdowns (tile type, interactable) */
+/* Dropdowns (interactable uses a native select) */
 select {
   width: 100%; background: var(--bg3); border: 1px solid var(--border);
   color: var(--text); font-family: 'Cinzel', serif; font-size: 11px;
@@ -80,8 +80,27 @@ select {
 }
 select:focus { outline: none; border-color: var(--gold-dim); }
 #interSelect { font-family: monospace; font-size: 11px; }
-.tile-select-row { display: flex; align-items: center; gap: 6px; }
-.tile-select-row select { flex: 1; }
+
+/* Custom tile-type dropdown — options show the tile colours */
+.dd { position: relative; }
+.dd-btn {
+  width: 100%; display: flex; align-items: center; gap: 7px;
+  padding: 5px 7px; text-align: left;
+}
+.dd-arrow { margin-left: auto; font-size: 8px; color: var(--dim); }
+.dd-list {
+  position: absolute; top: calc(100% + 2px); left: 0; right: 0; z-index: 50;
+  background: var(--bg2); border: 1px solid var(--gold-dim); border-radius: 3px;
+  display: none; overflow: hidden;
+}
+.dd.open .dd-list { display: block; }
+.dd-item {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 7px; cursor: pointer; font-size: 11px; letter-spacing: 0.5px;
+}
+.dd-item:hover { background: #231d0e; }
+.dd-item.active { color: var(--gold); }
+.dd-key { margin-left: auto; font-size: 9px; color: var(--dim); }
 .zoom-row   { display: flex; align-items: center; gap: 5px; }
 .zoom-row button { padding: 3px 8px; font-size: 13px; line-height: 1; }
 #zoomLabel { font-size: 10px; color: var(--dim); min-width: 38px; text-align: center; }
@@ -235,9 +254,13 @@ select:focus { outline: none; border-color: var(--gold-dim); }
       <!-- Tiles -->
       <div>
         <div class="sec-title">TILE TYPE</div>
-        <div class="tile-select-row">
-          <span id="tileSwatch" class="tile-swatch"></span>
-          <select id="tileSelect" onchange="selectTile(+this.value); this.blur()"></select>
+        <div class="dd" id="tileDD">
+          <button class="dd-btn" onclick="toggleTileDD()">
+            <span id="tileSwatch" class="tile-swatch"></span>
+            <span id="tileDDLabel"></span>
+            <span class="dd-arrow">▾</span>
+          </button>
+          <div class="dd-list" id="tileDDList"></div>
         </div>
       </div>
 
@@ -798,9 +821,20 @@ function setTool(t) {
 
 function selectTile(val) {
   selTile = val;
-  document.getElementById('tileSelect').value = val;
   document.getElementById('tileSwatch').style.background = TILE_COLORS[val];
+  document.getElementById('tileDDLabel').textContent = TILE_NAMES[val];
+  document.querySelectorAll('#tileDDList .dd-item').forEach((el, i) =>
+    el.classList.toggle('active', i === val));
 }
+
+function toggleTileDD() { document.getElementById('tileDD').classList.toggle('open'); }
+function closeTileDD()  { document.getElementById('tileDD').classList.remove('open'); }
+
+// Clicking anywhere outside the dropdown closes it
+document.addEventListener('mousedown', e => {
+  const dd = document.getElementById('tileDD');
+  if (dd.classList.contains('open') && !dd.contains(e.target)) closeTileDD();
+});
 
 function updateCursor() {
   const map = { paint:'crosshair', fill:'copy', rect:'crosshair', spawn:'pointer', object:'copy' };
@@ -1336,6 +1370,12 @@ window.addEventListener('keydown', e => {
     return;
   }
 
+  // Any key closes an open tile dropdown; Escape does only that
+  if (document.getElementById('tileDD').classList.contains('open')) {
+    closeTileDD();
+    if (e.key === 'Escape') return;
+  }
+
   if (e.key === 'Escape' && selSprite) { clearSpriteBrush(); return; }
 
   if (e.key === ' ') { spaceHeld = true; updateCursor(); e.preventDefault(); return; }
@@ -1361,14 +1401,18 @@ window.addEventListener('keyup', e => {
 
 // ── Tile palette builder ──────────────────────────────────────────────────────
 function buildPalette() {
-  const sel = document.getElementById('tileSelect');
+  const list = document.getElementById('tileDDList');
   Object.values(T).forEach(val => {
-    const opt = document.createElement('option');
-    opt.value = val;
-    opt.textContent = `${TILE_NAMES[val]}  (key ${val})`;
-    sel.appendChild(opt);
+    const item = document.createElement('div');
+    item.className = 'dd-item';
+    item.onclick = () => { selectTile(val); closeTileDD(); };
+    item.innerHTML =
+      `<span class="tile-swatch" style="background:${TILE_COLORS[val]}"></span>` +
+      `<span>${TILE_NAMES[val]}</span>` +
+      `<span class="dd-key">${val}</span>`;
+    list.appendChild(item);
   });
-  selectTile(selTile);   // sync the dropdown and swatch to the initial choice
+  selectTile(selTile);   // sync the closed button to the initial choice
 }
 
 // ── Tileset picker ────────────────────────────────────────────────────────────
