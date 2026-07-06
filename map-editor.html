@@ -113,23 +113,25 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
 
 #fileInput { display: none; }
 
-/* ── Tileset picker overlay ─────────────────────────────────────────────── */
-#tsOverlay {
+/* ── Overlay dialogs (shared by the tileset picker and My Maps) ─────────── */
+.overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.82);
   z-index: 500; display: none; align-items: center; justify-content: center;
 }
-#tsOverlay.open { display: flex; }
-#tsBox {
-  display: flex; flex-direction: column;
-  width: 600px; max-width: 94vw; height: 84vh;
+.overlay.open { display: flex; }
+.overlay-box {
+  display: flex; flex-direction: column; max-width: 94vw;
   background: var(--bg2); border: 1px solid var(--gold-dim);
   border-radius: 6px; overflow: hidden;
 }
-#tsHead {
+.overlay-head {
   flex-shrink: 0; display: flex; align-items: center; gap: 10px;
   padding: 8px 12px; border-bottom: 1px solid var(--border);
   font-size: 10px; letter-spacing: 1.5px; color: var(--dim);
 }
+
+/* ── Tileset picker ─────────────────────────────────────────────────────── */
+#tsBox { width: 600px; height: 84vh; }
 #tsSel { font-family: monospace; color: var(--gold); margin-left: auto; }
 #tsScroll {
   flex: 1; overflow: auto; position: relative;
@@ -164,22 +166,7 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
 #saveFlash.show { opacity: 1; }
 
 /* ── My Maps panel ──────────────────────────────────────────────────────── */
-#mapsOverlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.82);
-  z-index: 500; display: none; align-items: center; justify-content: center;
-}
-#mapsOverlay.open { display: flex; }
-#mapsBox {
-  display: flex; flex-direction: column;
-  width: 500px; max-width: 94vw; max-height: 86vh;
-  background: var(--bg2); border: 1px solid var(--gold-dim);
-  border-radius: 6px; overflow: hidden;
-}
-#mapsHead {
-  flex-shrink: 0; display: flex; align-items: center;
-  padding: 8px 12px; border-bottom: 1px solid var(--border);
-  font-size: 10px; letter-spacing: 1.5px; color: var(--dim);
-}
+#mapsBox { width: 500px; max-height: 86vh; }
 #mapsHead button { margin-left: auto; }
 #mapsBody {
   flex: 1; overflow-y: auto; padding: 12px;
@@ -348,9 +335,9 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
   </div><!-- /main -->
 
   <!-- Tileset picker -->
-  <div id="tsOverlay">
-    <div id="tsBox">
-      <div id="tsHead">
+  <div id="tsOverlay" class="overlay">
+    <div id="tsBox" class="overlay-box">
+      <div id="tsHead" class="overlay-head">
         <button class="ts-tab active" data-sheet="interiors" onclick="tsSelectSheet('interiors')">Modern Interiors</button>
         <button class="ts-tab" data-sheet="retro" onclick="tsSelectSheet('retro')">Retro Interior</button>
         <span>— click &amp; drag to select</span>
@@ -368,9 +355,9 @@ button.play:hover { border-color: #5a9a48; color: #aaee88; }
   </div>
 
   <!-- My Maps panel -->
-  <div id="mapsOverlay">
-    <div id="mapsBox">
-      <div id="mapsHead">MY MAPS<button onclick="closeMapsPanel()">Close</button></div>
+  <div id="mapsOverlay" class="overlay">
+    <div id="mapsBox" class="overlay-box">
+      <div id="mapsHead" class="overlay-head">MY MAPS<button onclick="closeMapsPanel()">Close</button></div>
       <div id="mapsBody">
 
         <div>
@@ -1010,9 +997,9 @@ function renderLocalList() {
     return;
   }
   for (const name of names) {
-    const dateText = lib[name].updated ? new Date(lib[name].updated).toLocaleDateString() : '';
-    list.appendChild(mpListRow(name, dateText,
-      () => mpLoadData(loadLibrary()[name]?.data, name),
+    const { updated, data } = lib[name];
+    list.appendChild(mpListRow(name, updated ? new Date(updated).toLocaleDateString() : '',
+      () => mpLoadData(data, name),
       () => mpDeleteLocal(name)));
   }
 }
@@ -1051,18 +1038,13 @@ async function ghErrMsg(resp) {
   try { return (await resp.json()).message || resp.statusText; }
   catch (e) { return resp.statusText || ('HTTP ' + resp.status); }
 }
-function b64EncodeUtf8(str) {
-  const bytes = new TextEncoder().encode(str);
-  let bin = '';
-  for (let i = 0; i < bytes.length; i += 0x8000)
-    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-  return btoa(bin);
-}
-function b64DecodeUtf8(b64) {
-  const bin = atob(b64.replace(/\s/g, ''));
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return new TextDecoder().decode(bytes);
+// UTF-8-safe base64 (the GitHub API sends and receives file content as base64)
+function b64EncodeUtf8(str) { return btoa(unescape(encodeURIComponent(str))); }
+function b64DecodeUtf8(b64) { return decodeURIComponent(escape(atob(b64.replace(/\s/g, '')))); }
+// sha of an existing repo file, or null — GitHub requires it to overwrite or delete
+async function ghSha(path) {
+  const r = await fetch(ghApi(path), { headers: ghHeaders(), cache: 'no-store' });
+  return r.ok ? (await r.json()).sha : null;
 }
 function slugify(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'map';
@@ -1152,13 +1134,9 @@ async function mpSaveCloud() {
   const path = GH.dir + '/' + slugify(name) + '.json';
   mpStatus('Saving to the website…', true);
   try {
-    let sha;
-    const head = await fetch(ghApi(path), { headers: ghHeaders(), cache: 'no-store' });
-    if (head.ok) {
-      sha = (await head.json()).sha;
-      if (!confirm(`"${slugify(name)}" already exists on the website. Overwrite it?`)) {
-        mpStatus(''); return;
-      }
+    const sha = await ghSha(path);
+    if (sha && !confirm(`"${slugify(name)}" already exists on the website. Overwrite it?`)) {
+      mpStatus(''); return;
     }
     mapName = name;
     const payload = JSON.stringify({ updated: Date.now(), data: toData() });
@@ -1175,7 +1153,8 @@ async function mpSaveCloud() {
 async function mpLoadCloud(fileName) {
   mpStatus('Loading…', true);
   try {
-    const r = await fetch(ghApi(GH.dir + '/' + fileName), { headers: ghHeaders(), cache: 'no-store' });
+    const path = GH.dir + '/' + fileName;
+    const r = await fetch(ghApi(path), { headers: ghHeaders(), cache: 'no-store' });
     if (!r.ok) throw new Error(await ghErrMsg(r));
     const meta   = await r.json();
     const parsed = JSON.parse(b64DecodeUtf8(meta.content));
@@ -1192,10 +1171,10 @@ async function mpDeleteCloud(fileName) {
   }
   if (!confirm(`Delete "${fileName}" from the website? This cannot be undone.`)) return;
   try {
-    const head = await fetch(ghApi(GH.dir + '/' + fileName), { headers: ghHeaders(), cache: 'no-store' });
-    if (!head.ok) throw new Error(await ghErrMsg(head));
-    const sha = (await head.json()).sha;
-    const r = await fetch(ghApi(GH.dir + '/' + fileName), {
+    const path = GH.dir + '/' + fileName;
+    const sha = await ghSha(path);
+    if (!sha) throw new Error('file not found on the website');
+    const r = await fetch(ghApi(path), {
       method: 'DELETE', headers: ghHeaders(),
       body: JSON.stringify({ message: `Delete map ${fileName} from Map Studio`, sha }),
     });
@@ -1398,13 +1377,10 @@ window.addEventListener('keydown', e => {
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
-  if (mapsOverlay.classList.contains('open')) {
-    if (e.key === 'Escape') closeMapsPanel();
-    return;
-  }
-
-  if (tsOverlay.classList.contains('open')) {
-    if (e.key === 'Escape') tsCancel();
+  // An open overlay dialog captures the keyboard; Escape closes it
+  const openOverlay = document.querySelector('.overlay.open');
+  if (openOverlay) {
+    if (e.key === 'Escape') openOverlay === tsOverlay ? tsCancel() : closeMapsPanel();
     return;
   }
 
