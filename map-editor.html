@@ -1075,6 +1075,13 @@ function renderCloudAuth() {
   }
 }
 
+// The usual mistake when creating a token: Repository access left at the
+// default "Public repositories (read-only)", or Contents permission not set
+// to "Read and write". Both produce a token that can read but not write.
+const TOKEN_FIX_HINT =
+  `create a new token with Repository access "Only select repositories" → ` +
+  `${GH.repo}, and Permissions → Contents → "Read and write".`;
+
 async function mpConnect() {
   const t = document.getElementById('mpToken').value.trim();
   if (!t) { mpStatus('Paste a token first.'); return; }
@@ -1083,9 +1090,12 @@ async function mpConnect() {
   try {
     const r = await fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}`, { headers: ghHeaders() });
     if (!r.ok) throw new Error(await ghErrMsg(r));
+    // permissions reflects what this token may do; push means it can write
+    if (!(await r.json()).permissions?.push)
+      throw new Error(`the token can read but not write the repo — ` + TOKEN_FIX_HINT);
   } catch (e) {
     localStorage.removeItem('ghToken');
-    mpStatus('Token rejected: ' + e.message + ' — check its repository access and permissions.');
+    mpStatus('Token rejected: ' + e.message);
     return;
   }
   renderCloudAuth();
@@ -1147,7 +1157,11 @@ async function mpSaveCloud() {
     saveDraft(); updateStatus();
     mpStatus(`Saved "${name}" to the website ✓ — load it from any PC.`, true);
     refreshCloudList();
-  } catch (e) { mpStatus('Save to website failed: ' + e.message); }
+  } catch (e) {
+    mpStatus('Save to website failed: ' + (/not accessible/i.test(e.message)
+      ? 'the token can\'t write to the repo. Disconnect below, then ' + TOKEN_FIX_HINT
+      : e.message));
+  }
 }
 
 async function mpLoadCloud(fileName) {
