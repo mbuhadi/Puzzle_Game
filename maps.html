@@ -211,10 +211,8 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .lib-name:hover { color: #e8c860; }
-  .lib-date { font-family: monospace; font-size: 9px; color: #4a4540; flex-shrink: 0; }
   .lib-btn { padding: 3px 10px; font-size: 10px; flex-shrink: 0; }
-  .lib-danger { color: #9a5a50; border-color: #3a2420; }
-  .lib-danger:hover { border-color: #9a5a50; background: #1a1210; }
+  .lib-msg { font-family: monospace; font-size: 10px; color: #4a4540; padding: 6px 4px; }
 </style>
 </head>
 <body>
@@ -229,7 +227,6 @@
   </div>
   <button class="bar-btn" id="btnRandomize">Randomize</button>
   <button class="bar-btn" id="btnSave">Save Placements</button>
-  <button class="bar-btn" id="btnSaveLib" title="Save this map with a name so you can replay or edit it later">Save to My Maps</button>
   <span id="saveConfirm">saved ✓</span>
 </div>
 
@@ -258,10 +255,10 @@
 </div>
 
 <div class="maps-lib">
-  <div class="panel-title">MY MAPS (saved in this browser — use Map Studio → My Maps to save on the website)</div>
+  <div class="panel-title">MY MAPS — saved on the website (maps/ folder in the repo)</div>
   <div id="libList"></div>
   <div class="panel-foot" id="libEmpty" style="display:none">
-    no saved maps yet — play a map and hit “Save to My Maps”
+    no maps on the website yet — create one in Map Studio and hit “Save to Website”
   </div>
 </div>
 
@@ -1200,92 +1197,81 @@ function loadProcedural(seed) {
   updatePanel();
 }
 
-// ── My Maps library (localStorage) ────────────────────────────────────────────
-const LIB_KEY = 'mapLibrary';
-function loadLibrary() {
-  try { return JSON.parse(localStorage.getItem(LIB_KEY)) || {}; } catch (e) { return {}; }
-}
-function saveLibrary(lib) { localStorage.setItem(LIB_KEY, JSON.stringify(lib)); }
+// ── My Maps — read from the website's maps/ folder in the GitHub repo ─────────
+// Maps are saved there by Map Studio ("Save to Website"). Reading a public
+// repo through the GitHub API needs no login; saving/deleting lives in the
+// editor, which holds the token.
+const GH = { owner: 'mbuhadi', repo: 'Puzzle_Game', dir: 'maps' };
 
-function renderLibrary() {
-  const lib   = loadLibrary();
+function ghApi(path) {
+  return `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${path}`;
+}
+// UTF-8-safe base64 decode (the GitHub API returns file content as base64)
+function b64DecodeUtf8(b64) { return decodeURIComponent(escape(atob(b64.replace(/\s/g, '')))); }
+
+async function fetchCloudMap(fileName) {
+  const r = await fetch(ghApi(GH.dir + '/' + fileName),
+    { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store' });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const parsed = JSON.parse(b64DecodeUtf8((await r.json()).content));
+  return parsed.data || parsed;   // Map Studio wraps the map in {updated, data}
+}
+
+async function renderLibrary() {
   const list  = document.getElementById('libList');
-  const names = Object.keys(lib).sort((a, b) => (lib[b].updated || 0) - (lib[a].updated || 0));
+  const empty = document.getElementById('libEmpty');
+  empty.style.display = 'none';
+  list.innerHTML = '<div class="lib-msg">loading maps from the website…</div>';
+  let files = [];
+  try {
+    const r = await fetch(ghApi(GH.dir),
+      { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store' });
+    if (r.ok) files = (await r.json()).filter(f => f.type === 'file' && f.name.endsWith('.json'));
+    else if (r.status !== 404) throw new Error('HTTP ' + r.status);
+    // 404 just means the maps/ folder doesn't exist yet — no maps saved
+  } catch (e) {
+    list.innerHTML = `<div class="lib-msg">couldn’t load maps from the website (${e.message})</div>`;
+    return;
+  }
   list.innerHTML = '';
-  document.getElementById('libEmpty').style.display = names.length ? 'none' : 'block';
-  for (const name of names) {
+  empty.style.display = files.length ? 'none' : 'block';
+  for (const f of files) {
     const row = document.createElement('div');
     row.className = 'lib-row';
     const nameEl = document.createElement('span');
     nameEl.className = 'lib-name';
-    nameEl.textContent = name;
+    nameEl.textContent = f.name.replace(/\.json$/, '');
     nameEl.title = 'Play this map';
-    nameEl.onclick = () => playLib(name);
-    const dateEl = document.createElement('span');
-    dateEl.className = 'lib-date';
-    dateEl.textContent = lib[name].updated ? new Date(lib[name].updated).toLocaleDateString() : '';
-    row.append(nameEl, dateEl);
-    const mkBtn = (label, fn, danger) => {
+    nameEl.onclick = () => playCloud(f.name);
+    row.appendChild(nameEl);
+    const mkBtn = (label, fn) => {
       const b = document.createElement('button');
-      b.className = 'bar-btn lib-btn' + (danger ? ' lib-danger' : '');
+      b.className = 'bar-btn lib-btn';
       b.textContent = label;
       b.onclick = fn;
       row.appendChild(b);
     };
-    mkBtn('Play',   () => playLib(name));
-    mkBtn('Edit',   () => editLib(name));
-    mkBtn('Delete', () => deleteLib(name), true);
+    mkBtn('Play', () => playCloud(f.name));
+    mkBtn('Edit', () => editCloud(f.name));
     list.appendChild(row);
   }
 }
 
-function playLib(name) {
-  const lib = loadLibrary();
-  if (!lib[name]) return;
-  if (!loadCustomData(lib[name].data)) alert('This saved map is corrupted or has the wrong grid size.');
+async function playCloud(fileName) {
+  try {
+    if (!loadCustomData(await fetchCloudMap(fileName)))
+      alert('This saved map is corrupted or has the wrong grid size.');
+  } catch (e) { alert('Couldn’t load the map from the website: ' + e.message); }
   canvas.focus();
 }
 
-function editLib(name) {
-  const lib = loadLibrary();
-  if (!lib[name]) return;
+async function editCloud(fileName) {
+  const name = fileName.replace(/\.json$/, '');
   if (!confirm(`Open "${name}" in Map Studio?\nThis replaces the current editor draft.`)) return;
-  localStorage.setItem('editorMap', JSON.stringify(lib[name].data));
-  location.href = 'map-editor.html';
-}
-
-function deleteLib(name) {
-  if (!confirm(`Delete map "${name}"? This cannot be undone.`)) return;
-  const lib = loadLibrary();
-  delete lib[name];
-  saveLibrary(lib);
-  renderLibrary();
-}
-
-function saveToLibrary() {
-  if (!currentMapData) return;
-  const name = prompt('Save map as:', currentMapData.name || 'My Map');
-  if (!name || !name.trim()) return;
-  const clean = name.trim();
-  const lib = loadLibrary();
-  if (lib[clean] && !confirm(`"${clean}" already exists. Overwrite it?`)) return;
-  lib[clean] = {
-    updated: Date.now(),
-    data: {
-      grid: currentMapData.grid,
-      spawn: currentMapData.spawn,
-      objects: OBJECTS.map(o => ({ ...o })),
-      interactables: PLACED.map(p => ({ id: p.id, col: p.col, row: p.row })),
-      name: clean,
-    },
-  };
-  saveLibrary(lib);
-  currentMapData.name = clean;
-  if (_customUiDone) document.querySelector('h1').textContent = clean;
-  renderLibrary();
-  const el = document.getElementById('saveConfirm');
-  el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 1800);
+  try {
+    localStorage.setItem('editorMap', JSON.stringify(await fetchCloudMap(fileName)));
+    location.href = 'map-editor.html';
+  } catch (e) { alert('Couldn’t load the map from the website: ' + e.message); }
 }
 
 // ── Startup: editor draft (?custom=1) or procedural riad ──────────────────────
@@ -1312,10 +1298,6 @@ document.getElementById('btnSave').addEventListener('click', () => {
   canvas.focus();
 });
 
-document.getElementById('btnSaveLib').addEventListener('click', () => {
-  saveToLibrary();
-  canvas.focus();
-});
 </script>
 </body>
 </html>
