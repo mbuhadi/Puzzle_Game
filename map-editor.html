@@ -213,9 +213,9 @@ select:focus { outline: none; border-color: var(--gold-dim); }
   <div id="topbar">
     <span class="tb-title">MAP STUDIO</span>
     <button onclick="newMap()">New</button>
-    <button onclick="saveLocal(this)" title="Saves the working draft in this browser (also autosaved after every edit)">Save</button>
+    <button onclick="quickSave()" title="Saves the map to the website — GitHub repo (Ctrl+S)">Save</button>
     <span id="saveFlash">saved ✓</span>
-    <button onclick="openMapsPanel()" title="Save/load named maps — in this browser or on the website (GitHub repo)">My Maps…</button>
+    <button onclick="openMapsPanel()" title="Save/load named maps on the website (GitHub repo)">My Maps…</button>
     <div class="tb-sep"></div>
     <button onclick="exportJSON()">Export</button>
     <label class="btn-like">Import<input type="file" id="fileInput" accept=".json" onchange="importJSON(event)"></label>
@@ -335,7 +335,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
           S — Spawn<br>
           0–4 — Tile type<br>
           Ctrl+Z/Y — Undo/Redo<br>
-          Ctrl+S — Save
+          Ctrl+S — Save to website
         </div>
       </div>
 
@@ -717,7 +717,6 @@ function pushHistory() {
   if (history.length > MAX_HIST) history.shift();
   histIdx = history.length - 1;
   updateHistBtns();
-  saveDraft();   // keep the working draft current so nothing is lost on navigation
 }
 
 function restoreSnapshot(s) {
@@ -731,14 +730,14 @@ function undo() {
   if (histIdx <= 0) return;
   histIdx--;
   restoreSnapshot(history[histIdx]);
-  render(); updateStatus(); updateHistBtns(); saveDraft();
+  render(); updateStatus(); updateHistBtns();
 }
 
 function redo() {
   if (histIdx >= history.length - 1) return;
   histIdx++;
   restoreSnapshot(history[histIdx]);
-  render(); updateStatus(); updateHistBtns(); saveDraft();
+  render(); updateStatus(); updateHistBtns();
 }
 
 function updateHistBtns() {
@@ -924,15 +923,40 @@ function fromData(data) {
 }
 
 // ── Save / load / export / import / play ──────────────────────────────────────
-function saveDraft() {
-  localStorage.setItem('editorMap', JSON.stringify(toData()));
+// Ctrl+S / the Save button commit the map to the website (GitHub repo) under
+// its current name, so it can be loaded from any PC. No map data is kept in
+// this browser — the only localStorage uses are the GitHub token and the
+// transient handoff to maps.html when playtesting.
+function showFlash(msg, color) {
+  const f = document.getElementById('saveFlash');
+  f.textContent = msg;
+  f.style.color = color || '#4a9a60';
+  f.classList.add('show');
+  clearTimeout(showFlash._t);
+  showFlash._t = setTimeout(() => f.classList.remove('show'), 1800);
 }
 
-function saveLocal(btn) {
-  pushHistory(); // prunes, snapshots, and persists the draft
-  const flash = document.getElementById('saveFlash');
-  flash.classList.add('show');
-  setTimeout(() => flash.classList.remove('show'), 1400);
+async function quickSave() {
+  pushHistory();
+  if (!ghToken()) {
+    openMapsPanel();
+    mpStatus('Connect a GitHub token below to enable saving to the website.');
+    return;
+  }
+  if (mapName === 'Custom Map') {   // unnamed — ask for a name via the panel once
+    openMapsPanel();
+    mpStatus('Name the map, then press "Save to Website". Ctrl+S will update it from then on.');
+    document.getElementById('mpName').focus();
+    return;
+  }
+  showFlash('saving…', '#b8a06a');
+  try {
+    await writeCloudMap(mapName);
+    showFlash('saved to website ✓');
+  } catch (e) {
+    showFlash('save failed ✗', '#cc7070');
+    alert('Save to website failed: ' + ghWriteFixMsg(e));
+  }
 }
 
 // ── My Maps panel — named saves stored on the website ────────────────────────
@@ -1098,6 +1122,25 @@ async function refreshCloudList() {
   }
 }
 
+// Core repo write shared by the panel's Save button and the Ctrl+S quick-save
+async function writeCloudMap(name) {
+  const path = GH.dir + '/' + slugify(name) + '.json';
+  const sha = await ghSha(path);   // required by GitHub to overwrite
+  mapName = name;
+  const payload = JSON.stringify({ updated: Date.now(), data: toData() });
+  const body = { message: `Save map "${name}" from Map Studio`, content: b64EncodeUtf8(payload) };
+  if (sha) body.sha = sha;
+  const r = await fetch(ghApi(path), { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(await ghErrMsg(r));
+  updateStatus();
+}
+
+function ghWriteFixMsg(e) {
+  return /not accessible/i.test(e.message)
+    ? 'the token can\'t write to the repo. Open My Maps, Disconnect, then ' + TOKEN_FIX_HINT
+    : e.message;
+}
+
 async function mpSaveCloud() {
   const name = document.getElementById('mpName').value.trim();
   if (!name) { mpStatus('Enter a map name first.'); return; }
@@ -1105,26 +1148,20 @@ async function mpSaveCloud() {
     mpStatus('Connect a GitHub token below first — saving writes to the repo.');
     return;
   }
-  const path = GH.dir + '/' + slugify(name) + '.json';
   mpStatus('Saving to the website…', true);
   try {
-    const sha = await ghSha(path);
-    if (sha && !confirm(`"${slugify(name)}" already exists on the website. Overwrite it?`)) {
+    // Only warn when the name collides with a different map — re-saving the
+    // map that is already open should not nag
+    if (slugify(name) !== slugify(mapName) &&
+        await ghSha(GH.dir + '/' + slugify(name) + '.json') &&
+        !confirm(`"${slugify(name)}" already exists on the website. Overwrite it?`)) {
       mpStatus(''); return;
     }
-    mapName = name;
-    const payload = JSON.stringify({ updated: Date.now(), data: toData() });
-    const body = { message: `Save map "${name}" from Map Studio`, content: b64EncodeUtf8(payload) };
-    if (sha) body.sha = sha;
-    const r = await fetch(ghApi(path), { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) });
-    if (!r.ok) throw new Error(await ghErrMsg(r));
-    saveDraft(); updateStatus();
-    mpStatus(`Saved "${name}" to the website ✓ — load it from any PC.`, true);
+    await writeCloudMap(name);
+    mpStatus(`Saved "${name}" to the website ✓ — Ctrl+S updates it from now on.`, true);
     refreshCloudList();
   } catch (e) {
-    mpStatus('Save to website failed: ' + (/not accessible/i.test(e.message)
-      ? 'the token can\'t write to the repo. Disconnect below, then ' + TOKEN_FIX_HINT
-      : e.message));
+    mpStatus('Save to website failed: ' + ghWriteFixMsg(e));
   }
 }
 
@@ -1197,6 +1234,7 @@ function playMap() {
     alert('The spawn point is inside a solid object — the player would be stuck. Move the spawn or make the object walkable.');
     return;
   }
+  // Transient handoff to maps.html only — real saves live in the GitHub repo
   localStorage.setItem('editorMap', JSON.stringify(toData()));
   window.open('maps.html?custom=1', '_blank');
 }
@@ -1383,7 +1421,7 @@ window.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey) {
     if (e.key === 'z') { e.shiftKey ? redo() : undo(); e.preventDefault(); return; }
     if (e.key === 'y') { redo(); e.preventDefault(); return; }
-    if (e.key === 's') { saveLocal(); e.preventDefault(); return; }
+    if (e.key === 's') { quickSave(); e.preventDefault(); return; }
     return;
   }
 
@@ -1544,21 +1582,15 @@ function updateInterList() {
 buildPalette();
 updateInterList();
 
-// Auto-load the working draft so Play Map → Back to Editor keeps your work
-try {
-  const draft = localStorage.getItem('editorMap');
-  if (draft) fromData(JSON.parse(draft));
-} catch (e) {
-  // Corrupted draft — keep a copy so the autosave below can't destroy it
-  localStorage.setItem('editorMap_backup', localStorage.getItem('editorMap') || '');
-  grid = makeGrid(); spawn = null; objects = [];
-}
-
 new ResizeObserver(resizeCanvas).observe(wrap);
 resizeCanvas();
 fitGrid();
-pushHistory(); // baseline history state (also persists the draft)
+pushHistory(); // baseline history state
 updateStatus();
+
+// No local drafts — open My Maps on startup so the latest website save is one
+// click away when continuing work from another PC
+openMapsPanel();
 </script>
 </body>
 </html>
