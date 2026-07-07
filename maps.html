@@ -310,6 +310,13 @@ const PLACED = [];
 const OBJECTS   = [];
 const OBJ_SOLID = new Set(); // cell keys (row*GRID_W+col) that block movement
 
+// ── Rooms (multi-room custom maps from Map Studio) ───────────────────────────
+// ROOMS is null for procedural riads. Doors are objects carrying a
+// `door: roomId` attachment — walking near one and pressing E teleports the
+// player to that room.
+let ROOMS = null;        // [{id, name, grid, spawn, objects, interactables}]
+let curRoomIdx = 0;
+
 const SHEET_TILE = 16;
 const SHEET_IMGS = {
   interiors: new Image(),
@@ -543,14 +550,18 @@ document.getElementById('examineLeave').addEventListener('click', closeExamine);
 
 // ── Nearby interactable detection ─────────────────────────────────────────────
 function getNearbyInteractable() {
-  // Objects with an attached interactable (footprint-aware radius)
+  // Objects with an attached interactable or door (footprint-aware radius)
   for (const o of OBJECTS) {
-    if (!o.inter) continue;
+    if (!o.inter && !o.door) continue;
     const w = o.sw || 1, h = o.sh || 1;
     const cx = o.col + w / 2, cy = o.row + h / 2;
     const dx = player.x - cx, dy = player.y - cy;
     const r = INTERACT_RADIUS + (Math.max(w, h) - 1) * 0.5;
-    if (Math.sqrt(dx*dx + dy*dy) < r) return { id: o.inter, col: cx - 0.5, row: cy - 0.5 };
+    if (Math.sqrt(dx*dx + dy*dy) < r) {
+      return o.inter
+        ? { id: o.inter, col: cx - 0.5, row: cy - 0.5, obj: o }
+        : { door: o.door, col: cx - 0.5, row: cy - 0.5, obj: o };
+    }
   }
   // Standalone markers (legacy / drag-and-drop panel)
   for (const p of PLACED) {
@@ -584,6 +595,48 @@ function update(dt) {
     if (canMoveTo(player.x + sdx, player.y)) player.x += sdx;
     if (canMoveTo(player.x, player.y + sdy)) player.y += sdy;
   }
+  updateNearby();
+}
+
+// ── Door traversal ────────────────────────────────────────────────────────────
+// Door objects (obj.door = target room id) trigger like interactables: walk
+// close, press E (or tap the bubble), and the player moves to the target room.
+// Arrival spot: next to the door object in that room that leads back here,
+// else the room's spawn, else the first walkable tile.
+function adjacentWalkable(o) {
+  const w = o.sw || 1, h = o.sh || 1;
+  const cands = [];
+  for (let c = o.col; c < o.col + w; c++) cands.push([c, o.row + h]);   // below first
+  for (let c = o.col; c < o.col + w; c++) cands.push([c, o.row - 1]);   // above
+  for (let r = o.row; r < o.row + h; r++) { cands.push([o.col - 1, r]); cands.push([o.col + w, r]); }
+  for (const [c, r] of cands)
+    if (walkable(c, r)) return { x: c + 0.5, y: r + 0.5 };
+  if (!o.solid && walkable(o.col, o.row)) return { x: o.col + 0.5, y: o.row + 0.5 };
+  return null;
+}
+
+function firstWalkable() {
+  for (let r = 0; r < GRID_H; r++)
+    for (let c = 0; c < GRID_W; c++)
+      if (walkable(c, r)) return { x: c + 0.5, y: r + 0.5 };
+  return null;
+}
+
+function doorTransit(targetRoomId) {
+  if (!ROOMS) return;
+  const ti = ROOMS.findIndex(r => r.id === targetRoomId);
+  if (ti === -1) return;
+  const fromId = ROOMS[curRoomIdx].id;
+  enterRoom(ti, 0.5, 0.5);   // load the room first; arrival needs its collision data
+  const rm = ROOMS[ti];
+  let pos = null;
+  const back = rm.objects.find(o => o.door === fromId);
+  if (back) pos = adjacentWalkable(back);
+  if (!pos && rm.spawn && walkable(+rm.spawn.col, +rm.spawn.row))
+    pos = { x: +rm.spawn.col + 0.5, y: +rm.spawn.row + 0.5 };
+  if (!pos) pos = firstWalkable();
+  if (pos) { player.x = pos.x; player.y = pos.y; }
+  for (const k in keys) keys[k] = false;
   updateNearby();
 }
 
@@ -668,6 +721,19 @@ function drawObject(o, px, py) {
       ctx.shadowColor = '#44ff88';
       ctx.shadowBlur  = 10 * pulse;
       ctx.strokeStyle = `rgba(80,220,120,${pulse.toFixed(3)})`;
+      ctx.lineWidth   = 2;
+      ctx.strokeRect(px + 1, py + 1, o.sw * S - 2, o.sh * S - 2);
+      ctx.restore();
+      drawInteractBadge(px + o.sw * S, py + o.sh * S);
+    }
+    // Attached door → cyan frame + E prompt in interact range
+    if (o.door && nearbyInteractable && nearbyInteractable.obj === o &&
+        !examineOverlay.classList.contains('open')) {
+      const pulse = 0.45 + 0.35 * Math.sin(performance.now() / 400);
+      ctx.save();
+      ctx.shadowColor = '#50b4dc';
+      ctx.shadowBlur  = 10 * pulse;
+      ctx.strokeStyle = `rgba(80,180,220,${pulse.toFixed(3)})`;
       ctx.lineWidth   = 2;
       ctx.strokeRect(px + 1, py + 1, o.sw * S - 2, o.sh * S - 2);
       ctx.restore();
@@ -831,11 +897,11 @@ function drawThoughtBubble() {
   // Bubble border
   ctx.strokeStyle = '#c8a84b'; ctx.lineWidth = 1.5;
   roundRect(bx, by, BW, BH, R); ctx.stroke();
-  // "?" label — curiosity, not instruction (the E prompt sits on the object)
+  // "?" for something examinable, "→" for a doorway to another room
   ctx.fillStyle = '#7a5a10';
   ctx.font = 'bold 15px monospace';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('?', bx + BW/2, by + BH/2 + 0.5);
+  ctx.fillText(nearbyInteractable.door ? '→' : '?', bx + BW/2, by + BH/2 + 0.5);
 }
 
 // "[E]" prompt in the same green as the interactable frame, centered on a
@@ -1042,7 +1108,10 @@ canvas.addEventListener('keydown', e => {
   keys[e.key] = true;
   e.preventDefault();
   if ((e.key === 'e' || e.key === 'E') && !examineOverlay.classList.contains('open')) {
-    if (nearbyInteractable) openExamine(nearbyInteractable);
+    if (nearbyInteractable) {
+      if (nearbyInteractable.door) doorTransit(nearbyInteractable.door);
+      else openExamine(nearbyInteractable);
+    }
   }
   if (e.key === 'Escape') closeExamine();
 });
@@ -1069,7 +1138,8 @@ canvas.addEventListener('touchstart', e => {
       const wx = cx + cam.x, wy = cy + cam.y;
       if (wx >= bubbleBounds.wx && wx <= bubbleBounds.wx + bubbleBounds.ww &&
           wy >= bubbleBounds.wy && wy <= bubbleBounds.wy + bubbleBounds.wh) {
-        openExamine(nearbyInteractable);
+        if (nearbyInteractable.door) doorTransit(nearbyInteractable.door);
+        else openExamine(nearbyInteractable);
         continue;
       }
     }
@@ -1134,50 +1204,89 @@ function enterCustomUI() {
   document.querySelector('.top-bar').appendChild(_back);
 }
 
-function loadCustomData(_data) {
-  if (!_data || !_data.grid || _data.grid.length !== GRID_H || _data.grid[0].length !== GRID_W)
-    return false;
-  const _sp = _data.spawn || { col: 5, row: 5 };
-  const _grid = _data.grid.map(row => row.map(Number));
-  const _floorCount = _grid.flat().filter(t => t === T.FLOOR || t === T.COURTYARD).length;
-  applyMap({
-    grid: _grid,
-    start: { x: +_sp.col + 0.5, y: +_sp.row + 0.5 },
-    floorCount: _floorCount,
-  }, 'custom');
-  // Objects from the editor (solid ones block movement); objects can carry an
-  // attached interactable id in `inter`
-  OBJECTS.length = 0;
-  if (Array.isArray(_data.objects)) {
-    for (const o of _data.objects) {
-      const col = +o.col, row = +o.row;
-      if (col < 0 || col >= GRID_W || row < 0 || row >= GRID_H) continue;
-      let obj;
-      if (o.sw > 0 && o.sh > 0) {
-        obj = { col, row, sx: +o.sx, sy: +o.sy, sw: +o.sw, sh: +o.sh, solid: !!o.solid };
-        if (typeof o.sheet === 'string') obj.sheet = o.sheet;
-      } else {
-        obj = { col, row, type: String(o.type), solid: !!o.solid };
-      }
-      if (typeof o.inter === 'string' && ALL.some(x => x.id === o.inter)) obj.inter = o.inter;
-      OBJECTS.push(obj);
+// Objects from the editor (solid ones block movement); objects can carry an
+// attached interactable id in `inter`
+function sanitizeObjects(raw) {
+  const out = [];
+  if (!Array.isArray(raw)) return out;
+  for (const o of raw) {
+    const col = +o.col, row = +o.row;
+    if (col < 0 || col >= GRID_W || row < 0 || row >= GRID_H) continue;
+    let obj;
+    if (o.sw > 0 && o.sh > 0) {
+      obj = { col, row, sx: +o.sx, sy: +o.sy, sw: +o.sw, sh: +o.sh, solid: !!o.solid };
+      if (typeof o.sheet === 'string') obj.sheet = o.sheet;
+    } else {
+      obj = { col, row, type: String(o.type), solid: !!o.solid };
     }
+    if (typeof o.inter === 'string' && ALL.some(x => x.id === o.inter)) obj.inter = o.inter;
+    if (typeof o.door === 'string') obj.door = o.door;
+    out.push(obj);
   }
+  return out;
+}
+
+// Swap the active room in: grid, objects, interactable markers, player
+function enterRoom(idx, px, py) {
+  const rm = ROOMS[idx];
+  curRoomIdx = idx;
+  mapGrid = rm.grid;
+  OBJECTS.length = 0;
+  for (const o of rm.objects) OBJECTS.push(o);
   rebuildObjSolid();
   // The editor is the source of truth for the map's interactables. Standalone
-  // markers (legacy maps / riads saved with dragged placements) still load;
-  // otherwise the stale per-map placement save is cleared.
+  // markers (legacy maps / riads saved with dragged placements) still load.
   PLACED.length = 0;
-  if (Array.isArray(_data.interactables)) {
-    for (const p of _data.interactables) {
+  if (Array.isArray(rm.interactables)) {
+    for (const p of rm.interactables) {
       const col = +p.col, row = +p.row;
       if (ALL.some(x => x.id === p.id) && col >= 0 && col < GRID_W && row >= 0 && row < GRID_H)
         PLACED.push({ id: p.id, col, row });
     }
   }
+  player.x = px; player.y = py;
+  const fc = rm.grid.flat().filter(t => t === T.FLOOR || t === T.COURTYARD).length;
+  document.getElementById('sqftLabel').textContent =
+    (ROOMS.length > 1 ? rm.name + ' · ' : '') +
+    `~${(fc * SQFT_PER_TILE).toLocaleString()} sq ft`;
+  updatePanel();
+}
+
+function loadCustomData(_data) {
+  if (!_data) return false;
+  // v2 = {rooms: […]} · legacy v1 = single {grid, spawn, objects}
+  const roomsIn = Array.isArray(_data.rooms) && _data.rooms.length
+    ? _data.rooms
+    : (_data.grid ? [{ grid: _data.grid, spawn: _data.spawn, objects: _data.objects,
+                       interactables: _data.interactables }] : null);
+  if (!roomsIn) return false;
+
+  const parsed = [];
+  for (const rm of roomsIn) {
+    if (!rm.grid || rm.grid.length !== GRID_H || rm.grid[0].length !== GRID_W) return false;
+    parsed.push({
+      id: typeof rm.id === 'string' ? rm.id : 'r' + (parsed.length + 1),
+      name: (typeof rm.name === 'string' && rm.name.trim()) ? rm.name.trim() : 'Room ' + (parsed.length + 1),
+      grid: rm.grid.map(row => row.map(Number)),
+      spawn: rm.spawn ? { col: +rm.spawn.col, row: +rm.spawn.row } : null,
+      objects: sanitizeObjects(rm.objects),
+      interactables: rm.interactables,
+    });
+  }
+  ROOMS = parsed;
+
+  // Start room: the saved index if it has a spawn, else the first with one
+  let si = Number.isInteger(_data.startRoom) && parsed[_data.startRoom] ? _data.startRoom : -1;
+  if (si === -1 || !parsed[si].spawn) {
+    const j = parsed.findIndex(r => r.spawn);
+    si = j === -1 ? (si === -1 ? 0 : si) : j;
+  }
+  const sp = parsed[si].spawn || { col: 5, row: 5 };
+  enterRoom(si, +sp.col + 0.5, +sp.row + 0.5);
+
   currentMapData = {
-    grid: _grid,
-    spawn: { col: +_sp.col, row: +_sp.row },
+    grid: parsed[si].grid,
+    spawn: { col: +sp.col, row: +sp.row },
     name: (typeof _data.name === 'string' && _data.name.trim()) ? _data.name.trim() : 'Custom Map',
   };
   document.querySelector('h1').textContent = currentMapData.name;
@@ -1187,6 +1296,8 @@ function loadCustomData(_data) {
 }
 
 function loadProcedural(seed) {
+  ROOMS = null; curRoomIdx = 0;
+  OBJECTS.length = 0; rebuildObjSolid();
   const result = generateRiad(seed);
   applyMap(result, seed);
   currentMapData = {

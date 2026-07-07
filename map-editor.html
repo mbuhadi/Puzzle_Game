@@ -36,6 +36,47 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 }
 .tb-sep { width: 1px; height: 24px; background: var(--border); margin: 0 6px; flex-shrink: 0; }
 
+/* ── Room tabs (browser-style, one tab per room of the map) ─────────────── */
+#roomTabs {
+  height: 32px; flex-shrink: 0;
+  background: var(--bg); border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-end; gap: 3px; padding: 4px 8px 0 8px;
+  overflow-x: auto; overflow-y: hidden;
+}
+#roomTabs::-webkit-scrollbar { height: 3px; }
+#roomTabs::-webkit-scrollbar-thumb { background: var(--border); }
+.room-tab {
+  display: flex; align-items: center; gap: 7px; flex-shrink: 0;
+  max-width: 180px; padding: 5px 8px 5px 12px;
+  background: var(--bg2); border: 1px solid var(--border); border-bottom: none;
+  border-radius: 6px 6px 0 0; cursor: pointer;
+  font-size: 11px; letter-spacing: 0.5px; color: var(--dim);
+  user-select: none;
+}
+.room-tab:hover { color: var(--text); }
+.room-tab.active {
+  background: var(--bg3); border-color: var(--gold-dim);
+  color: var(--gold);
+}
+.room-tab .tab-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.room-tab input {
+  width: 110px; background: var(--bg); border: 1px solid var(--gold-dim);
+  color: var(--gold); font-family: 'Cinzel', serif; font-size: 11px;
+  padding: 1px 4px; border-radius: 2px;
+}
+.room-tab input:focus { outline: none; }
+.tab-x {
+  font-size: 12px; line-height: 1; padding: 0 2px; border-radius: 2px;
+  color: var(--dim);
+}
+.tab-x:hover { color: #cc7070; }
+#addRoomBtn {
+  flex-shrink: 0; border-bottom: none; border-radius: 6px 6px 0 0;
+  padding: 5px 10px; font-size: 13px; line-height: 1;
+}
+
 /* ── Main area ───────────────────────────────────────────────────────────── */
 #main { flex: 1; display: flex; overflow: hidden; min-height: 0; }
 
@@ -226,6 +267,12 @@ select:focus { outline: none; border-color: var(--gold-dim); }
     <button class="play" onclick="playMap()">▶ Play Map</button>
   </div>
 
+  <!-- Room tabs -->
+  <div id="roomTabs">
+    <!-- tabs injected by renderTabs() -->
+    <button id="addRoomBtn" onclick="addRoom()" title="Add a room to this map">+</button>
+  </div>
+
   <!-- Main -->
   <div id="main">
 
@@ -294,7 +341,10 @@ select:focus { outline: none; border-color: var(--gold-dim); }
         <div class="hint-text" style="margin-bottom:5px">
           Optional — attaches to the<br>next object you place
         </div>
+        <div class="sec-title">PUZZLE</div>
         <select id="interSelect" onchange="selectInter(this.value || null); this.blur()"></select>
+        <div class="sec-title" style="margin-top:7px">DOOR</div>
+        <select id="doorSelect" onchange="selectInter(this.value || null); this.blur()"></select>
       </div>
 
       <div class="divider"></div>
@@ -429,10 +479,18 @@ const INTERACTABLE_IDS = [
 ];
 
 // ── State ─────────────────────────────────────────────────────────────────────
+// A map is a set of rooms (one editor tab each). The globals below (grid,
+// spawn, objects, history) always hold the ACTIVE room's data; they are
+// written back into rooms[curRoom] by syncRoomFromGlobals().
+let rooms = [];             // {id, name, grid, spawn, objects, _hist, _histIdx}
+let curRoom = 0;
+let roomIdSeq = 1;          // map-wide unique room ids: r1, r2, …
+
 let grid = makeGrid();
 let spawn = null;           // {col, row}
 let mapName = 'Custom Map';
-let objects = [];           // {col, row, sx, sy, sw, sh, solid, inter?}
+let objects = [];           // {col, row, sx, sy, sw, sh, solid, inter?, door?}
+                            // door: id of the room this object teleports to
 let zoom = 12;
 let panX = 0, panY = 0;
 let tool = 'paint';
@@ -509,6 +567,113 @@ function pruneDetached() {
     if (grid[objects[i].row][objects[i].col] === T.VOID) { objects.splice(i, 1); changed = true; }
   if (changed) updateInterList();
 }
+
+// ── Rooms (editor tabs) ───────────────────────────────────────────────────────
+function makeRoom(name) {
+  return { id: 'r' + (roomIdSeq++), name,
+           grid: makeGrid(), spawn: null, objects: [],
+           _hist: [], _histIdx: -1 };
+}
+
+// Write the active-room globals back into the room record. Cheap (reference
+// copies only) — called before anything that reads rooms[] or leaves the room.
+function syncRoomFromGlobals() {
+  const r = rooms[curRoom];
+  if (!r) return;
+  r.grid = grid; r.spawn = spawn; r.objects = objects;
+  r._hist = history; r._histIdx = histIdx;
+}
+
+// Point the globals at rooms[i] (no sync — callers sync first if needed)
+function bindRoom(i) {
+  curRoom = i;
+  const r = rooms[i];
+  grid = r.grid; spawn = r.spawn; objects = r.objects;
+  history = r._hist; histIdx = r._histIdx;
+}
+
+function switchRoom(i) {
+  if (i === curRoom || !rooms[i]) return;
+  syncRoomFromGlobals();
+  bindRoom(i);
+  if (histIdx < 0) pushHistory();   // baseline for a room never edited
+  renderTabs(); updateInterList(); updateHistBtns(); updateStatus(); render();
+}
+
+function addRoom() {
+  syncRoomFromGlobals();
+  const room = makeRoom('Room ' + (rooms.length + 1));
+  rooms.push(room);
+  switchRoom(rooms.length - 1);
+}
+
+function deleteRoom(i) {
+  if (rooms.length <= 1) { alert('A map needs at least one room.'); return; }
+  if (!confirm(`Delete room "${rooms[i].name}"? Its tiles, objects and doors are lost.`)) return;
+  syncRoomFromGlobals();
+  const deadId = rooms[i].id;
+  rooms.splice(i, 1);
+  // Door objects elsewhere that led to the deleted room lose their attachment
+  for (const rm of rooms)
+    for (const o of rm.objects)
+      if (o.door === deadId) delete o.door;
+  bindRoom(Math.min(curRoom > i ? curRoom - 1 : curRoom, rooms.length - 1));
+  if (histIdx < 0) pushHistory();
+  renderTabs(); updateInterList(); updateHistBtns(); updateStatus(); render();
+}
+
+function renderTabs() {
+  const bar = document.getElementById('roomTabs');
+  bar.querySelectorAll('.room-tab').forEach(el => el.remove());
+  const addBtn = document.getElementById('addRoomBtn');
+  rooms.forEach((rm, i) => {
+    const tab = document.createElement('div');
+    tab.className = 'room-tab' + (i === curRoom ? ' active' : '');
+    tab.title = 'Double-click to rename';
+    const nm = document.createElement('span');
+    nm.className = 'tab-name';
+    nm.textContent = rm.name;
+    tab.appendChild(nm);
+    if (rooms.length > 1) {
+      const x = document.createElement('span');
+      x.className = 'tab-x';
+      x.textContent = '✕';
+      x.title = 'Delete this room';
+      x.onclick = e => { e.stopPropagation(); deleteRoom(i); };
+      tab.appendChild(x);
+    }
+    tab.onclick = () => switchRoom(i);
+    tab.ondblclick = () => startTabRename(i, tab, nm);
+    bar.insertBefore(tab, addBtn);
+  });
+}
+
+function startTabRename(i, tab, nameEl) {
+  const input = document.createElement('input');
+  input.type = 'text'; input.maxLength = 24;
+  input.value = rooms[i].name;
+  tab.replaceChild(input, nameEl);
+  input.focus(); input.select();
+  let done = false;
+  const commit = () => {
+    if (done) return; done = true;
+    const v = input.value.trim();
+    if (v) rooms[i].name = v;
+    renderTabs(); updateInterList(); updateStatus(); render();
+  };
+  input.onblur = commit;
+  input.onkeydown = e => {
+    e.stopPropagation();
+    if (e.key === 'Enter') commit();
+    if (e.key === 'Escape') { done = true; renderTabs(); }
+  };
+  input.onmousedown = e => e.stopPropagation();
+}
+
+// ── Doors ─────────────────────────────────────────────────────────────────────
+// A door is an object with a `door: roomId` attachment (picked from the
+// Interactable dropdown's Doors group, exactly like puzzle attachments).
+function findRoomById(id) { return rooms.find(r => r.id === id) || null; }
 
 // ── Canvas resize ─────────────────────────────────────────────────────────────
 function resizeCanvas() {
@@ -672,7 +837,7 @@ function drawEditorObject(o) {
     ctx.fillRect(x, y, fw, fh);
   }
   drawCollisionOutline(o, x, y, fw, fh);
-  // Interactable badge — green corner marker + id label
+  // Interactable badge — green frame + id label
   if (o.inter) {
     ctx.setLineDash([]);
     ctx.strokeStyle = 'rgba(80,220,120,0.95)';
@@ -683,6 +848,20 @@ function drawEditorObject(o) {
       ctx.font = `bold ${Math.max(6, Math.floor(zoom * 0.28))}px monospace`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(o.inter, x + fw / 2, y - Math.max(4, zoom * 0.2));
+    }
+  }
+  // Door badge — cyan frame + "→ room" label (amber if the room is gone)
+  if (o.door) {
+    const target = findRoomById(o.door);
+    ctx.setLineDash([]);
+    ctx.strokeStyle = target ? 'rgba(80,180,220,0.95)' : 'rgba(220,150,50,0.95)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x + 1.5, y + 1.5, fw - 3, fh - 3);
+    if (zoom >= 12) {
+      ctx.fillStyle = target ? '#a8e0f8' : '#f8d090';
+      ctx.font = `bold ${Math.max(6, Math.floor(zoom * 0.28))}px monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(target ? '→ ' + target.name : '→ ?', x + fw / 2, y - Math.max(4, zoom * 0.2));
     }
   }
   ctx.restore();
@@ -717,12 +896,14 @@ function pushHistory() {
   if (history.length > MAX_HIST) history.shift();
   histIdx = history.length - 1;
   updateHistBtns();
+  syncRoomFromGlobals();
 }
 
 function restoreSnapshot(s) {
   grid  = s.grid.map(r => r.slice());
   spawn = s.spawn ? { ...s.spawn } : null;
   objects = (s.objects || []).map(o => ({ ...o }));
+  syncRoomFromGlobals();
   updateInterList();
 }
 
@@ -794,19 +975,21 @@ function autoWall() {
 
 // ── Map ops ───────────────────────────────────────────────────────────────────
 function clearMap() {
-  if (!confirm('Clear the entire map?')) return;
+  if (!confirm(`Clear the room "${rooms[curRoom].name}"? (Other rooms are kept.)`)) return;
   grid = makeGrid(); spawn = null;
   objects = []; updateInterList();
   pushHistory(); render(); updateStatus();
 }
 
 function newMap() {
-  if (!confirm('Start a new blank map? Unsaved changes will be lost.')) return;
-  grid = makeGrid(); spawn = null; mapName = 'Custom Map';
-  objects = []; updateInterList();
-  history = []; histIdx = -1;
+  if (!confirm('Start a new blank map? All rooms and unsaved changes will be lost.')) return;
+  mapName = 'Custom Map';
+  roomIdSeq = 1;
+  rooms = [makeRoom('Room 1')];
+  bindRoom(0);
+  updateInterList();
   fitGrid();
-  pushHistory(); render(); updateStatus(); updateHistBtns();
+  pushHistory(); renderTabs(); render(); updateStatus(); updateHistBtns();
 }
 
 // ── Tool / tile selection ─────────────────────────────────────────────────────
@@ -883,42 +1066,98 @@ function updateZoomLabel() {
 function updateStatus() {
   const sp = spawn ? `(${spawn.col}, ${spawn.row})` : 'not set';
   document.getElementById('stSpawn').textContent = 'spawn: ' + sp;
-  document.getElementById('stName').textContent  = mapName;
+  const room = rooms[curRoom];
+  document.getElementById('stName').textContent =
+    mapName + (room ? ' · ' + room.name : '');
 }
 
 // ── Serialize / deserialize ───────────────────────────────────────────────────
+// The room the player starts in when the map is played: the active tab if it
+// has a spawn, otherwise the first room that has one.
+function startRoomIndex() {
+  syncRoomFromGlobals();
+  if (rooms[curRoom].spawn) return curRoom;
+  const i = rooms.findIndex(r => r.spawn);
+  return i === -1 ? 0 : i;
+}
+
 function toData() {
+  syncRoomFromGlobals();
+  const roomIds = new Set(rooms.map(r => r.id));
   return {
-    grid: cloneGrid(),
-    spawn: spawn ? { ...spawn } : null,
-    objects: objects.map(o => ({ ...o })),
+    version: 2,
     name: mapName,
+    startRoom: startRoomIndex(),
+    rooms: rooms.map(r => ({
+      id: r.id, name: r.name,
+      grid: r.grid.map(row => row.slice()),
+      spawn: r.spawn ? { ...r.spawn } : null,
+      objects: r.objects.map(o => {
+        const c = { ...o };
+        // Drop door attachments that dangle (room deleted, then undo re-added it)
+        if (c.door && !roomIds.has(c.door)) delete c.door;
+        return c;
+      }),
+    })),
   };
 }
 
 function fromData(data) {
-  if (!data || !data.grid) throw new Error('Missing grid');
-  if (data.grid.length !== GRID_H || data.grid[0].length !== GRID_W)
-    throw new Error(`Expected ${GRID_W}×${GRID_H} grid, got ${data.grid[0]?.length}×${data.grid.length}`);
-  grid  = data.grid.map(row => row.map(Number));
-  spawn = data.spawn ? { col: +data.spawn.col, row: +data.spawn.row } : null;
+  if (!data) throw new Error('Empty map data');
+  // v2 = {rooms: […]} · legacy v1 = single {grid, spawn, objects}
+  const roomsIn = Array.isArray(data.rooms) && data.rooms.length
+    ? data.rooms
+    : (data.grid ? [{ name: 'Room 1', grid: data.grid, spawn: data.spawn, objects: data.objects }] : null);
+  if (!roomsIn) throw new Error('Missing grid');
+
+  const seenInter = new Set();  // each puzzle id lives on ONE object map-wide
+  const seenRoomIds = new Set();
+  roomIdSeq = 1;
+
+  const newRooms = roomsIn.map((rm, i) => {
+    if (!rm.grid || rm.grid.length !== GRID_H || rm.grid[0].length !== GRID_W)
+      throw new Error(`Room ${i + 1}: expected ${GRID_W}×${GRID_H} grid, got ${rm.grid?.[0]?.length}×${rm.grid?.length}`);
+    let id = (typeof rm.id === 'string' && rm.id && !seenRoomIds.has(rm.id)) ? rm.id : null;
+    if (!id) { while (seenRoomIds.has('r' + roomIdSeq)) roomIdSeq++; id = 'r' + (roomIdSeq++); }
+    seenRoomIds.add(id);
+    const room = makeRoom((typeof rm.name === 'string' && rm.name.trim()) ? rm.name.trim() : 'Room ' + (i + 1));
+    room.id = id;
+    room.grid  = rm.grid.map(row => row.map(Number));
+    room.spawn = rm.spawn ? { col: +rm.spawn.col, row: +rm.spawn.row } : null;
+    // Legacy shape objects (palm/pot/…) are no longer supported and get dropped
+    room.objects = Array.isArray(rm.objects)
+      ? rm.objects
+          .filter(o => inBounds(+o.col, +o.row) && o.sw > 0 && o.sh > 0 && o.sx >= 0 && o.sy >= 0)
+          .map(o => {
+            const obj = { col: +o.col, row: +o.row, sheet: SHEETS[o.sheet] ? o.sheet : 'interiors',
+                          sx: +o.sx, sy: +o.sy, sw: +o.sw, sh: +o.sh, solid: !!o.solid };
+            if (typeof o.inter === 'string' &&
+                INTERACTABLE_IDS.some(x => x.id === o.inter) && !seenInter.has(o.inter)) {
+              obj.inter = o.inter;
+              seenInter.add(o.inter);
+            }
+            if (typeof o.door === 'string') obj.door = o.door;
+            return obj;
+          })
+      : [];
+    return room;
+  });
+
+  // Bump the id sequence past everything loaded, so new rooms get unique ids
+  for (const rid of seenRoomIds) {
+    const m = /^r(\d+)$/.exec(rid);
+    if (m) roomIdSeq = Math.max(roomIdSeq, +m[1] + 1);
+  }
+
   mapName = (typeof data.name === 'string' && data.name.trim()) ? data.name.trim() : 'Custom Map';
-  // Legacy shape objects (palm/pot/…) are no longer supported and get dropped
-  const seenInter = new Set();
-  objects = Array.isArray(data.objects)
-    ? data.objects
-        .filter(o => inBounds(+o.col, +o.row) && o.sw > 0 && o.sh > 0 && o.sx >= 0 && o.sy >= 0)
-        .map(o => {
-          const obj = { col: +o.col, row: +o.row, sheet: SHEETS[o.sheet] ? o.sheet : 'interiors',
-                        sx: +o.sx, sy: +o.sy, sw: +o.sw, sh: +o.sh, solid: !!o.solid };
-          if (typeof o.inter === 'string' &&
-              INTERACTABLE_IDS.some(x => x.id === o.inter) && !seenInter.has(o.inter)) {
-            obj.inter = o.inter;
-            seenInter.add(o.inter);
-          }
-          return obj;
-        })
-    : [];
+  rooms = newRooms;
+  const start = Number.isInteger(data.startRoom) && rooms[data.startRoom] ? data.startRoom : 0;
+  bindRoom(start);
+  // Drop door attachments that point at rooms that didn't survive the load
+  for (const rm of rooms)
+    for (const o of rm.objects)
+      if (o.door && !seenRoomIds.has(o.door)) delete o.door;
+  renderTabs();
   updateInterList();
 }
 
@@ -1225,15 +1464,31 @@ function importJSON(e) {
 }
 
 function playMap() {
-  if (!spawn) {
-    alert('Set a spawn point first — use the "Set Spawn" tool, then click a floor tile.');
+  const si = startRoomIndex();
+  const startRoom = rooms[si];
+  if (!startRoom.spawn) {
+    alert('Set a spawn point first — use the "Set Spawn" tool, then click a floor tile in the room where the player should start.');
     return;
   }
-  const spawnBlocked = objects.some(o => o.solid && objCovers(o, spawn.col, spawn.row));
+  const sp = startRoom.spawn;
+  const spawnBlocked = startRoom.objects.some(o => o.solid && objCovers(o, sp.col, sp.row));
   if (spawnBlocked) {
     alert('The spawn point is inside a solid object — the player would be stuck. Move the spawn or make the object walkable.');
     return;
   }
+  // Doors into rooms with no walkable tile would have nowhere to drop the player
+  const deadEnds = [];
+  for (const rm of rooms)
+    for (const o of rm.objects) {
+      if (!o.door) continue;
+      const target = findRoomById(o.door);
+      if (target && !target.grid.some(row => row.some(t => t === T.FLOOR || t === T.COURTYARD)))
+        deadEnds.push(`${rm.name} → ${target.name}`);
+    }
+  if (deadEnds.length &&
+      !confirm(`These doors lead to rooms with no floor tiles yet, so they won't work in the game:\n` +
+               deadEnds.join('\n') + `\n\nPlay anyway?`))
+    return;
   // Transient handoff to maps.html only — real saves live in the GitHub repo
   localStorage.setItem('editorMap', JSON.stringify(toData()));
   window.open('maps.html?custom=1', '_blank');
@@ -1283,9 +1538,18 @@ canvas.addEventListener('mousedown', e => {
     const obj = { col, row, sheet: selSprite.sheet || 'interiors',
                   sx: selSprite.sx, sy: selSprite.sy, sw, sh, solid: objSolid };
     if (selInter) {
-      // Each interactable id lives on exactly one object — steal it if reused
-      for (const o of objects) if (o.inter === selInter) delete o.inter;
-      obj.inter = selInter;
+      if (selInter.startsWith('door:')) {
+        // Door attachment — this object teleports the player to that room
+        const rid = selInter.slice(5);
+        if (findRoomById(rid)) obj.door = rid;
+      } else {
+        // Each puzzle id lives on exactly one object map-wide — steal it
+        // if reused, even from an object in another room
+        syncRoomFromGlobals();
+        for (const rm of rooms)
+          for (const o of rm.objects) if (o.inter === selInter) delete o.inter;
+        obj.inter = selInter;
+      }
       selInter = null;   // one-shot: reset to None after attaching
     }
     // Sprites may layer (rug under a table) — just add on top
@@ -1346,6 +1610,7 @@ canvas.addEventListener('mousemove', e => {
       const o = objects[oi];
       info += ` · Sprite ${o.sw}×${o.sh} (${o.solid ? 'solid' : 'walkable'})`;
       if (o.inter) info += ' · ' + o.inter;
+      if (o.door)  info += ' · door → ' + (findRoomById(o.door)?.name || '?');
     }
     document.getElementById('stTile').textContent = info;
   }
@@ -1564,21 +1829,43 @@ function selectInter(id) {
   if (id) setTool('object');   // attaching implies placing an object next
 }
 
-// Rebuilds the dropdown options so placed ids are marked, and shows the
-// current selection (selInter resets to none after each placement)
+// Rebuilds both attachment dropdowns so placed ids are marked, and shows the
+// current selection (selInter resets to none after each placement). Puzzle ids
+// are map-unique; Doors has one entry per room — attaching "door to X" makes
+// the object teleport the player to room X. Picking from one dropdown clears
+// the other: an object carries a single attachment.
 function updateInterList() {
-  const sel = document.getElementById('interSelect');
-  sel.innerHTML = '<option value="">none</option>';
+  syncRoomFromGlobals();
+
+  const pSel = document.getElementById('interSelect');
+  pSel.innerHTML = '<option value="">none</option>';
   INTERACTABLE_IDS.forEach(({ id }) => {
     const opt = document.createElement('option');
     opt.value = id;
-    opt.textContent = id + (objects.some(o => o.inter === id) ? ' ● placed' : '');
-    sel.appendChild(opt);
+    const holder = rooms.find(rm => rm.objects.some(o => o.inter === id));
+    opt.textContent = id + (holder ? ` ● ${holder.name}` : '');
+    pSel.appendChild(opt);
   });
-  sel.value = selInter || '';
+
+  const dSel = document.getElementById('doorSelect');
+  dSel.innerHTML = '<option value="">none</option>';
+  rooms.forEach(rm => {
+    const opt = document.createElement('option');
+    opt.value = 'door:' + rm.id;
+    const placedHere = objects.some(o => o.door === rm.id);
+    opt.textContent = 'door to ' + rm.name + (placedHere ? ' ● placed' : '');
+    dSel.appendChild(opt);
+  });
+
+  const isDoor = !!selInter && selInter.startsWith('door:');
+  pSel.value = isDoor ? '' : (selInter || '');
+  dSel.value = isDoor ? selInter : '';
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+rooms = [makeRoom('Room 1')];
+bindRoom(0);
+renderTabs();
 buildPalette();
 updateInterList();
 
