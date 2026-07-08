@@ -592,6 +592,16 @@ function bindRoom(i) {
   history = r._hist; histIdx = r._histIdx;
 }
 
+// A map has a single spawn point — placing one removes any spawn in the other
+// rooms (from their undo histories too, so undo can't bring a second one back)
+function clearSpawnsInOtherRooms() {
+  rooms.forEach((r, i) => {
+    if (i === curRoom) return;
+    r.spawn = null;
+    for (const s of r._hist) s.spawn = null;
+  });
+}
+
 function switchRoom(i) {
   if (i === curRoom || !rooms[i]) return;
   syncRoomFromGlobals();
@@ -1152,6 +1162,10 @@ function fromData(data) {
   mapName = (typeof data.name === 'string' && data.name.trim()) ? data.name.trim() : 'Custom Map';
   rooms = newRooms;
   const start = Number.isInteger(data.startRoom) && rooms[data.startRoom] ? data.startRoom : 0;
+  // A map has a single spawn point — if an older file carries several, keep
+  // the start room's (or the first found) and drop the rest
+  const spawnIdx = rooms[start].spawn ? start : rooms.findIndex(r => r.spawn);
+  rooms.forEach((r, i) => { if (i !== spawnIdx) r.spawn = null; });
   bindRoom(start);
   // Drop door attachments that point at rooms that didn't survive the load
   for (const rm of rooms)
@@ -1512,6 +1526,7 @@ canvas.addEventListener('mousedown', e => {
 
   if (tool === 'spawn') {
     if (!inBounds(col, row)) return;
+    clearSpawnsInOtherRooms();
     spawn = { col, row };
     pushHistory(); updateStatus(); render(); return;
   }
