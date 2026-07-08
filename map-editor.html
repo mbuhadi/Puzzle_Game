@@ -76,6 +76,18 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   flex-shrink: 0; border-bottom: none; border-radius: 6px 6px 0 0;
   padding: 5px 10px; font-size: 13px; line-height: 1;
 }
+/* Special-instructions tab — pinned to the far right of the tab bar. Not a
+   .room-tab so renderTabs() doesn't wipe it. */
+#specialTab {
+  margin-left: auto; flex-shrink: 0;
+  display: flex; align-items: center; padding: 5px 12px;
+  background: var(--bg2); border: 1px solid var(--border); border-bottom: none;
+  border-radius: 6px 6px 0 0; cursor: pointer;
+  font-size: 11px; letter-spacing: 0.5px; color: var(--dim);
+  user-select: none;
+}
+#specialTab:hover { color: var(--text); }
+#specialTab.has-notes { color: var(--gold); border-color: var(--gold-dim); }
 
 /* ── Main area ───────────────────────────────────────────────────────────── */
 #main { flex: 1; display: flex; overflow: hidden; min-height: 0; }
@@ -182,6 +194,16 @@ select:focus { outline: none; border-color: var(--gold-dim); }
   font-size: 10px; letter-spacing: 1.5px; color: var(--dim);
 }
 
+/* ── Special instructions panel ─────────────────────────────────────────── */
+#specialBox { width: 520px; height: 60vh; }
+#specialBody { flex: 1; display: flex; flex-direction: column; padding: 10px 12px; min-height: 0; }
+#specialText {
+  flex: 1; resize: none; background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px; padding: 8px;
+  font-family: monospace; font-size: 12px; line-height: 1.5;
+}
+#specialText:focus { outline: none; border-color: var(--gold-dim); }
+
 /* ── Tileset picker ─────────────────────────────────────────────────────── */
 #tsBox { width: 600px; height: 84vh; }
 #tsSel { font-family: monospace; color: var(--gold); margin-left: auto; }
@@ -271,6 +293,10 @@ select:focus { outline: none; border-color: var(--gold-dim); }
   <div id="roomTabs">
     <!-- tabs injected by renderTabs() -->
     <button id="addRoomBtn" onclick="addRoom()" title="Add a room to this map">+</button>
+    <div id="specialTab" onclick="openSpecialPanel()"
+         title="Special instructions for the current room — custom behaviors added to the game outside the studio">
+      <span id="specialTabLabel">✦ Special</span>
+    </div>
   </div>
 
   <!-- Main -->
@@ -339,12 +365,13 @@ select:focus { outline: none; border-color: var(--gold-dim); }
       <div>
         <div class="sec-title">INTERACTABLE</div>
         <div class="hint-text" style="margin-bottom:5px">
-          Optional — attaches to the<br>next object you place
+          Optional — attaches to the<br>next object you place.<br>
+          Pick both to make a locked<br>door: it won't open until<br>its puzzle is solved
         </div>
         <div class="sec-title">PUZZLE</div>
-        <select id="interSelect" onchange="selectInter(this.value || null); this.blur()"></select>
+        <select id="interSelect" onchange="selectPuzzle(this.value || null); this.blur()"></select>
         <div class="sec-title" style="margin-top:7px">DOOR</div>
-        <select id="doorSelect" onchange="selectInter(this.value || null); this.blur()"></select>
+        <select id="doorSelect" onchange="selectDoor(this.value || null); this.blur()"></select>
       </div>
 
       <div class="divider"></div>
@@ -414,6 +441,23 @@ select:focus { outline: none; border-color: var(--gold-dim); }
       <div id="tsFoot">
         <button onclick="tsCancel()">Cancel</button>
         <button id="tsUseBtn" onclick="tsUse()" disabled>Use Selection</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Special instructions panel (per room) -->
+  <div id="specialOverlay" class="overlay">
+    <div id="specialBox" class="overlay-box">
+      <div class="overlay-head">SPECIAL INSTRUCTIONS — <span id="specialRoomName"></span>
+        <button style="margin-left:auto" onclick="closeSpecialPanel()">Close</button>
+      </div>
+      <div id="specialBody">
+        <div class="hint-text" style="margin-bottom:6px">
+          Notes for custom behaviors this room should have in the game — things the
+          studio can't build. They're saved with the map and implemented outside the studio.
+        </div>
+        <textarea id="specialText" spellcheck="false"
+                  placeholder="e.g. lights flicker when the player enters…"></textarea>
       </div>
     </div>
   </div>
@@ -497,7 +541,10 @@ let tool = 'paint';
 let selTile = T.FLOOR;
 let selSprite = null;       // {sx, sy, sw, sh} in sheet tiles — the object brush
 let objSolid = true;
-let selInter = null;        // interactable id to attach to the next placed object
+let selPuzzle = null;       // puzzle id to attach to the next placed object
+let selDoor = null;         // 'door:roomId' to attach to the next placed object
+                            // (both set = locked door: puzzle must be solved
+                            // in-game before the door works)
 let showGrid = true;
 
 // History — stores post-operation snapshots
@@ -571,7 +618,7 @@ function pruneDetached() {
 // ── Rooms (editor tabs) ───────────────────────────────────────────────────────
 function makeRoom(name) {
   return { id: 'r' + (roomIdSeq++), name,
-           grid: makeGrid(), spawn: null, objects: [],
+           grid: makeGrid(), spawn: null, objects: [], special: '',
            _hist: [], _histIdx: -1 };
 }
 
@@ -656,6 +703,36 @@ function renderTabs() {
     tab.ondblclick = () => startTabRename(i, tab, nm);
     bar.insertBefore(tab, addBtn);
   });
+  updateSpecialTab();
+}
+
+// ── Special instructions (per room) ───────────────────────────────────────────
+// Free-form notes describing custom behaviors the room should have in the
+// game — things the studio can't build. Saved with the map; implemented
+// outside the studio. Edits save live (every keystroke), so closing the
+// panel any way is safe.
+function openSpecialPanel() {
+  syncRoomFromGlobals();
+  document.getElementById('specialRoomName').textContent = rooms[curRoom].name.toUpperCase();
+  document.getElementById('specialText').value = rooms[curRoom].special || '';
+  document.getElementById('specialOverlay').classList.add('open');
+  document.getElementById('specialText').focus();
+}
+function closeSpecialPanel() {
+  document.getElementById('specialOverlay').classList.remove('open');
+  updateSpecialTab();
+}
+document.getElementById('specialText').addEventListener('input', e => {
+  rooms[curRoom].special = e.target.value;
+});
+document.getElementById('specialText').addEventListener('keydown', e => {
+  if (e.key === 'Escape') { e.stopPropagation(); closeSpecialPanel(); }
+});
+// Gold tint on the tab when the active room has instructions
+function updateSpecialTab() {
+  const has = !!(rooms[curRoom] && rooms[curRoom].special && rooms[curRoom].special.trim());
+  document.getElementById('specialTab').classList.toggle('has-notes', has);
+  document.getElementById('specialTabLabel').textContent = has ? '✦ Special ●' : '✦ Special';
 }
 
 function startTabRename(i, tab, nameEl) {
@@ -847,31 +924,32 @@ function drawEditorObject(o) {
     ctx.fillRect(x, y, fw, fh);
   }
   drawCollisionOutline(o, x, y, fw, fh);
-  // Interactable badge — green frame + id label
-  if (o.inter) {
-    ctx.setLineDash([]);
-    ctx.strokeStyle = 'rgba(80,220,120,0.95)';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(x + 1.5, y + 1.5, fw - 3, fh - 3);
-    if (zoom >= 12) {
-      ctx.fillStyle = '#88ffb8';
-      ctx.font = `bold ${Math.max(6, Math.floor(zoom * 0.28))}px monospace`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(o.inter, x + fw / 2, y - Math.max(4, zoom * 0.2));
+  // Attachment badge — green frame = puzzle, cyan = door, amber = locked door
+  // (puzzle + door on one object). Orange label marks a door whose room is gone.
+  if (o.inter || o.door) {
+    const target = o.door ? findRoomById(o.door) : null;
+    const locked = !!(o.inter && o.door);
+    let stroke, fill, label;
+    if (locked) {
+      stroke = 'rgba(230,180,70,0.95)'; fill = '#f0d080';
+      label  = `🔒 ${o.inter} → ${target ? target.name : '?'}`;
+    } else if (o.inter) {
+      stroke = 'rgba(80,220,120,0.95)'; fill = '#88ffb8';
+      label  = o.inter;
+    } else {
+      stroke = target ? 'rgba(80,180,220,0.95)' : 'rgba(220,150,50,0.95)';
+      fill   = target ? '#a8e0f8' : '#f8d090';
+      label  = target ? '→ ' + target.name : '→ ?';
     }
-  }
-  // Door badge — cyan frame + "→ room" label (amber if the room is gone)
-  if (o.door) {
-    const target = findRoomById(o.door);
     ctx.setLineDash([]);
-    ctx.strokeStyle = target ? 'rgba(80,180,220,0.95)' : 'rgba(220,150,50,0.95)';
+    ctx.strokeStyle = stroke;
     ctx.lineWidth = 1.5;
     ctx.strokeRect(x + 1.5, y + 1.5, fw - 3, fh - 3);
     if (zoom >= 12) {
-      ctx.fillStyle = target ? '#a8e0f8' : '#f8d090';
+      ctx.fillStyle = fill;
       ctx.font = `bold ${Math.max(6, Math.floor(zoom * 0.28))}px monospace`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(target ? '→ ' + target.name : '→ ?', x + fw / 2, y - Math.max(4, zoom * 0.2));
+      ctx.fillText(label, x + fw / 2, y - Math.max(4, zoom * 0.2));
     }
   }
   ctx.restore();
@@ -1102,6 +1180,7 @@ function toData() {
       id: r.id, name: r.name,
       grid: r.grid.map(row => row.slice()),
       spawn: r.spawn ? { ...r.spawn } : null,
+      special: r.special || '',
       objects: r.objects.map(o => {
         const c = { ...o };
         // Drop door attachments that dangle (room deleted, then undo re-added it)
@@ -1134,6 +1213,7 @@ function fromData(data) {
     room.id = id;
     room.grid  = rm.grid.map(row => row.map(Number));
     room.spawn = rm.spawn ? { col: +rm.spawn.col, row: +rm.spawn.row } : null;
+    room.special = typeof rm.special === 'string' ? rm.special : '';
     // Legacy shape objects (palm/pot/…) are no longer supported and get dropped
     room.objects = Array.isArray(rm.objects)
       ? rm.objects
@@ -1552,21 +1632,21 @@ canvas.addEventListener('mousedown', e => {
         if (!inBounds(c, r) || grid[r][c] === T.VOID) return;
     const obj = { col, row, sheet: selSprite.sheet || 'interiors',
                   sx: selSprite.sx, sy: selSprite.sy, sw, sh, solid: objSolid };
-    if (selInter) {
-      if (selInter.startsWith('door:')) {
-        // Door attachment — this object teleports the player to that room
-        const rid = selInter.slice(5);
-        if (findRoomById(rid)) obj.door = rid;
-      } else {
-        // Each puzzle id lives on exactly one object map-wide — steal it
-        // if reused, even from an object in another room
-        syncRoomFromGlobals();
-        for (const rm of rooms)
-          for (const o of rm.objects) if (o.inter === selInter) delete o.inter;
-        obj.inter = selInter;
-      }
-      selInter = null;   // one-shot: reset to None after attaching
+    if (selDoor) {
+      // Door attachment — this object teleports the player to that room
+      const rid = selDoor.slice(5);
+      if (findRoomById(rid)) obj.door = rid;
     }
+    if (selPuzzle) {
+      // Each puzzle id lives on exactly one object map-wide — steal it
+      // if reused, even from an object in another room. Combined with a
+      // door attachment this makes a locked door.
+      syncRoomFromGlobals();
+      for (const rm of rooms)
+        for (const o of rm.objects) if (o.inter === selPuzzle) delete o.inter;
+      obj.inter = selPuzzle;
+    }
+    selPuzzle = selDoor = null;   // one-shot: reset to None after attaching
     // Sprites may layer (rug under a table) — just add on top
     objects.push(obj);
     updateInterList(); pushHistory(); render(); return;
@@ -1684,7 +1764,11 @@ window.addEventListener('keydown', e => {
   // An open overlay dialog captures the keyboard; Escape closes it
   const openOverlay = document.querySelector('.overlay.open');
   if (openOverlay) {
-    if (e.key === 'Escape') openOverlay === tsOverlay ? tsCancel() : closeMapsPanel();
+    if (e.key === 'Escape') {
+      if (openOverlay === tsOverlay) tsCancel();
+      else if (openOverlay.id === 'specialOverlay') closeSpecialPanel();
+      else closeMapsPanel();
+    }
     return;
   }
 
@@ -1837,18 +1921,24 @@ function setObjSolid(v) {
   document.getElementById('solid-no').classList.toggle('active', !v);
 }
 
-// ── Interactable attachment dropdown ──────────────────────────────────────────
-function selectInter(id) {
-  selInter = id;
+// ── Interactable attachment dropdowns ─────────────────────────────────────────
+function selectPuzzle(id) {
+  selPuzzle = id;
   updateInterList();
   if (id) setTool('object');   // attaching implies placing an object next
 }
+function selectDoor(id) {
+  selDoor = id;
+  updateInterList();
+  if (id) setTool('object');
+}
 
 // Rebuilds both attachment dropdowns so placed ids are marked, and shows the
-// current selection (selInter resets to none after each placement). Puzzle ids
+// current selections (both reset to none after each placement). Puzzle ids
 // are map-unique; Doors has one entry per room — attaching "door to X" makes
-// the object teleport the player to room X. Picking from one dropdown clears
-// the other: an object carries a single attachment.
+// the object teleport the player to room X. Picking from BOTH dropdowns makes
+// the next object a locked door: in the game it opens its puzzle until the
+// puzzle is solved, then works as a normal door.
 function updateInterList() {
   syncRoomFromGlobals();
 
@@ -1872,9 +1962,8 @@ function updateInterList() {
     dSel.appendChild(opt);
   });
 
-  const isDoor = !!selInter && selInter.startsWith('door:');
-  pSel.value = isDoor ? '' : (selInter || '');
-  dSel.value = isDoor ? selInter : '';
+  pSel.value = selPuzzle || '';
+  dSel.value = selDoor || '';
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────

@@ -759,6 +759,14 @@ function buildCylinderLock(){
 
 /* ───────────────── Puzzle Six: Circle Sequence ───────────────── */
 const P6_CORRECT = [5, 2, 4, 3, 1, 0];
+// When a puzzle chunk is embedded in maps.html's examine iframe, tell the host
+// page it was solved — the game uses this to unlock puzzle-locked doors.
+function notifyPuzzleSolved() {
+  const chunk = new URLSearchParams(location.search).get('chunk');
+  if (chunk && window.parent !== window)
+    window.parent.postMessage({ type: 'puzzle-solved', chunk }, '*');
+}
+
 function buildPuzzleSix() {
   sceneIllustration('preview-p6', drawScenePoemWall);
   const wrap = document.getElementById('p6grid'); if (!wrap) return;
@@ -857,7 +865,7 @@ function buildPuzzleSix() {
         input.push(c.id);
         const len = input.length;
         if (len === P6_CORRECT.length) {
-          if (P6_CORRECT.every((v, i) => input[i] === v)) solved = true;
+          if (P6_CORRECT.every((v, i) => input[i] === v)) { solved = true; notifyPuzzleSolved(); }
           else { wrong = true; wrongTimer = 40; }
         }
         return;
@@ -961,7 +969,7 @@ function buildPuzzleSeven() {
           selected.push(cell.id);
           if (selected.length === 3) {
             const s = [...selected].sort((a,b)=>a-b).join();
-            if (s === [...P7_CORRECT].sort((a,b)=>a-b).join()) solved = true;
+            if (s === [...P7_CORRECT].sort((a,b)=>a-b).join()) { solved = true; notifyPuzzleSolved(); }
             else { wrong = true; wrongTimer = 40; }
           }
         }

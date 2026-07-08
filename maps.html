@@ -516,6 +516,19 @@ const keys   = {};
 const examineOverlay = document.getElementById('examineOverlay');
 const examineFrame   = document.getElementById('examineFrame');
 
+// Puzzles solved this session — chunk ids posted by puzzles_curated.html from
+// inside the examine iframe. An object carrying both `inter` and `door` is a
+// locked door: it only examines its puzzle until that puzzle is solved, then
+// it behaves like a normal door (free two-way transit).
+const SOLVED_CHUNKS = new Set();
+window.addEventListener('message', e => {
+  if (e.data && e.data.type === 'puzzle-solved' && typeof e.data.chunk === 'string')
+    SOLVED_CHUNKS.add(e.data.chunk);
+});
+function puzzleSolved(interId) {
+  return SOLVED_CHUNKS.has(String(interId).replace(/s$/, ''));
+}
+
 const INTERACT_RADIUS = 1.2;  // tiles — proximity for thought bubble
 let activeInteractable = null;
 let exitDir = { x: 0, y: -1 };
@@ -558,9 +571,10 @@ function getNearbyInteractable() {
     const dx = player.x - cx, dy = player.y - cy;
     const r = INTERACT_RADIUS + (Math.max(w, h) - 1) * 0.5;
     if (Math.sqrt(dx*dx + dy*dy) < r) {
-      return o.inter
-        ? { id: o.inter, col: cx - 0.5, row: cy - 0.5, obj: o }
-        : { door: o.door, col: cx - 0.5, row: cy - 0.5, obj: o };
+      const n = { col: cx - 0.5, row: cy - 0.5, obj: o };
+      if (o.inter) n.id = o.inter;    // both present = locked door
+      if (o.door)  n.door = o.door;
+      return n;
     }
   }
   // Standalone markers (legacy / drag-and-drop panel)
@@ -640,6 +654,13 @@ function doorTransit(targetRoomId) {
   updateNearby();
 }
 
+// E / bubble tap on whatever is nearby. A locked door opens its puzzle until
+// the puzzle is solved; from then on it transits like a plain door.
+function interactWith(n) {
+  if (n.door && (!n.id || puzzleSolved(n.id))) doorTransit(n.door);
+  else openExamine(n);
+}
+
 // ── Camera ────────────────────────────────────────────────────────────────────
 function getCamera() {
   return {
@@ -713,27 +734,19 @@ function drawObject(o, px, py) {
         o.sx * SHEET_TILE, o.sy * SHEET_TILE, o.sw * SHEET_TILE, o.sh * SHEET_TILE,
         px, py, o.sw * S, o.sh * S);
     }
-    // Attached interactable → frame + E prompt appear only in interact range
-    if (o.inter && nearbyInteractable && nearbyInteractable.id === o.inter &&
+    // Attachment frame + E prompt appear only in interact range.
+    // Green = puzzle, cyan = door, amber = door still locked by its puzzle.
+    if ((o.inter || o.door) && nearbyInteractable && nearbyInteractable.obj === o &&
         !examineOverlay.classList.contains('open')) {
+      const locked = o.inter && o.door && !puzzleSolved(o.inter);
+      const [glow, rgb] = locked  ? ['#e8b040', '232,176,64']
+                        : o.door  ? ['#50b4dc', '80,180,220']
+                        :           ['#44ff88', '80,220,120'];
       const pulse = 0.45 + 0.35 * Math.sin(performance.now() / 400);
       ctx.save();
-      ctx.shadowColor = '#44ff88';
+      ctx.shadowColor = glow;
       ctx.shadowBlur  = 10 * pulse;
-      ctx.strokeStyle = `rgba(80,220,120,${pulse.toFixed(3)})`;
-      ctx.lineWidth   = 2;
-      ctx.strokeRect(px + 1, py + 1, o.sw * S - 2, o.sh * S - 2);
-      ctx.restore();
-      drawInteractBadge(px + o.sw * S, py + o.sh * S);
-    }
-    // Attached door → cyan frame + E prompt in interact range
-    if (o.door && nearbyInteractable && nearbyInteractable.obj === o &&
-        !examineOverlay.classList.contains('open')) {
-      const pulse = 0.45 + 0.35 * Math.sin(performance.now() / 400);
-      ctx.save();
-      ctx.shadowColor = '#50b4dc';
-      ctx.shadowBlur  = 10 * pulse;
-      ctx.strokeStyle = `rgba(80,180,220,${pulse.toFixed(3)})`;
+      ctx.strokeStyle = `rgba(${rgb},${pulse.toFixed(3)})`;
       ctx.lineWidth   = 2;
       ctx.strokeRect(px + 1, py + 1, o.sw * S - 2, o.sh * S - 2);
       ctx.restore();
@@ -897,11 +910,14 @@ function drawThoughtBubble() {
   // Bubble border
   ctx.strokeStyle = '#c8a84b'; ctx.lineWidth = 1.5;
   roundRect(bx, by, BW, BH, R); ctx.stroke();
-  // "?" for something examinable, "→" for a doorway to another room
+  // Glyph mirrors what E will do: "→" for a doorway that will transit, "?" for
+  // something examinable (including a door still locked behind its puzzle)
+  const willTransit = nearbyInteractable.door &&
+    (!nearbyInteractable.id || puzzleSolved(nearbyInteractable.id));
   ctx.fillStyle = '#7a5a10';
   ctx.font = 'bold 15px monospace';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(nearbyInteractable.door ? '→' : '?', bx + BW/2, by + BH/2 + 0.5);
+  ctx.fillText(willTransit ? '→' : '?', bx + BW/2, by + BH/2 + 0.5);
 }
 
 // "[E]" prompt in the same green as the interactable frame, centered on a
@@ -1108,10 +1124,7 @@ canvas.addEventListener('keydown', e => {
   keys[e.key] = true;
   e.preventDefault();
   if ((e.key === 'e' || e.key === 'E') && !examineOverlay.classList.contains('open')) {
-    if (nearbyInteractable) {
-      if (nearbyInteractable.door) doorTransit(nearbyInteractable.door);
-      else openExamine(nearbyInteractable);
-    }
+    if (nearbyInteractable) interactWith(nearbyInteractable);
   }
   if (e.key === 'Escape') closeExamine();
 });
@@ -1138,8 +1151,7 @@ canvas.addEventListener('touchstart', e => {
       const wx = cx + cam.x, wy = cy + cam.y;
       if (wx >= bubbleBounds.wx && wx <= bubbleBounds.wx + bubbleBounds.ww &&
           wy >= bubbleBounds.wy && wy <= bubbleBounds.wy + bubbleBounds.wh) {
-        if (nearbyInteractable.door) doorTransit(nearbyInteractable.door);
-        else openExamine(nearbyInteractable);
+        interactWith(nearbyInteractable);
         continue;
       }
     }
@@ -1271,6 +1283,9 @@ function loadCustomData(_data) {
       spawn: rm.spawn ? { col: +rm.spawn.col, row: +rm.spawn.row } : null,
       objects: sanitizeObjects(rm.objects),
       interactables: rm.interactables,
+      // Per-room special instructions from Map Studio — no runtime behavior
+      // yet, carried so future features can read them
+      special: typeof rm.special === 'string' ? rm.special : '',
     });
   }
   ROOMS = parsed;
