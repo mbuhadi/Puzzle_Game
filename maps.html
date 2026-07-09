@@ -516,15 +516,25 @@ const keys   = {};
 const examineOverlay = document.getElementById('examineOverlay');
 const examineFrame   = document.getElementById('examineFrame');
 
-// Puzzles solved this session — chunk ids posted by puzzles_curated.html from
-// inside the examine iframe. An object carrying both `inter` and `door` is a
-// locked door: it only examines its puzzle until that puzzle is solved, then
-// it behaves like a normal door (free two-way transit).
-const SOLVED_CHUNKS = new Set();
+// Puzzles solved this playthrough — chunk ids posted by puzzles_curated.html
+// from inside the examine iframe. An object carrying both `inter` and `door`
+// is a locked door: it only examines its puzzle until that puzzle is solved,
+// then it behaves like a normal door (free two-way transit).
+// Kept in sessionStorage (per tab) so an accidental refresh resumes the run;
+// deliberately starting a playthrough — Play in My Maps, Randomize, or Play
+// Map from the editor (which opens a fresh tab) — starts from a clean slate.
+const SOLVED_KEY = 'solvedChunks';
+const SOLVED_CHUNKS = new Set((() => {
+  try { return JSON.parse(sessionStorage.getItem(SOLVED_KEY)) || []; }
+  catch (e) { return []; }
+})());
+function persistSolved() { sessionStorage.setItem(SOLVED_KEY, JSON.stringify([...SOLVED_CHUNKS])); }
+function resetSolved()   { SOLVED_CHUNKS.clear(); persistSolved(); }
 window.addEventListener('message', e => {
   if (!(e.data && e.data.type === 'puzzle-solved' && typeof e.data.chunk === 'string')) return;
   const firstSolve = !SOLVED_CHUNKS.has(e.data.chunk);
   SOLVED_CHUNKS.add(e.data.chunk);
+  persistSolved();
   // A locked door fires the moment its puzzle is solved: after a short beat
   // (so the solved feedback is visible) the puzzle closes and the door
   // carries the player through to its room.
@@ -1278,7 +1288,8 @@ function enterRoom(idx, px, py) {
   updatePanel();
 }
 
-function loadCustomData(_data) {
+// resume=true (page refresh) keeps the playthrough's solved puzzles
+function loadCustomData(_data, resume) {
   if (!_data) return false;
   // v2 = {rooms: […]} · legacy v1 = single {grid, spawn, objects}
   const roomsIn = Array.isArray(_data.rooms) && _data.rooms.length
@@ -1287,7 +1298,7 @@ function loadCustomData(_data) {
                        interactables: _data.interactables }] : null);
   if (!roomsIn) return false;
 
-  SOLVED_CHUNKS.clear();   // fresh playthrough — puzzle-locked doors re-lock
+  if (!resume) resetSolved();   // fresh playthrough — puzzle-locked doors re-lock
 
   const parsed = [];
   for (const rm of roomsIn) {
@@ -1326,9 +1337,9 @@ function loadCustomData(_data) {
   return true;
 }
 
-function loadProcedural(seed) {
+function loadProcedural(seed, resume) {
   ROOMS = null; curRoomIdx = 0;
-  SOLVED_CHUNKS.clear();   // fresh playthrough — puzzle-locked doors re-lock
+  if (!resume) resetSolved();   // fresh playthrough — puzzle-locked doors re-lock
   OBJECTS.length = 0; rebuildObjSolid();
   const result = generateRiad(seed);
   applyMap(result, seed);
@@ -1421,10 +1432,10 @@ async function editCloud(fileName) {
 const _urlParams = new URLSearchParams(location.search);
 let _started = false;
 if (_urlParams.get('custom') === '1') {
-  try { _started = loadCustomData(JSON.parse(localStorage.getItem('editorMap'))); }
+  try { _started = loadCustomData(JSON.parse(localStorage.getItem('editorMap')), true); }
   catch (_e) { /* fall through to normal */ }
 }
-if (!_started) loadProcedural(currentSeed);
+if (!_started) loadProcedural(currentSeed, true);
 renderLibrary();
 canvas.focus();
 requestAnimationFrame(loop);
