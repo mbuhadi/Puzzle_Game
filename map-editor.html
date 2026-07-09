@@ -9,6 +9,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  /* Defaults = Desert Gold; applyTheme() overrides these per theme */
   --gold:     #c8a84b;
   --gold-dim: #7a6030;
   --bg:       #0e0d0a;
@@ -17,6 +18,9 @@
   --border:   #2e2a1e;
   --text:     #d4ba88;
   --dim:      #6a5c3a;
+  --hover:    #231d0e;
+  --check1:   #171512;
+  --check2:   #1d1a15;
 }
 
 html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
@@ -116,7 +120,7 @@ button, .btn-like {
   transition: border-color 0.12s, color 0.12s; white-space: nowrap;
 }
 button:hover, .btn-like:hover { border-color: var(--gold-dim); color: var(--gold); }
-button.active { border-color: var(--gold); color: var(--gold); background: #231d0e; }
+button.active { border-color: var(--gold); color: var(--gold); background: var(--hover); }
 button:disabled { opacity: 0.35; cursor: default; }
 button:disabled:hover { border-color: var(--border); color: var(--text); }
 button.danger:hover { border-color: #7a3030; color: #cc7070; }
@@ -151,7 +155,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
   display: flex; align-items: center; gap: 7px;
   padding: 5px 7px; cursor: pointer; font-size: 11px; letter-spacing: 0.5px;
 }
-.dd-item:hover { background: #231d0e; }
+.dd-item:hover { background: var(--hover); }
 .dd-item.active { color: var(--gold); }
 .dd-key { margin-left: auto; font-size: 9px; color: var(--dim); }
 .zoom-row   { display: flex; align-items: center; gap: 5px; }
@@ -210,7 +214,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
 #tsScroll {
   flex: 1; overflow: auto; position: relative;
   background:
-    repeating-conic-gradient(#171512 0% 25%, #1d1a15 0% 50%) 0 0 / 32px 32px;
+    repeating-conic-gradient(var(--check1) 0% 25%, var(--check2) 0% 50%) 0 0 / 32px 32px;
 }
 #tsScroll img {
   display: block; width: 512px;              /* 2× the sheet's 256px width */
@@ -250,11 +254,11 @@ select:focus { outline: none; border-color: var(--gold-dim); }
   border-radius: 3px; cursor: pointer; border: 1px solid transparent;
   font-size: 10px; letter-spacing: 0.3px;
 }
-.anim-item:hover { background: #231d0e; }
+.anim-item:hover { background: var(--hover); }
 .anim-item.active { border-color: var(--gold); color: var(--gold); }
 .anim-item canvas {
   width: 32px; height: 32px; flex-shrink: 0;
-  image-rendering: pixelated; background: #171512; border-radius: 2px;
+  image-rendering: pixelated; background: var(--check1); border-radius: 2px;
 }
 .anim-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #animStage {
@@ -263,7 +267,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
 }
 #animCanvas {
   image-rendering: pixelated; cursor: crosshair;
-  background: repeating-conic-gradient(#171512 0% 25%, #1d1a15 0% 50%) 0 0 / 16px 16px;
+  background: repeating-conic-gradient(var(--check1) 0% 25%, var(--check2) 0% 50%) 0 0 / 16px 16px;
   border: 1px solid var(--border); border-radius: 3px;
 }
 #animInfo { font-family: monospace; font-size: 10px; color: var(--gold); text-align: center; }
@@ -273,7 +277,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
 #brushWrap.show { display: block; }
 #brushPreview {
   image-rendering: pixelated; border: 1px solid var(--gold-dim);
-  border-radius: 3px; background: #171512; max-width: 100%;
+  border-radius: 3px; background: var(--check1); max-width: 100%;
 }
 
 /* Save flash */
@@ -298,7 +302,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
 .mp-row input:focus { outline: none; border-color: var(--gold-dim); }
 .mp-item {
   display: flex; align-items: center; gap: 8px;
-  padding: 5px 2px; border-bottom: 1px solid #1a1814;
+  padding: 5px 2px; border-bottom: 1px solid var(--border);
 }
 .mp-item:last-child { border-bottom: none; }
 .mp-item-name {
@@ -356,12 +360,6 @@ select:focus { outline: none; border-color: var(--gold-dim); }
           <button id="tool-rect"                onclick="setTool('rect')"  title="Rectangle (R)">Rect</button>
           <button id="tool-spawn"               onclick="setTool('spawn')" title="Set Spawn Point (S)">Set Spawn</button>
         </div>
-        <div class="hint-text" style="margin-top:6px">
-          Right-click → erase tile<br>
-          &nbsp;&nbsp;(or remove object)<br>
-          Space + Drag → Pan<br>
-          Scroll → Zoom
-        </div>
       </div>
 
       <div class="divider"></div>
@@ -393,11 +391,6 @@ select:focus { outline: none; border-color: var(--gold-dim); }
         <div class="tool-grid">
           <button id="solid-yes" class="active" onclick="setObjSolid(true)"  title="Player must walk around it">Solid</button>
           <button id="solid-no"                 onclick="setObjSolid(false)" title="Player can walk over it">Walkable</button>
-        </div>
-        <div class="hint-text" style="margin-top:5px">
-          Left-click → place<br>
-          Right-click → remove<br>
-          Right-click / Esc → drop sprite brush
         </div>
       </div>
 
@@ -443,19 +436,10 @@ select:focus { outline: none; border-color: var(--gold-dim); }
 
       <div class="divider"></div>
 
-      <!-- Shortcuts -->
+      <!-- Theme -->
       <div>
-        <div class="sec-title">SHORTCUTS</div>
-        <div class="hint-text">
-          B — Paint<br>
-          G — Fill<br>
-          R — Rect<br>
-          T — Tileset<br>
-          S — Spawn<br>
-          0–4 — Tile type<br>
-          Ctrl+Z/Y — Undo/Redo<br>
-          Ctrl+S — Save to website
-        </div>
+        <div class="sec-title">THEME</div>
+        <select id="themeSelect" onchange="applyTheme(this.value); this.blur()"></select>
       </div>
 
     </div><!-- /sidebar -->
@@ -550,7 +534,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
 
   <!-- Status bar -->
   <div id="statusbar">
-    <span id="stName" style="color:#c8a84b">Custom Map</span>
+    <span id="stName" style="color:var(--gold)">Custom Map</span>
     <span id="stCell">col —, row —</span>
     <span id="stTile">—</span>
     <span id="stZoom">zoom 12×</span>
@@ -566,6 +550,73 @@ const GRID_W = 72, GRID_H = 60;
 const T = { VOID: 0, FLOOR: 1, WALL: 2, WATER: 3, COURTYARD: 4 };
 const TILE_COLORS = ['#1a1410', '#c8a86a', '#8a6a40', '#2a6898', '#d4ba88'];
 const TILE_NAMES  = ['Void', 'Floor', 'Wall', 'Water', 'Courtyard'];
+
+// ── Themes ────────────────────────────────────────────────────────────────────
+// Studio chrome only — tile and sprite colours stay true to the game. Each
+// theme rewrites the :root CSS variables plus the canvas chrome colours
+// (CANVAS_THEME). The choice persists per browser in localStorage.
+const THEMES = {
+  desert: { label: 'Desert Gold', canvasBg: '#080705', vars: {
+    'gold': '#c8a84b', 'gold-dim': '#7a6030', 'bg': '#0e0d0a', 'bg2': '#14120e',
+    'bg3': '#1e1a12', 'border': '#2e2a1e', 'text': '#d4ba88', 'dim': '#6a5c3a',
+    'hover': '#231d0e', 'check1': '#171512', 'check2': '#1d1a15' } },
+  midnight: { label: 'Midnight Blue', canvasBg: '#05080d', vars: {
+    'gold': '#5ab4dc', 'gold-dim': '#2e6a86', 'bg': '#0a0e14', 'bg2': '#0e141c',
+    'bg3': '#142030', 'border': '#1e2a3a', 'text': '#a8c4dc', 'dim': '#4a627a',
+    'hover': '#14243a', 'check1': '#10161f', 'check2': '#141c28' } },
+  emerald: { label: 'Emerald', canvasBg: '#050c07', vars: {
+    'gold': '#58c878', 'gold-dim': '#2e7a48', 'bg': '#0a120c', 'bg2': '#0e1810',
+    'bg3': '#142418', 'border': '#1e3424', 'text': '#a8d4b4', 'dim': '#4a7a58',
+    'hover': '#14301e', 'check1': '#101a12', 'check2': '#142216' } },
+  amethyst: { label: 'Amethyst', canvasBg: '#090510', vars: {
+    'gold': '#c080e8', 'gold-dim': '#74489e', 'bg': '#100a16', 'bg2': '#160e20',
+    'bg3': '#201430', 'border': '#2e1e42', 'text': '#d0b4e4', 'dim': '#6a4a8a',
+    'hover': '#2a1840', 'check1': '#150f20', 'check2': '#1b1429' } },
+  crimson: { label: 'Crimson', canvasBg: '#0e0505', vars: {
+    'gold': '#e87868', 'gold-dim': '#8a4038', 'bg': '#140a0a', 'bg2': '#1c0e0e',
+    'bg3': '#2a1414', 'border': '#3a1e1e', 'text': '#dca8a0', 'dim': '#7a4e4a',
+    'hover': '#341a18', 'check1': '#1a1010', 'check2': '#221414' } },
+  parchment: { label: 'Parchment (Light)', canvasBg: '#c8bea4', vars: {
+    'gold': '#8a6210', 'gold-dim': '#b09040', 'bg': '#ece4d0', 'bg2': '#f4eee0',
+    'bg3': '#e0d6bc', 'border': '#c0b494', 'text': '#4a3a1a', 'dim': '#8a7a54',
+    'hover': '#e6dcc2', 'check1': '#e4dcc8', 'check2': '#d8ceb4' } },
+};
+
+// Canvas chrome (outside-grid backdrop, glow, grid lines, border) — kept in a
+// mutable object because canvas paints can't read CSS variables
+const CANVAS_THEME = { bg: '#080705', accent: '#c8a84b',
+                       glow: 'rgba(200,168,75,0.18)', gridLine: 'rgba(200,168,75,0.1)' };
+
+function hexToRgba(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`;
+}
+
+let curTheme = 'desert';
+function applyTheme(id) {
+  curTheme = THEMES[id] ? id : 'desert';
+  const t = THEMES[curTheme];
+  for (const [k, v] of Object.entries(t.vars))
+    document.documentElement.style.setProperty('--' + k, v);
+  CANVAS_THEME.bg       = t.canvasBg;
+  CANVAS_THEME.accent   = t.vars.gold;
+  CANVAS_THEME.glow     = hexToRgba(t.vars.gold, 0.18);
+  CANVAS_THEME.gridLine = hexToRgba(t.vars.gold, 0.1);
+  localStorage.setItem('studioTheme', curTheme);
+  const sel = document.getElementById('themeSelect');
+  if (sel) sel.value = curTheme;
+  if (typeof render === 'function' && canvas.width) render();
+}
+
+function buildThemeSelect() {
+  const sel = document.getElementById('themeSelect');
+  for (const [id, t] of Object.entries(THEMES)) {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = t.label;
+    sel.appendChild(opt);
+  }
+}
 
 // Must stay in sync with the ALL list in maps.html
 const INTERACTABLE_IDS = [
@@ -843,13 +894,13 @@ function render() {
   ctx.clearRect(0, 0, W, H);
 
   // Background
-  ctx.fillStyle = '#080705';
+  ctx.fillStyle = CANVAS_THEME.bg;
   ctx.fillRect(0, 0, W, H);
 
   // Grid world shadow
   const gx = panX, gy = panY, gw = GRID_W * zoom, gh = GRID_H * zoom;
   ctx.save();
-  ctx.shadowColor = 'rgba(200,168,75,0.18)';
+  ctx.shadowColor = CANVAS_THEME.glow;
   ctx.shadowBlur  = 24;
   ctx.fillStyle   = '#1a1410';
   ctx.fillRect(gx, gy, gw, gh);
@@ -875,7 +926,7 @@ function render() {
   // Grid lines
   if (showGrid && zoom >= 6) {
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(200,168,75,0.1)';
+    ctx.strokeStyle = CANVAS_THEME.gridLine;
     ctx.lineWidth = 0.5;
     for (let c = c0; c <= c1 + 1; c++) {
       const x = c * zoom + panX;
@@ -920,7 +971,7 @@ function render() {
   }
 
   // Grid border
-  ctx.strokeStyle = '#c8a84b';
+  ctx.strokeStyle = CANVAS_THEME.accent;
   ctx.lineWidth   = 1.5;
   ctx.strokeRect(gx + 0.75, gy + 0.75, gw - 1.5, gh - 1.5);
 
@@ -2145,8 +2196,7 @@ function drawAnimStage() {
     animCtx.fillRect(0, py, px, ph);
     animCtx.fillRect(px + pw, py, W - px - pw, ph);
   }
-  animCtx.strokeStyle = 'var(--gold)';
-  animCtx.strokeStyle = '#c8a84b';
+  animCtx.strokeStyle = CANVAS_THEME.accent;
   animCtx.lineWidth = 2;
   animCtx.strokeRect(px + 1, py + 1, pw - 2, ph - 2);
 }
@@ -2272,6 +2322,8 @@ rooms = [makeRoom('Room 1')];
 bindRoom(0);
 renderTabs();
 buildPalette();
+buildThemeSelect();
+applyTheme(localStorage.getItem('studioTheme') || 'desert');
 updateInterList();
 
 new ResizeObserver(resizeCanvas).observe(wrap);
