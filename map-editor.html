@@ -431,6 +431,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
       <div id="tsHead" class="overlay-head">
         <button class="ts-tab active" data-sheet="interiors" onclick="tsSelectSheet('interiors')">Modern Interiors</button>
         <button class="ts-tab" data-sheet="retro" onclick="tsSelectSheet('retro')">Retro Interior</button>
+        <button class="ts-tab" data-sheet="exteriors" onclick="tsSelectSheet('exteriors')">Modern Exteriors</button>
         <span>— click &amp; drag to select</span>
         <span id="tsSel">no selection</span>
       </div>
@@ -573,6 +574,7 @@ const SHEET_TILE = 16;
 const SHEETS = {
   interiors: { name: 'Modern Interiors', src: 'assets/Interiors_16x16.png' },
   retro:     { name: 'Retro Interior',   src: 'assets/Retro_Interior_16x16.png' },
+  exteriors: { name: 'Modern Exteriors', src: 'assets/Exteriors_16x16.png' },
 };
 const SHEET_IMGS = {};
 for (const key in SHEETS) {

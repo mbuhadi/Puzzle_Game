@@ -321,9 +321,11 @@ const SHEET_TILE = 16;
 const SHEET_IMGS = {
   interiors: new Image(),
   retro:     new Image(),
+  exteriors: new Image(),
 };
 SHEET_IMGS.interiors.src = 'assets/Interiors_16x16.png';
 SHEET_IMGS.retro.src     = 'assets/Retro_Interior_16x16.png';
+SHEET_IMGS.exteriors.src = 'assets/Exteriors_16x16.png';
 
 function rebuildObjSolid() {
   OBJ_SOLID.clear();
