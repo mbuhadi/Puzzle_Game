@@ -226,6 +226,48 @@ select:focus { outline: none; border-color: var(--gold-dim); }
   padding: 8px 12px; border-top: 1px solid var(--border);
 }
 
+/* ── Animated tab inside the tileset picker ─────────────────────────────── */
+#animPane { display: none; height: 100%; }
+#tsScroll.anim-mode { overflow: hidden; }
+#tsScroll.anim-mode img, #tsScroll.anim-mode #tsRect { display: none !important; }
+#tsScroll.anim-mode #animPane { display: flex; }
+#animSide {
+  width: 232px; flex-shrink: 0; display: flex; flex-direction: column;
+  border-right: 1px solid var(--border); background: var(--bg2);
+}
+#animSearch {
+  margin: 8px; padding: 5px 7px; background: var(--bg3);
+  border: 1px solid var(--border); border-radius: 3px;
+  color: var(--text); font-family: monospace; font-size: 11px;
+}
+#animSearch:focus { outline: none; border-color: var(--gold-dim); }
+#animItems { flex: 1; overflow-y: auto; padding: 0 4px 8px; }
+#animItems::-webkit-scrollbar { width: 4px; }
+#animItems::-webkit-scrollbar-thumb { background: var(--border); }
+.anim-cat { font-size: 8px; letter-spacing: 2.5px; color: var(--dim); padding: 8px 4px 3px; }
+.anim-item {
+  display: flex; align-items: center; gap: 7px; padding: 3px 4px;
+  border-radius: 3px; cursor: pointer; border: 1px solid transparent;
+  font-size: 10px; letter-spacing: 0.3px;
+}
+.anim-item:hover { background: #231d0e; }
+.anim-item.active { border-color: var(--gold); color: var(--gold); }
+.anim-item canvas {
+  width: 32px; height: 32px; flex-shrink: 0;
+  image-rendering: pixelated; background: #171512; border-radius: 2px;
+}
+.anim-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#animStage {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 10px; padding: 14px; min-width: 0; overflow: auto;
+}
+#animCanvas {
+  image-rendering: pixelated; cursor: crosshair;
+  background: repeating-conic-gradient(#171512 0% 25%, #1d1a15 0% 50%) 0 0 / 16px 16px;
+  border: 1px solid var(--border); border-radius: 3px;
+}
+#animInfo { font-family: monospace; font-size: 10px; color: var(--gold); text-align: center; }
+
 /* Brush preview in sidebar */
 #brushWrap { display: none; margin-top: 6px; text-align: center; }
 #brushWrap.show { display: block; }
@@ -432,12 +474,24 @@ select:focus { outline: none; border-color: var(--gold-dim); }
         <button class="ts-tab active" data-sheet="interiors" onclick="tsSelectSheet('interiors')">Modern Interiors</button>
         <button class="ts-tab" data-sheet="retro" onclick="tsSelectSheet('retro')">Retro Interior</button>
         <button class="ts-tab" data-sheet="exteriors" onclick="tsSelectSheet('exteriors')">Modern Exteriors</button>
+        <button class="ts-tab" data-sheet="animated" onclick="tsSelectSheet('animated')">Animated ▶</button>
         <span>— click &amp; drag to select</span>
         <span id="tsSel">no selection</span>
       </div>
       <div id="tsScroll">
         <img id="tsImg" src="assets/Interiors_16x16.png" draggable="false" alt="tileset">
         <div id="tsRect"></div>
+        <div id="animPane">
+          <div id="animSide">
+            <input id="animSearch" type="text" placeholder="search animations…" spellcheck="false" autocomplete="off">
+            <div id="animItems"></div>
+          </div>
+          <div id="animStage">
+            <canvas id="animCanvas" width="0" height="0"></canvas>
+            <div id="animInfo" class="hint-text">pick an animation from the list</div>
+            <div class="hint-text">drag on the preview to crop tiles · full frame preselected</div>
+          </div>
+        </div>
       </div>
       <div id="tsFoot">
         <button onclick="tsCancel()">Cancel</button>
@@ -505,6 +559,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
 
 </div><!-- /app -->
 
+<script src="assets/anim_manifest.js"></script>
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────────
 const GRID_W = 72, GRID_H = 60;
@@ -843,16 +898,24 @@ function render() {
 
   // Ghost preview of the sprite brush under the cursor
   if (tool === 'object' && selSprite && hoverCell && !painting && !isPanning &&
-      inBounds(hoverCell.col, hoverCell.row) &&
-      sheetOf(selSprite).complete && sheetOf(selSprite).naturalWidth) {
+      inBounds(hoverCell.col, hoverCell.row)) {
     const { x, y } = cellXY(hoverCell.col, hoverCell.row);
     ctx.save();
     ctx.globalAlpha = 0.55;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(sheetOf(selSprite),
-      selSprite.sx * SHEET_TILE, selSprite.sy * SHEET_TILE,
-      selSprite.sw * SHEET_TILE, selSprite.sh * SHEET_TILE,
-      x, y, selSprite.sw * zoom, selSprite.sh * zoom);
+    if (selSprite.anim) {
+      const a = selSprite.anim, im = stripImg(a.src);
+      if (im.complete && im.naturalWidth) {
+        const idx = Math.floor(performance.now() / a.ms) % a.frames;
+        ctx.drawImage(im, a.x + idx * a.stride, a.y, a.w, a.h,
+          x, y, selSprite.sw * zoom, selSprite.sh * zoom);
+      }
+    } else if (sheetOf(selSprite).complete && sheetOf(selSprite).naturalWidth) {
+      ctx.drawImage(sheetOf(selSprite),
+        selSprite.sx * SHEET_TILE, selSprite.sy * SHEET_TILE,
+        selSprite.sw * SHEET_TILE, selSprite.sh * SHEET_TILE,
+        x, y, selSprite.sw * zoom, selSprite.sh * zoom);
+    }
     ctx.restore();
   }
 
@@ -914,14 +977,28 @@ function render() {
 function drawEditorObject(o) {
   const { x, y } = cellXY(o.col, o.row);
   const fw = objW(o) * zoom, fh = objH(o) * zoom;
-  const sheet = sheetOf(o);
   ctx.save();
-  if (sheet.complete && sheet.naturalWidth) {
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(sheet,
-      o.sx * SHEET_TILE, o.sy * SHEET_TILE, o.sw * SHEET_TILE, o.sh * SHEET_TILE,
-      x, y, fw, fh);
+  let drawn = false;
+  if (o.anim) {
+    // Animation strip — the editor previews the loop live (doors too)
+    const a = o.anim, im = stripImg(a.src);
+    if (im.complete && im.naturalWidth) {
+      const idx = Math.floor(performance.now() / a.ms) % a.frames;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(im, a.x + idx * a.stride, a.y, a.w, a.h, x, y, fw, fh);
+      drawn = true;
+    }
   } else {
+    const sheet = sheetOf(o);
+    if (sheet.complete && sheet.naturalWidth) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(sheet,
+        o.sx * SHEET_TILE, o.sy * SHEET_TILE, o.sw * SHEET_TILE, o.sh * SHEET_TILE,
+        x, y, fw, fh);
+      drawn = true;
+    }
+  }
+  if (!drawn) {
     ctx.fillStyle = 'rgba(200,168,75,0.35)';
     ctx.fillRect(x, y, fw, fh);
   }
@@ -1219,10 +1296,24 @@ function fromData(data) {
     // Legacy shape objects (palm/pot/…) are no longer supported and get dropped
     room.objects = Array.isArray(rm.objects)
       ? rm.objects
-          .filter(o => inBounds(+o.col, +o.row) && o.sw > 0 && o.sh > 0 && o.sx >= 0 && o.sy >= 0)
+          .filter(o => inBounds(+o.col, +o.row) &&
+                       ((o.anim && typeof o.anim.src === 'string') ||
+                        (o.sw > 0 && o.sh > 0 && o.sx >= 0 && o.sy >= 0)))
           .map(o => {
-            const obj = { col: +o.col, row: +o.row, sheet: SHEETS[o.sheet] ? o.sheet : 'interiors',
-                          sx: +o.sx, sy: +o.sy, sw: +o.sw, sh: +o.sh, solid: !!o.solid };
+            let obj;
+            if (o.anim && typeof o.anim.src === 'string') {
+              const a = o.anim, w = Math.max(16, +a.w || 16), h = Math.max(16, +a.h || 16);
+              obj = { col: +o.col, row: +o.row,
+                      sw: Math.max(1, Math.round(w / SHEET_TILE)),
+                      sh: Math.max(1, Math.round(h / SHEET_TILE)),
+                      solid: !!o.solid,
+                      anim: { src: String(a.src), x: +a.x || 0, y: +a.y || 0, w, h,
+                              stride: +a.stride || w, frames: Math.max(1, +a.frames | 0),
+                              ms: Math.min(1000, Math.max(30, +a.ms || 120)), once: !!a.once } };
+            } else {
+              obj = { col: +o.col, row: +o.row, sheet: SHEETS[o.sheet] ? o.sheet : 'interiors',
+                      sx: +o.sx, sy: +o.sy, sw: +o.sw, sh: +o.sh, solid: !!o.solid };
+            }
             if (typeof o.inter === 'string' &&
                 INTERACTABLE_IDS.some(x => x.id === o.inter) && !seenInter.has(o.inter)) {
               obj.inter = o.inter;
@@ -1632,8 +1723,10 @@ canvas.addEventListener('mousedown', e => {
     for (let r = row; r < row + sh; r++)
       for (let c = col; c < col + sw; c++)
         if (!inBounds(c, r) || grid[r][c] === T.VOID) return;
-    const obj = { col, row, sheet: selSprite.sheet || 'interiors',
-                  sx: selSprite.sx, sy: selSprite.sy, sw, sh, solid: objSolid };
+    const obj = selSprite.anim
+      ? { col, row, sw, sh, solid: objSolid, anim: { ...selSprite.anim } }
+      : { col, row, sheet: selSprite.sheet || 'interiors',
+          sx: selSprite.sx, sy: selSprite.sy, sw, sh, solid: objSolid };
     if (selDoor) {
       // Door attachment — this object teleports the player to that room
       const rid = selDoor.slice(5);
@@ -1705,7 +1798,7 @@ canvas.addEventListener('mousemove', e => {
     const oi = objAt(col, row);
     if (oi !== -1) {
       const o = objects[oi];
-      info += ` · Sprite ${o.sw}×${o.sh} (${o.solid ? 'solid' : 'walkable'})`;
+      info += ` · ${o.anim ? 'Animated' : 'Sprite'} ${o.sw}×${o.sh} (${o.solid ? 'solid' : 'walkable'})`;
       if (o.inter) info += ' · ' + o.inter;
       if (o.door)  info += ' · door → ' + (findRoomById(o.door)?.name || '?');
     }
@@ -1832,17 +1925,36 @@ function openTileset() { tsOverlay.classList.add('open'); }
 function tsCancel()    { tsOverlay.classList.remove('open'); tsStart = null; }
 
 function tsSelectSheet(key) {
-  if (!SHEETS[key] || key === tsSheet) return;
+  if (key === tsSheet) return;
+  if (key !== 'animated' && !SHEETS[key]) return;
   tsSheet = key;
-  tsImgEl.src = SHEETS[key].src;
-  tsStart = null; tsPick = null;
-  tsRect.style.display = 'none';
+  const animMode = key === 'animated';
+  tsScroll.classList.toggle('anim-mode', animMode);
+  tsStart = null;
+  if (animMode) {
+    buildAnimList();
+    if (animSel) { animUpdateSel(); drawAnimStage(); }
+    else {
+      document.getElementById('tsSel').textContent = 'no selection';
+      document.getElementById('tsUseBtn').disabled = true;
+    }
+  } else {
+    tsImgEl.src = SHEETS[key].src;
+    tsPick = null;
+    tsRect.style.display = 'none';
+    document.getElementById('tsSel').textContent = 'no selection';
+    document.getElementById('tsUseBtn').disabled = true;
+  }
   tsScroll.scrollTop = 0;
-  document.getElementById('tsSel').textContent = 'no selection';
-  document.getElementById('tsUseBtn').disabled = true;
   document.querySelectorAll('.ts-tab').forEach(b =>
     b.classList.toggle('active', b.dataset.sheet === key));
 }
+
+// Sheets are pixel art — always display at 2× native size (the CSS width
+// only fits the 256px-wide Interiors sheet; Exteriors is 2816px wide)
+tsImgEl.addEventListener('load', () => {
+  tsImgEl.style.width = (tsImgEl.naturalWidth * 2) + 'px';
+});
 
 // Sheet-tile coordinate under the mouse (img is displayed at 2× natural size)
 function tsTileAt(e) {
@@ -1891,12 +2003,190 @@ function clearSpriteBrush() {
 }
 
 function tsUse() {
-  if (!tsPick) return;
-  selSprite = { ...tsPick, sheet: tsSheet };
+  if (tsSheet === 'animated') {
+    if (!animSel || !animPick) return;
+    const d = animSel;
+    selSprite = {
+      sw: animPick.w / SHEET_TILE, sh: animPick.h / SHEET_TILE,
+      name: d.n,
+      anim: { src: d.src, x: animPick.x, y: animPick.y, w: animPick.w, h: animPick.h,
+              stride: d.w, frames: d.frames, ms: d.ms, once: !!d.once },
+    };
+    // Sensible collision defaults: water is swimmable-over, doors block until used
+    if (d.cat === 'Water & Terrain') setObjSolid(false);
+    else if (d.once) setObjSolid(true);
+  } else {
+    if (!tsPick) return;
+    selSprite = { ...tsPick, sheet: tsSheet };
+  }
   updateBrushPreview();
   tsOverlay.classList.remove('open');
   setTool('object');
 }
+
+// ── Animated picker (entries come from assets/anim_manifest.js) ───────────────
+// Left pane: searchable list of every animation strip in the Modern Exteriors
+// pack, grouped by category, with lazily drawn frame-0 thumbnails. Right pane:
+// live looping preview where a drag crops a tile region out of the frame (so
+// a single water tile can be cut from the 3×3 autotile block).
+const ANIM_LIST = typeof ANIM_DEFS !== 'undefined' ? ANIM_DEFS : [];
+const animCanvasEl = document.getElementById('animCanvas');
+const animCtx = animCanvasEl.getContext('2d');
+let animSel = null;         // selected ANIM_LIST entry
+let animPick = null;        // {x, y, w, h} px crop within one frame
+let animScale = 4;
+let animDragStart = null;   // {tx, ty} crop-drag anchor in frame tiles
+let animListQuery = null;
+
+const ANIM_STRIPS = {};     // shared Image cache for strip PNGs
+function stripImg(src) {
+  let im = ANIM_STRIPS[src];
+  if (!im) { im = new Image(); im.src = src; ANIM_STRIPS[src] = im; }
+  return im;
+}
+
+// Thumbnails load their strip only once scrolled into view — the list holds
+// hundreds of items and eagerly loading every PNG would hammer first open
+const animThumbObs = new IntersectionObserver(entries => {
+  for (const en of entries) {
+    if (!en.isIntersecting) continue;
+    animThumbObs.unobserve(en.target);
+    const cv = en.target, def = ANIM_LIST[+cv.dataset.i];
+    const im = stripImg(def.src);
+    const draw = () => {
+      const g = cv.getContext('2d');
+      g.imageSmoothingEnabled = false;
+      const s = Math.min(32 / def.w, 32 / def.h);
+      g.drawImage(im, 0, 0, def.w, def.h,
+        (32 - def.w * s) / 2, (32 - def.h * s) / 2, def.w * s, def.h * s);
+    };
+    if (im.complete && im.naturalWidth) draw();
+    else im.addEventListener('load', draw, { once: true });
+  }
+});
+
+function buildAnimList() {
+  const q = document.getElementById('animSearch').value.trim().toLowerCase();
+  if (animListQuery === q) return;
+  animListQuery = q;
+  const box = document.getElementById('animItems');
+  box.innerHTML = '';
+  let cat = null;
+  ANIM_LIST.forEach((def, i) => {
+    if (q && !def.n.toLowerCase().includes(q)) return;
+    if (def.cat !== cat) {
+      cat = def.cat;
+      const h = document.createElement('div');
+      h.className = 'anim-cat';
+      h.textContent = cat.toUpperCase();
+      box.appendChild(h);
+    }
+    const item = document.createElement('div');
+    item.className = 'anim-item' + (animSel === def ? ' active' : '');
+    item.title = `${def.w / 16}×${def.h / 16} tiles · ${def.frames} frames` +
+                 (def.once ? ' · plays on E' : ' · loops');
+    const cv = document.createElement('canvas');
+    cv.width = 32; cv.height = 32; cv.dataset.i = i;
+    const nm = document.createElement('span');
+    nm.textContent = def.n;
+    item.append(cv, nm);
+    item.onclick = () => selectAnim(def, item);
+    box.appendChild(item);
+    animThumbObs.observe(cv);
+  });
+  if (!box.childElementCount) {
+    const empty = document.createElement('div');
+    empty.className = 'hint-text';
+    empty.style.padding = '8px 4px';
+    empty.textContent = ANIM_LIST.length ? 'no animations match' : 'anim_manifest.js missing';
+    box.appendChild(empty);
+  }
+}
+document.getElementById('animSearch').addEventListener('input', buildAnimList);
+
+function selectAnim(def, itemEl) {
+  animSel = def;
+  animPick = { x: 0, y: 0, w: def.w, h: def.h };   // full frame preselected
+  animScale = Math.max(2, Math.min(8, Math.floor(288 / Math.max(def.w, def.h))));
+  animCanvasEl.width  = def.w * animScale;
+  animCanvasEl.height = def.h * animScale;
+  document.querySelectorAll('.anim-item').forEach(el =>
+    el.classList.toggle('active', el === itemEl));
+  animUpdateSel();
+  drawAnimStage();
+}
+
+function animUpdateSel() {
+  document.getElementById('tsSel').textContent =
+    `${animPick.w / 16}×${animPick.h / 16} tiles · ${animSel.frames} frames`;
+  document.getElementById('tsUseBtn').disabled = false;
+  document.getElementById('animInfo').textContent =
+    `${animSel.n} · ${animSel.ms} ms/frame · ` +
+    (animSel.once ? 'plays once on E (door-style)' : 'loops forever');
+}
+
+function drawAnimStage() {
+  if (!animSel) return;
+  const d = animSel, im = stripImg(d.src);
+  const W = animCanvasEl.width, H = animCanvasEl.height;
+  animCtx.clearRect(0, 0, W, H);
+  if (im.complete && im.naturalWidth) {
+    const idx = Math.floor(performance.now() / d.ms) % d.frames;
+    animCtx.imageSmoothingEnabled = false;
+    animCtx.drawImage(im, idx * d.w, 0, d.w, d.h, 0, 0, W, H);
+  }
+  if (!animPick) return;
+  const px = animPick.x * animScale, py = animPick.y * animScale;
+  const pw = animPick.w * animScale, ph = animPick.h * animScale;
+  if (px || py || pw !== W || ph !== H) {   // dim everything outside the crop
+    animCtx.fillStyle = 'rgba(0,0,0,0.55)';
+    animCtx.fillRect(0, 0, W, py);
+    animCtx.fillRect(0, py + ph, W, H - py - ph);
+    animCtx.fillRect(0, py, px, ph);
+    animCtx.fillRect(px + pw, py, W - px - pw, ph);
+  }
+  animCtx.strokeStyle = 'var(--gold)';
+  animCtx.strokeStyle = '#c8a84b';
+  animCtx.lineWidth = 2;
+  animCtx.strokeRect(px + 1, py + 1, pw - 2, ph - 2);
+}
+
+function animTileAt(e) {
+  const r = animCanvasEl.getBoundingClientRect();
+  const px = SHEET_TILE * animScale;
+  return {
+    tx: Math.max(0, Math.min(animSel.w / 16 - 1, Math.floor((e.clientX - r.left) / px))),
+    ty: Math.max(0, Math.min(animSel.h / 16 - 1, Math.floor((e.clientY - r.top) / px))),
+  };
+}
+function animApplyDrag(b) {
+  const a = animDragStart;
+  animPick = {
+    x: Math.min(a.tx, b.tx) * 16, y: Math.min(a.ty, b.ty) * 16,
+    w: (Math.abs(a.tx - b.tx) + 1) * 16, h: (Math.abs(a.ty - b.ty) + 1) * 16,
+  };
+  animUpdateSel();
+  drawAnimStage();
+}
+animCanvasEl.addEventListener('mousedown', e => {
+  if (!animSel) return;
+  e.preventDefault();
+  animDragStart = animTileAt(e);
+  animApplyDrag(animDragStart);
+});
+animCanvasEl.addEventListener('mousemove', e => {
+  if (animDragStart) animApplyDrag(animTileAt(e));
+});
+window.addEventListener('mouseup', () => { animDragStart = null; });
+
+// Editor animation clock: repaint the stage while the picker shows it, and the
+// map canvas while it contains (or previews) an animated object. Cheap no-op
+// otherwise.
+setInterval(() => {
+  if (tsOverlay.classList.contains('open') && tsSheet === 'animated') drawAnimStage();
+  if (objects.some(o => o.anim) || (tool === 'object' && selSprite && selSprite.anim))
+    render();
+}, 60);
 
 function updateBrushPreview() {
   const wrapEl = document.getElementById('brushWrap');
@@ -1909,6 +2199,15 @@ function updateBrushPreview() {
   cv.height = sh * SHEET_TILE * scale;
   const g = cv.getContext('2d');
   g.imageSmoothingEnabled = false;
+  if (selSprite.anim) {
+    const a = selSprite.anim, im = stripImg(a.src);
+    const draw = () => g.drawImage(im, a.x, a.y, a.w, a.h, 0, 0, cv.width, cv.height);
+    if (im.complete && im.naturalWidth) draw();
+    else im.addEventListener('load', draw, { once: true });
+    document.getElementById('brushLabel').textContent =
+      `${sw}×${sh} · ${selSprite.name} · ${a.frames} frames`;
+    return;
+  }
   const sheet = sheetOf(selSprite);
   if (sheet.complete && sheet.naturalWidth)
     g.drawImage(sheet, sx * SHEET_TILE, sy * SHEET_TILE, sw * SHEET_TILE, sh * SHEET_TILE,

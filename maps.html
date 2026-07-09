@@ -263,7 +263,7 @@
 </div>
 
 <a href="index.html">← Back to Home</a>
-<div style="font-family:monospace;font-size:10px;color:#3a3530;">interior art: Modern Interiors by LimeZu (limezu.itch.io)</div>
+<div style="font-family:monospace;font-size:10px;color:#3a3530;">art: Modern Interiors &amp; Modern Exteriors by LimeZu (limezu.itch.io)</div>
 
 <div id="dragGhost"></div>
 
@@ -326,6 +326,45 @@ const SHEET_IMGS = {
 SHEET_IMGS.interiors.src = 'assets/Interiors_16x16.png';
 SHEET_IMGS.retro.src     = 'assets/Retro_Interior_16x16.png';
 SHEET_IMGS.exteriors.src = 'assets/Exteriors_16x16.png';
+
+// ── Animated objects ──────────────────────────────────────────────────────────
+// o.anim = {src, x, y, w, h, stride, frames, ms, once}: the object's pixels
+// come from a horizontal animation strip instead of a tilesheet. x/y/w/h crop
+// a region of frame 0 (so a single water tile can be cut from an autotile
+// block); stride is the frame-to-frame pixel offset. Looping strips (water,
+// fountains) advance on a shared clock; `once` strips (doors) idle on frame 0
+// and play through a single time when triggered — see playAnimOnce.
+const ANIM_IMGS = {};
+function animImg(src) {
+  let im = ANIM_IMGS[src];
+  if (!im) { im = new Image(); im.src = src; ANIM_IMGS[src] = im; }
+  return im;
+}
+
+const ANIM_PLAYS = [];   // {o, after} — one-shot playbacks in flight
+function playAnimOnce(o, after) {
+  if (o._playStart != null) return;   // already playing — don't restart mid-swing
+  o._playStart = performance.now();
+  ANIM_PLAYS.push({ o, after });
+}
+function tickAnimPlays() {
+  const now = performance.now();
+  for (let i = ANIM_PLAYS.length - 1; i >= 0; i--) {
+    const p = ANIM_PLAYS[i], a = p.o.anim;
+    if (now - p.o._playStart < a.frames * a.ms) continue;
+    p.o._playStart = null;
+    ANIM_PLAYS.splice(i, 1);
+    if (p.after) p.after();
+  }
+}
+
+function animFrameIdx(o) {
+  const a = o.anim;
+  if (a.once)
+    return o._playStart == null ? 0
+      : Math.min(a.frames - 1, Math.floor((performance.now() - o._playStart) / a.ms));
+  return Math.floor(performance.now() / a.ms) % a.frames;
+}
 
 function rebuildObjSolid() {
   OBJ_SOLID.clear();
@@ -547,7 +586,9 @@ window.addEventListener('message', e => {
       examineFrame.src = '';
       activeInteractable = null;   // skip closeExamine()'s step-back nudge
       canvas.focus();
-      doorTransit(a.door);
+      if (a.obj && a.obj.anim && a.obj.anim.once)
+        playAnimOnce(a.obj, () => doorTransit(a.door));
+      else doorTransit(a.door);
     }, 900);
   }
 });
@@ -589,9 +630,10 @@ document.getElementById('examineLeave').addEventListener('click', closeExamine);
 
 // ── Nearby interactable detection ─────────────────────────────────────────────
 function getNearbyInteractable() {
-  // Objects with an attached interactable or door (footprint-aware radius)
+  // Objects with an attached interactable or door, plus play-on-interact
+  // animations (a decorative door swings even with nothing attached)
   for (const o of OBJECTS) {
-    if (!o.inter && !o.door) continue;
+    if (!o.inter && !o.door && !(o.anim && o.anim.once)) continue;
     const w = o.sw || 1, h = o.sh || 1;
     const cx = o.col + w / 2, cy = o.row + h / 2;
     const dx = player.x - cx, dy = player.y - cy;
@@ -681,10 +723,17 @@ function doorTransit(targetRoomId) {
 }
 
 // E / bubble tap on whatever is nearby. A locked door opens its puzzle until
-// the puzzle is solved; from then on it transits like a plain door.
+// the puzzle is solved; from then on it transits like a plain door. Objects
+// with a `once` animation swing open before their door fires (or just swing,
+// if nothing is attached).
 function interactWith(n) {
-  if (n.door && (!n.id || puzzleSolved(n.id))) doorTransit(n.door);
-  else openExamine(n);
+  const o = n.obj;
+  if (n.door && (!n.id || puzzleSolved(n.id))) {
+    if (o && o.anim && o.anim.once) playAnimOnce(o, () => doorTransit(n.door));
+    else doorTransit(n.door);
+  }
+  else if (n.id) openExamine(n);
+  else if (o && o.anim && o.anim.once) playAnimOnce(o, null);
 }
 
 // ── Camera ────────────────────────────────────────────────────────────────────
@@ -752,17 +801,28 @@ function drawTile(t, px, py) {
 function drawObject(o, px, py) {
   const S = TILE_PX;
   if (o.sw) {
-    // Tileset sprite, drawn at 2× (16px sheet tiles → 32px map tiles)
-    const sheet = SHEET_IMGS[o.sheet] || SHEET_IMGS.interiors;
-    if (sheet.complete && sheet.naturalWidth) {
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(sheet,
-        o.sx * SHEET_TILE, o.sy * SHEET_TILE, o.sw * SHEET_TILE, o.sh * SHEET_TILE,
-        px, py, o.sw * S, o.sh * S);
+    if (o.anim) {
+      // Animation strip — draw the current frame's crop at 2×
+      const a = o.anim, im = animImg(a.src);
+      if (im.complete && im.naturalWidth) {
+        const idx = animFrameIdx(o);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(im, a.x + idx * a.stride, a.y, a.w, a.h, px, py, o.sw * S, o.sh * S);
+      }
+    } else {
+      // Tileset sprite, drawn at 2× (16px sheet tiles → 32px map tiles)
+      const sheet = SHEET_IMGS[o.sheet] || SHEET_IMGS.interiors;
+      if (sheet.complete && sheet.naturalWidth) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(sheet,
+          o.sx * SHEET_TILE, o.sy * SHEET_TILE, o.sw * SHEET_TILE, o.sh * SHEET_TILE,
+          px, py, o.sw * S, o.sh * S);
+      }
     }
     // Attachment frame + E prompt appear only in interact range.
     // Green = puzzle, cyan = door, amber = door still locked by its puzzle.
-    if ((o.inter || o.door) && nearbyInteractable && nearbyInteractable.obj === o &&
+    if ((o.inter || o.door || (o.anim && o.anim.once)) &&
+        nearbyInteractable && nearbyInteractable.obj === o &&
         !examineOverlay.classList.contains('open')) {
       const locked = o.inter && o.door && !puzzleSolved(o.inter);
       const [glow, rgb] = locked  ? ['#e8b040', '232,176,64']
@@ -940,10 +1000,12 @@ function drawThoughtBubble() {
   // something examinable (including a door still locked behind its puzzle)
   const willTransit = nearbyInteractable.door &&
     (!nearbyInteractable.id || puzzleSolved(nearbyInteractable.id));
+  // "✦" marks a bare animation trigger (a door that swings but leads nowhere)
+  const glyph = willTransit ? '→' : nearbyInteractable.id ? '?' : '✦';
   ctx.fillStyle = '#7a5a10';
   ctx.font = 'bold 15px monospace';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(willTransit ? '→' : '?', bx + BW/2, by + BH/2 + 0.5);
+  ctx.fillText(glyph, bx + BW/2, by + BH/2 + 0.5);
 }
 
 // "[E]" prompt in the same green as the interactable frame, centered on a
@@ -1140,6 +1202,7 @@ let lastTs = null;
 function loop(ts) {
   const dt = lastTs !== null ? Math.min((ts - lastTs) / 1000, 0.1) : 0;
   lastTs = ts;
+  tickAnimPlays();   // finish door swings (fires their teleport)
   update(dt);
   render();
   requestAnimationFrame(loop);
@@ -1251,7 +1314,16 @@ function sanitizeObjects(raw) {
     const col = +o.col, row = +o.row;
     if (col < 0 || col >= GRID_W || row < 0 || row >= GRID_H) continue;
     let obj;
-    if (o.sw > 0 && o.sh > 0) {
+    if (o.anim && typeof o.anim.src === 'string' && o.anim.src.startsWith('assets/')) {
+      const a = o.anim, w = Math.max(16, +a.w || 16), h = Math.max(16, +a.h || 16);
+      obj = { col, row,
+              sw: Math.max(1, Math.round(w / SHEET_TILE)),
+              sh: Math.max(1, Math.round(h / SHEET_TILE)),
+              solid: !!o.solid,
+              anim: { src: a.src, x: +a.x || 0, y: +a.y || 0, w, h,
+                      stride: +a.stride || w, frames: Math.max(1, +a.frames | 0),
+                      ms: Math.min(1000, Math.max(30, +a.ms || 120)), once: !!a.once } };
+    } else if (o.sw > 0 && o.sh > 0) {
       obj = { col, row, sx: +o.sx, sy: +o.sy, sw: +o.sw, sh: +o.sh, solid: !!o.solid };
       if (typeof o.sheet === 'string') obj.sheet = o.sheet;
     } else {
