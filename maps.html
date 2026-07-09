@@ -522,8 +522,22 @@ const examineFrame   = document.getElementById('examineFrame');
 // it behaves like a normal door (free two-way transit).
 const SOLVED_CHUNKS = new Set();
 window.addEventListener('message', e => {
-  if (e.data && e.data.type === 'puzzle-solved' && typeof e.data.chunk === 'string')
-    SOLVED_CHUNKS.add(e.data.chunk);
+  if (!(e.data && e.data.type === 'puzzle-solved' && typeof e.data.chunk === 'string')) return;
+  const firstSolve = !SOLVED_CHUNKS.has(e.data.chunk);
+  SOLVED_CHUNKS.add(e.data.chunk);
+  // A locked door fires the moment its puzzle is solved: after a short beat
+  // (so the solved feedback is visible) the puzzle closes and the door
+  // carries the player through to its room.
+  const a = activeInteractable;
+  if (firstSolve && a && a.door && a.id && String(a.id).replace(/s$/, '') === e.data.chunk) {
+    setTimeout(() => {
+      examineOverlay.classList.remove('open');
+      examineFrame.src = '';
+      activeInteractable = null;   // skip closeExamine()'s step-back nudge
+      canvas.focus();
+      doorTransit(a.door);
+    }, 900);
+  }
 });
 function puzzleSolved(interId) {
   return SOLVED_CHUNKS.has(String(interId).replace(/s$/, ''));
@@ -1273,6 +1287,8 @@ function loadCustomData(_data) {
                        interactables: _data.interactables }] : null);
   if (!roomsIn) return false;
 
+  SOLVED_CHUNKS.clear();   // fresh playthrough — puzzle-locked doors re-lock
+
   const parsed = [];
   for (const rm of roomsIn) {
     if (!rm.grid || rm.grid.length !== GRID_H || rm.grid[0].length !== GRID_W) return false;
@@ -1312,6 +1328,7 @@ function loadCustomData(_data) {
 
 function loadProcedural(seed) {
   ROOMS = null; curRoomIdx = 0;
+  SOLVED_CHUNKS.clear();   // fresh playthrough — puzzle-locked doors re-lock
   OBJECTS.length = 0; rebuildObjSolid();
   const result = generateRiad(seed);
   applyMap(result, seed);

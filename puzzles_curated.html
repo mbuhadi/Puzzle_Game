@@ -270,7 +270,11 @@ function buildFamilyTree(){
 
   let openDD=null; const closeDD=()=>{if(openDD){openDD.remove();openDD=null;}};
   const banner=document.createElement('div'); banner.id='treeBanner'; banner.className='tree-banner'; banner.textContent='تم حل الأحجية!';
-  const check=()=>{banner.style.display=TREE_NODES.every(n=>names[n.id]===TREE_CORRECT[n.id])?'block':'none';};
+  const check=()=>{
+    const ok=TREE_NODES.every(n=>names[n.id]===TREE_CORRECT[n.id]);
+    banner.style.display=ok?'block':'none';
+    if(ok)notifyPuzzleSolved();
+  };
 
   TREE_NODES.forEach(n=>{
     const b=document.createElement('div');
@@ -742,6 +746,7 @@ function buildCylinderLock(){
       unlockBtn.disabled=true;
       selectBtn.disabled=true;
       resetBtn.disabled=true;
+      notifyPuzzleSolved();
     }else{
       status.textContent='✗ Incorrect combination - try again';
       status.style.color='#c06040';
