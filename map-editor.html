@@ -715,14 +715,6 @@ function objAt(col, row) {
     if (objCovers(objects[i], col, row)) return i;
   return -1;
 }
-// Drop objects whose anchor tile was erased to VOID
-function pruneDetached() {
-  let changed = false;
-  for (let i = objects.length - 1; i >= 0; i--)
-    if (grid[objects[i].row][objects[i].col] === T.VOID) { objects.splice(i, 1); changed = true; }
-  if (changed) updateInterList();
-}
-
 // ── Rooms (editor tabs) ───────────────────────────────────────────────────────
 function makeRoom(name) {
   return { id: 'r' + (roomIdSeq++), name,
@@ -1108,7 +1100,6 @@ function snapshot() {
 }
 
 function pushHistory() {
-  pruneDetached();
   history = history.slice(0, histIdx + 1);
   history.push(snapshot());
   if (history.length > MAX_HIST) history.shift();
@@ -1732,6 +1723,52 @@ function playMap() {
   window.open('maps.html?custom=1', '_blank');
 }
 
+// Footprints stamped during the current object-brush drag — lets the brush
+// tile the sprite like paint without stacking copies on overlapping cells.
+let strokePlaced = [];
+
+function placeObjectAt(col, row) {
+  const { sw, sh } = selSprite;
+  for (let r = row; r < row + sh; r++)
+    for (let c = col; c < col + sw; c++)
+      if (!inBounds(c, r)) return false;
+  for (const p of strokePlaced)
+    if (col < p.col + p.sw && col + sw > p.col &&
+        row < p.row + p.sh && row + sh > p.row) return false;
+  const obj = selSprite.anim
+    ? { col, row, sw, sh, solid: objSolid, anim: { ...selSprite.anim } }
+    : { col, row, sheet: selSprite.sheet || 'interiors',
+        sx: selSprite.sx, sy: selSprite.sy, sw, sh, solid: objSolid };
+  if (selDoor) {
+    // Door attachment — this object teleports the player to that room
+    const rid = selDoor.slice(5);
+    if (findRoomById(rid)) obj.door = rid;
+  }
+  if (selPuzzle) {
+    // Each puzzle id lives on exactly one object map-wide — steal it
+    // if reused, even from an object in another room. Combined with a
+    // door attachment this makes a locked door.
+    syncRoomFromGlobals();
+    for (const rm of rooms)
+      for (const o of rm.objects) if (o.inter === selPuzzle) delete o.inter;
+    obj.inter = selPuzzle;
+  }
+  selPuzzle = selDoor = null;   // one-shot: reset to None after attaching
+  // Sprites may layer (rug under a table) — just add on top
+  objects.push(obj);
+  strokePlaced.push({ col, row, sw, sh });
+  updateInterList();
+  return true;
+}
+
+function eraseObjectAt(col, row) {
+  const i = objAt(col, row);
+  if (i === -1) return false;
+  objects.splice(i, 1);
+  updateInterList();
+  return true;
+}
+
 // ── Mouse events ──────────────────────────────────────────────────────────────
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
@@ -1763,39 +1800,15 @@ canvas.addEventListener('mousedown', e => {
       return;
     }
     if (!inBounds(col, row)) return;
-    if (erasing) {
-      const i = objAt(col, row);
-      if (i !== -1) { objects.splice(i, 1); updateInterList(); pushHistory(); render(); }
-      return;
-    }
-    if (!selSprite) { openTileset(); return; }   // no brush yet — pick one
-    // Whole footprint must be on non-void tiles
-    const { sw, sh } = selSprite;
-    for (let r = row; r < row + sh; r++)
-      for (let c = col; c < col + sw; c++)
-        if (!inBounds(c, r) || grid[r][c] === T.VOID) return;
-    const obj = selSprite.anim
-      ? { col, row, sw, sh, solid: objSolid, anim: { ...selSprite.anim } }
-      : { col, row, sheet: selSprite.sheet || 'interiors',
-          sx: selSprite.sx, sy: selSprite.sy, sw, sh, solid: objSolid };
-    if (selDoor) {
-      // Door attachment — this object teleports the player to that room
-      const rid = selDoor.slice(5);
-      if (findRoomById(rid)) obj.door = rid;
-    }
-    if (selPuzzle) {
-      // Each puzzle id lives on exactly one object map-wide — steal it
-      // if reused, even from an object in another room. Combined with a
-      // door attachment this makes a locked door.
-      syncRoomFromGlobals();
-      for (const rm of rooms)
-        for (const o of rm.objects) if (o.inter === selPuzzle) delete o.inter;
-      obj.inter = selPuzzle;
-    }
-    selPuzzle = selDoor = null;   // one-shot: reset to None after attaching
-    // Sprites may layer (rug under a table) — just add on top
-    objects.push(obj);
-    updateInterList(); pushHistory(); render(); return;
+    if (!erasing && !selSprite) { openTileset(); return; }   // no brush yet — pick one
+    // Drag paints/erases objects continuously, like the tile brush
+    painting     = true;
+    paintErase   = erasing;
+    strokeMade   = false;
+    strokePlaced = [];
+    lastCell     = { col, row };
+    if (erasing ? eraseObjectAt(col, row) : placeObjectAt(col, row)) strokeMade = true;
+    render(); return;
   }
 
   if (tool === 'fill') {
@@ -1862,11 +1875,17 @@ canvas.addEventListener('mousemove', e => {
 
   // Brush painting
   if (lastCell && lastCell.col === col && lastCell.row === row) return;
-  if (inBounds(col, row)) {
-    if (applyTile(col, row, paintErase ? T.VOID : undefined)) strokeMade = true;
+  if (!inBounds(col, row)) return;
+  if (tool === 'object') {
+    if (paintErase ? eraseObjectAt(col, row) : (selSprite && placeObjectAt(col, row)))
+      strokeMade = true;
     lastCell = { col, row };
     render();
+    return;
   }
+  if (applyTile(col, row, paintErase ? T.VOID : undefined)) strokeMade = true;
+  lastCell = { col, row };
+  render();
 });
 
 window.addEventListener('mouseup', e => {
