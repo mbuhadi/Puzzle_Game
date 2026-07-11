@@ -227,7 +227,11 @@ select:focus { outline: none; border-color: var(--gold-dim); }
 }
 #tsFoot {
   flex-shrink: 0; display: flex; gap: 8px; justify-content: flex-end;
-  padding: 8px 12px; border-top: 1px solid var(--border);
+  align-items: center; padding: 8px 12px; border-top: 1px solid var(--border);
+}
+#tsZoomLabel {
+  font-family: monospace; font-size: 11px; color: var(--dim);
+  min-width: 24px; text-align: center;
 }
 
 /* ── Animated tab inside the tileset picker ─────────────────────────────── */
@@ -392,6 +396,13 @@ select:focus { outline: none; border-color: var(--gold-dim); }
           <button id="solid-yes" class="active" onclick="setObjSolid(true)"  title="Player must walk around it">Solid</button>
           <button id="solid-no"                 onclick="setObjSolid(false)" title="Player can walk over it">Walkable</button>
         </div>
+        <div class="sec-title" style="margin-top:8px">PLACEMENT SNAP</div>
+        <div class="tool-grid" style="grid-template-columns:repeat(3,1fr)">
+          <button id="snap-1" class="active" onclick="setPlaceSnap(1)"    title="Snap to whole tiles">1</button>
+          <button id="snap-2"                onclick="setPlaceSnap(0.5)"  title="Snap to half tiles">½</button>
+          <button id="snap-4"                onclick="setPlaceSnap(0.25)" title="Snap to quarter tiles">¼</button>
+        </div>
+        <div class="hint-text" style="margin-top:4px">Arrow keys nudge the<br>object under the cursor</div>
       </div>
 
       <div class="divider"></div>
@@ -478,6 +489,11 @@ select:focus { outline: none; border-color: var(--gold-dim); }
         </div>
       </div>
       <div id="tsFoot">
+        <button onclick="tsZoomStep(-1)" title="Zoom out (or Ctrl+scroll)">−</button>
+        <span id="tsZoomLabel">2×</span>
+        <button onclick="tsZoomStep(1)" title="Zoom in (or Ctrl+scroll)">+</button>
+        <button id="tsSnapBtn" onclick="tsToggleSnap()" title="Selection precision: whole 16px tiles or 8px half-tiles">Snap: 16px</button>
+        <span class="hint-text" style="margin-right:auto">arrows move · shift+arrows resize · enter = use</span>
         <button onclick="tsCancel()">Cancel</button>
         <button id="tsUseBtn" onclick="tsUse()" disabled>Use Selection</button>
       </div>
@@ -669,6 +685,11 @@ let panAnchor  = null;
 let spaceHeld  = false;
 let rectStart  = null;
 let hoverCell  = null;
+let hoverCellF = null;    // exact (fractional) grid position under the cursor
+let placeSnap  = 1;       // object placement snap in tiles: 1, 0.5 or 0.25
+let nudgePending = false; // arrow-key nudges made since the last history push
+let nudgeTarget  = null;  // object of the current nudge burst — keeps moving
+                          // even after it slides out from under the cursor
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const canvas = document.getElementById('editorCanvas');
@@ -751,6 +772,7 @@ function clearSpawnsInOtherRooms() {
 
 function switchRoom(i) {
   if (i === curRoom || !rooms[i]) return;
+  flushNudge();   // pending nudges belong to this room's history
   syncRoomFromGlobals();
   bindRoom(i);
   if (histIdx < 0) pushHistory();   // baseline for a room never edited
@@ -876,6 +898,13 @@ function canvasToCell(cx, cy) {
     row: Math.floor((cy - panY) / zoom),
   };
 }
+// Exact position — object placement snaps this to placeSnap increments
+function canvasToCellF(cx, cy) {
+  return { col: (cx - panX) / zoom, row: (cy - panY) / zoom };
+}
+function snapCoord(v) { return Math.floor(v / placeSnap) * placeSnap; }
+// "2.5" not "2.500000", "3" not "3.00" — for labels showing fractional coords
+function fmtn(v) { return String(+(+v).toFixed(2)); }
 function cellXY(col, row) {
   return { x: col * zoom + panX, y: row * zoom + panY };
 }
@@ -939,10 +968,10 @@ function render() {
     drawEditorObject(o);
   }
 
-  // Ghost preview of the sprite brush under the cursor
-  if (tool === 'object' && selSprite && hoverCell && !painting && !isPanning &&
-      inBounds(hoverCell.col, hoverCell.row)) {
-    const { x, y } = cellXY(hoverCell.col, hoverCell.row);
+  // Ghost preview of the sprite brush under the cursor (snapped to placeSnap)
+  if (tool === 'object' && selSprite && hoverCellF && !painting && !isPanning &&
+      inBounds(Math.floor(hoverCellF.col), Math.floor(hoverCellF.row))) {
+    const { x, y } = cellXY(snapCoord(hoverCellF.col), snapCoord(hoverCellF.row));
     ctx.save();
     ctx.globalAlpha = 0.55;
     ctx.imageSmoothingEnabled = false;
@@ -1117,6 +1146,7 @@ function restoreSnapshot(s) {
 }
 
 function undo() {
+  flushNudge();   // an unfinished nudge burst becomes the state undo returns to
   if (histIdx <= 0) return;
   histIdx--;
   restoreSnapshot(history[histIdx]);
@@ -1124,6 +1154,7 @@ function undo() {
 }
 
 function redo() {
+  flushNudge();
   if (histIdx >= history.length - 1) return;
   histIdx++;
   restoreSnapshot(history[histIdx]);
@@ -1729,9 +1760,8 @@ let strokePlaced = [];
 
 function placeObjectAt(col, row) {
   const { sw, sh } = selSprite;
-  for (let r = row; r < row + sh; r++)
-    for (let c = col; c < col + sw; c++)
-      if (!inBounds(c, r)) return false;
+  // col/row may be fractional (placeSnap < 1) — the whole footprint must fit
+  if (col < 0 || row < 0 || col + sw > GRID_W || row + sh > GRID_H) return false;
   for (const p of strokePlaced)
     if (col < p.col + p.sw && col + sw > p.col &&
         row < p.row + p.sh && row + sh > p.row) return false;
@@ -1773,7 +1803,9 @@ function eraseObjectAt(col, row) {
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 canvas.addEventListener('mousedown', e => {
+  flushNudge();   // arrow-key nudges become one undo step before new edits
   const { col, row } = canvasToCell(e.offsetX, e.offsetY);
+  const cellF = canvasToCellF(e.offsetX, e.offsetY);
 
   // Pan: middle-mouse or space+left
   if (e.button === 1 || (e.button === 0 && spaceHeld)) {
@@ -1801,13 +1833,16 @@ canvas.addEventListener('mousedown', e => {
     }
     if (!inBounds(col, row)) return;
     if (!erasing && !selSprite) { openTileset(); return; }   // no brush yet — pick one
-    // Drag paints/erases objects continuously, like the tile brush
+    // Drag paints/erases objects continuously, like the tile brush.
+    // Placement snaps to placeSnap; erasing hit-tests the exact cursor point
+    // so fractionally placed objects are picked accurately.
+    const pc = snapCoord(cellF.col), pr = snapCoord(cellF.row);
     painting     = true;
     paintErase   = erasing;
     strokeMade   = false;
     strokePlaced = [];
-    lastCell     = { col, row };
-    if (erasing ? eraseObjectAt(col, row) : placeObjectAt(col, row)) strokeMade = true;
+    lastCell     = { col: pc, row: pr };
+    if (erasing ? eraseObjectAt(cellF.col, cellF.row) : placeObjectAt(pc, pr)) strokeMade = true;
     render(); return;
   }
 
@@ -1826,7 +1861,7 @@ canvas.addEventListener('mousedown', e => {
 
   // Paint brush — right-click removes the object on top first, then erases tiles
   if (erasing && inBounds(col, row)) {
-    const oi = objAt(col, row);
+    const oi = objAt(cellF.col, cellF.row);
     if (oi !== -1) {
       objects.splice(oi, 1);
       updateInterList(); pushHistory(); render();
@@ -1847,7 +1882,8 @@ canvas.addEventListener('mousedown', e => {
 
 canvas.addEventListener('mousemove', e => {
   const { col, row } = canvasToCell(e.offsetX, e.offsetY);
-  hoverCell = { col, row };
+  hoverCell  = { col, row };
+  hoverCellF = canvasToCellF(e.offsetX, e.offsetY);
 
   if (isPanning) {
     panX = panAnchor.px + (e.clientX - panAnchor.mx);
@@ -1855,14 +1891,18 @@ canvas.addEventListener('mousemove', e => {
     render(); return;
   }
 
-  // Update status cell info
+  // Update status cell info — with a fine snap the exact drop position matters,
+  // so show the snapped fractional coordinate alongside the cell
   if (inBounds(col, row)) {
-    document.getElementById('stCell').textContent = `col ${col}, row ${row}`;
+    let cellTxt = `col ${col}, row ${row}`;
+    if (tool === 'object' && placeSnap < 1)
+      cellTxt += ` · place @ ${fmtn(snapCoord(hoverCellF.col))}, ${fmtn(snapCoord(hoverCellF.row))}`;
+    document.getElementById('stCell').textContent = cellTxt;
     let info = TILE_NAMES[grid[row][col]];
-    const oi = objAt(col, row);
+    const oi = objAt(hoverCellF.col, hoverCellF.row);
     if (oi !== -1) {
       const o = objects[oi];
-      info += ` · ${o.anim ? 'Animated' : 'Sprite'} ${o.sw}×${o.sh} (${o.solid ? 'solid' : 'walkable'})`;
+      info += ` · ${o.anim ? 'Animated' : 'Sprite'} ${fmtn(o.sw)}×${fmtn(o.sh)} @ ${fmtn(o.col)},${fmtn(o.row)} (${o.solid ? 'solid' : 'walkable'})`;
       if (o.inter) info += ' · ' + o.inter;
       if (o.door)  info += ' · door → ' + (findRoomById(o.door)?.name || '?');
     }
@@ -1874,15 +1914,19 @@ canvas.addEventListener('mousemove', e => {
   if (tool === 'rect') { render(); return; } // preview only
 
   // Brush painting
-  if (lastCell && lastCell.col === col && lastCell.row === row) return;
-  if (!inBounds(col, row)) return;
   if (tool === 'object') {
-    if (paintErase ? eraseObjectAt(col, row) : (selSprite && placeObjectAt(col, row)))
+    const pc = snapCoord(hoverCellF.col), pr = snapCoord(hoverCellF.row);
+    if (lastCell && lastCell.col === pc && lastCell.row === pr) return;
+    if (!inBounds(col, row)) return;
+    if (paintErase ? eraseObjectAt(hoverCellF.col, hoverCellF.row)
+                   : (selSprite && placeObjectAt(pc, pr)))
       strokeMade = true;
-    lastCell = { col, row };
+    lastCell = { col: pc, row: pr };
     render();
     return;
   }
+  if (lastCell && lastCell.col === col && lastCell.row === row) return;
+  if (!inBounds(col, row)) return;
   if (applyTile(col, row, paintErase ? T.VOID : undefined)) strokeMade = true;
   lastCell = { col, row };
   render();
@@ -1919,7 +1963,7 @@ canvas.addEventListener('wheel', e => {
   zoomAt(e.offsetX, e.offsetY, e.deltaY < 0 ? 1.333 : 0.75);
 }, { passive: false });
 
-canvas.addEventListener('mouseleave', () => { hoverCell = null; render(); });
+canvas.addEventListener('mouseleave', () => { hoverCell = hoverCellF = null; render(); });
 
 // ── Keyboard ──────────────────────────────────────────────────────────────────
 window.addEventListener('keydown', e => {
@@ -1933,6 +1977,21 @@ window.addEventListener('keydown', e => {
       if (openOverlay === tsOverlay) tsCancel();
       else if (openOverlay.id === 'specialOverlay') closeSpecialPanel();
       else closeMapsPanel();
+      return;
+    }
+    // Tileset picker: Enter confirms; arrows move the selection one snap
+    // step, Shift+arrows grow/shrink it (sheet tabs only, not Animated)
+    if (openOverlay === tsOverlay) {
+      if (e.key === 'Enter') {
+        if (!document.getElementById('tsUseBtn').disabled) tsUse();
+        e.preventDefault(); return;
+      }
+      const arrow = { ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+                      ArrowUp: [0, -1],  ArrowDown: [0, 1] }[e.key];
+      if (arrow && tsSheet !== 'animated') {
+        tsNudge(arrow[0], arrow[1], e.shiftKey);
+        e.preventDefault(); return;
+      }
     }
     return;
   }
@@ -1954,6 +2013,30 @@ window.addEventListener('keydown', e => {
     return;
   }
 
+  // Arrow keys nudge the object under the cursor by one placement-snap step.
+  // The whole burst becomes a single undo entry, pushed on keyup.
+  const arrow = { ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+                  ArrowUp: [0, -1],  ArrowDown: [0, 1] }[e.key];
+  if (arrow) {
+    // Prefer the object under the cursor; if the burst already moved it out
+    // from under a stationary cursor, keep moving that same object
+    let o = null;
+    const i = hoverCellF ? objAt(hoverCellF.col, hoverCellF.row) : -1;
+    if (i !== -1) o = objects[i];
+    else if (nudgePending && nudgeTarget && objects.includes(nudgeTarget)) o = nudgeTarget;
+    if (!o) return;
+    nudgeTarget = o;
+    const nc = Math.max(0, Math.min(GRID_W - objW(o), o.col + arrow[0] * placeSnap));
+    const nr = Math.max(0, Math.min(GRID_H - objH(o), o.row + arrow[1] * placeSnap));
+    if (nc !== o.col || nr !== o.row) {
+      o.col = nc; o.row = nr;
+      nudgePending = true;
+      render();
+    }
+    e.preventDefault();
+    return;
+  }
+
   const toolMap = { b:'paint', g:'fill', r:'rect', s:'spawn' };
   if (toolMap[e.key.toLowerCase()]) { setTool(toolMap[e.key.toLowerCase()]); return; }
 
@@ -1964,7 +2047,15 @@ window.addEventListener('keydown', e => {
 
 window.addEventListener('keyup', e => {
   if (e.key === ' ') { spaceHeld = false; updateCursor(); }
+  if (e.key.startsWith('Arrow')) flushNudge();
 });
+
+function flushNudge() {
+  nudgeTarget = null;
+  if (!nudgePending) return;
+  nudgePending = false;
+  pushHistory();
+}
 
 // ── Tile palette builder ──────────────────────────────────────────────────────
 function buildPalette() {
@@ -1990,6 +2081,10 @@ const tsRect    = document.getElementById('tsRect');
 let tsStart = null;   // {tx, ty} sheet-tile coords where drag began
 let tsPick  = null;   // pending {sx, sy, sw, sh}
 let tsSheet = 'interiors';   // which sheet tab is active
+let tsZoom  = 2;      // display scale of the sheet (pixel-art integer steps)
+let tsSnap  = 1;      // selection precision in sheet tiles: 1 (16px) or 0.5 (8px)
+let tsHover = null;   // {tx, ty} snap-unit under the cursor, for the readout
+const TS_ZOOMS = [1, 2, 3, 4, 6, 8];
 
 function openTileset() { tsOverlay.classList.add('open'); }
 function tsCancel()    { tsOverlay.classList.remove('open'); tsStart = null; }
@@ -2020,37 +2115,108 @@ function tsSelectSheet(key) {
     b.classList.toggle('active', b.dataset.sheet === key));
 }
 
-// Sheets are pixel art — always display at 2× native size (the CSS width
-// only fits the 256px-wide Interiors sheet; Exteriors is 2816px wide)
+// Sheets are pixel art — display at an integer zoom (the CSS width only fits
+// the 256px-wide Interiors sheet; Exteriors is 2816px wide)
 tsImgEl.addEventListener('load', () => {
-  tsImgEl.style.width = (tsImgEl.naturalWidth * 2) + 'px';
+  tsImgEl.style.width = (tsImgEl.naturalWidth * tsZoom) + 'px';
 });
 
-// Sheet-tile coordinate under the mouse (img is displayed at 2× natural size)
+// Zoom keeps the sheet point under the anchor (cursor or view center) fixed
+function tsSetZoom(z, cx, cy) {
+  z = Math.max(TS_ZOOMS[0], Math.min(TS_ZOOMS[TS_ZOOMS.length - 1], z));
+  if (z === tsZoom) return;
+  const r  = tsScroll.getBoundingClientRect();
+  const mx = cx != null ? cx - r.left : r.width  / 2;
+  const my = cy != null ? cy - r.top  : r.height / 2;
+  const px = (tsScroll.scrollLeft + mx) / tsZoom;   // sheet px at the anchor
+  const py = (tsScroll.scrollTop  + my) / tsZoom;
+  tsZoom = z;
+  tsImgEl.style.width = (tsImgEl.naturalWidth * tsZoom) + 'px';
+  tsScroll.scrollLeft = px * tsZoom - mx;
+  tsScroll.scrollTop  = py * tsZoom - my;
+  document.getElementById('tsZoomLabel').textContent = tsZoom + '×';
+  tsPlaceRect();
+}
+
+function tsZoomStep(dir, cx, cy) {
+  const i = TS_ZOOMS.indexOf(tsZoom);
+  tsSetZoom(TS_ZOOMS[Math.max(0, Math.min(TS_ZOOMS.length - 1, i + dir))], cx, cy);
+}
+
+// Ctrl+scroll zooms at the cursor; plain scroll pans as usual
+tsScroll.addEventListener('wheel', e => {
+  if (!e.ctrlKey || tsSheet === 'animated') return;
+  e.preventDefault();
+  tsZoomStep(e.deltaY < 0 ? 1 : -1, e.clientX, e.clientY);
+}, { passive: false });
+
+function tsToggleSnap() {
+  tsSnap = tsSnap === 1 ? 0.5 : 1;
+  document.getElementById('tsSnapBtn').textContent =
+    'Snap: ' + (tsSnap === 1 ? '16px' : '8px');
+}
+
+// Sheet-tile coordinate under the mouse, floored to the current snap step
 function tsTileAt(e) {
   const r = tsImgEl.getBoundingClientRect();
   const scale = r.width / tsImgEl.naturalWidth;
-  const tx = Math.floor((e.clientX - r.left) / (SHEET_TILE * scale));
-  const ty = Math.floor((e.clientY - r.top)  / (SHEET_TILE * scale));
+  const step = SHEET_TILE * scale * tsSnap;
+  const tx = Math.floor((e.clientX - r.left) / step) * tsSnap;
+  const ty = Math.floor((e.clientY - r.top)  / step) * tsSnap;
   return {
-    tx: Math.max(0, Math.min(Math.floor(tsImgEl.naturalWidth  / SHEET_TILE) - 1, tx)),
-    ty: Math.max(0, Math.min(Math.floor(tsImgEl.naturalHeight / SHEET_TILE) - 1, ty)),
+    tx: Math.max(0, Math.min(tsImgEl.naturalWidth  / SHEET_TILE - tsSnap, tx)),
+    ty: Math.max(0, Math.min(tsImgEl.naturalHeight / SHEET_TILE - tsSnap, ty)),
   };
+}
+
+function tsSelLabel() {
+  const hov = tsHover ? `@ ${fmtn(tsHover.tx)},${fmtn(tsHover.ty)}` : '';
+  const sel = tsPick ? `${fmtn(tsPick.sw)}×${fmtn(tsPick.sh)} tiles` : 'no selection';
+  document.getElementById('tsSel').textContent = hov ? `${hov} · ${sel}` : sel;
+}
+
+// Position the highlight rect from tsPick (drag, nudge and zoom all end here)
+function tsPlaceRect() {
+  if (!tsPick) return;
+  const scale = tsImgEl.getBoundingClientRect().width / tsImgEl.naturalWidth;
+  const px = SHEET_TILE * scale;
+  tsRect.style.display = 'block';
+  tsRect.style.left   = (tsPick.sx * px) + 'px';
+  tsRect.style.top    = (tsPick.sy * px) + 'px';
+  tsRect.style.width  = (tsPick.sw * px) + 'px';
+  tsRect.style.height = (tsPick.sh * px) + 'px';
+  tsSelLabel();
+  document.getElementById('tsUseBtn').disabled = false;
 }
 
 function tsUpdateRect(a, b) {
   const sx = Math.min(a.tx, b.tx), sy = Math.min(a.ty, b.ty);
-  const sw = Math.abs(a.tx - b.tx) + 1, sh = Math.abs(a.ty - b.ty) + 1;
+  const sw = Math.abs(a.tx - b.tx) + tsSnap, sh = Math.abs(a.ty - b.ty) + tsSnap;
   tsPick = { sx, sy, sw, sh };
+  tsPlaceRect();
+}
+
+// Arrow keys move the selection one snap step; Shift+arrows resize it
+function tsNudge(dx, dy, resize) {
+  if (!tsPick) return;
+  const maxW = tsImgEl.naturalWidth / SHEET_TILE, maxH = tsImgEl.naturalHeight / SHEET_TILE;
+  if (resize) {
+    tsPick.sw = Math.max(tsSnap, Math.min(maxW - tsPick.sx, tsPick.sw + dx * tsSnap));
+    tsPick.sh = Math.max(tsSnap, Math.min(maxH - tsPick.sy, tsPick.sh + dy * tsSnap));
+  } else {
+    tsPick.sx = Math.max(0, Math.min(maxW - tsPick.sw, tsPick.sx + dx * tsSnap));
+    tsPick.sy = Math.max(0, Math.min(maxH - tsPick.sh, tsPick.sy + dy * tsSnap));
+  }
+  tsPlaceRect();
+  // Keep the selection in view while it walks off-screen
   const scale = tsImgEl.getBoundingClientRect().width / tsImgEl.naturalWidth;
   const px = SHEET_TILE * scale;
-  tsRect.style.display = 'block';
-  tsRect.style.left   = (sx * px) + 'px';
-  tsRect.style.top    = (sy * px) + 'px';
-  tsRect.style.width  = (sw * px) + 'px';
-  tsRect.style.height = (sh * px) + 'px';
-  document.getElementById('tsSel').textContent = `${sw}×${sh} tiles`;
-  document.getElementById('tsUseBtn').disabled = false;
+  const x0 = tsPick.sx * px, y0 = tsPick.sy * px;
+  const x1 = x0 + tsPick.sw * px, y1 = y0 + tsPick.sh * px;
+  if (x0 < tsScroll.scrollLeft) tsScroll.scrollLeft = x0 - px;
+  if (y0 < tsScroll.scrollTop)  tsScroll.scrollTop  = y0 - px;
+  if (x1 > tsScroll.scrollLeft + tsScroll.clientWidth)  tsScroll.scrollLeft = x1 - tsScroll.clientWidth  + px;
+  if (y1 > tsScroll.scrollTop  + tsScroll.clientHeight) tsScroll.scrollTop  = y1 - tsScroll.clientHeight + px;
 }
 
 tsScroll.addEventListener('mousedown', e => {
@@ -2060,9 +2226,12 @@ tsScroll.addEventListener('mousedown', e => {
   tsUpdateRect(tsStart, tsStart);
 });
 tsScroll.addEventListener('mousemove', e => {
-  if (!tsStart) return;
-  tsUpdateRect(tsStart, tsTileAt(e));
+  if (tsSheet === 'animated') return;
+  if (e.target === tsImgEl || tsStart) tsHover = tsTileAt(e);
+  if (tsStart) tsUpdateRect(tsStart, tsHover);
+  else tsSelLabel();
 });
+tsScroll.addEventListener('mouseleave', () => { tsHover = null; tsSelLabel(); });
 window.addEventListener('mouseup', () => { tsStart = null; });
 
 function clearSpriteBrush() {
@@ -2289,6 +2458,14 @@ function setObjSolid(v) {
   objSolid = v;
   document.getElementById('solid-yes').classList.toggle('active', v);
   document.getElementById('solid-no').classList.toggle('active', !v);
+}
+
+function setPlaceSnap(s) {
+  placeSnap = s;
+  document.getElementById('snap-1').classList.toggle('active', s === 1);
+  document.getElementById('snap-2').classList.toggle('active', s === 0.5);
+  document.getElementById('snap-4').classList.toggle('active', s === 0.25);
+  render();
 }
 
 // ── Interactable attachment dropdowns ─────────────────────────────────────────
