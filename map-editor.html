@@ -492,7 +492,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
         <button onclick="tsZoomStep(-1)" title="Zoom out (or Ctrl+scroll)">−</button>
         <span id="tsZoomLabel">2×</span>
         <button onclick="tsZoomStep(1)" title="Zoom in (or Ctrl+scroll)">+</button>
-        <button id="tsSnapBtn" onclick="tsToggleSnap()" title="Selection precision: whole 16px tiles or 8px half-tiles">Snap: 16px</button>
+        <button id="tsSnapBtn" onclick="tsToggleSnap()" title="Selection precision: cycles 16px → 8px → 4px">Snap: 16px</button>
         <span class="hint-text" style="margin-right:auto">arrows move · shift+arrows resize · enter = use</span>
         <button onclick="tsCancel()">Cancel</button>
         <button id="tsUseBtn" onclick="tsUse()" disabled>Use Selection</button>
@@ -2082,7 +2082,7 @@ let tsStart = null;   // {tx, ty} sheet-tile coords where drag began
 let tsPick  = null;   // pending {sx, sy, sw, sh}
 let tsSheet = 'interiors';   // which sheet tab is active
 let tsZoom  = 2;      // display scale of the sheet (pixel-art integer steps)
-let tsSnap  = 1;      // selection precision in sheet tiles: 1 (16px) or 0.5 (8px)
+let tsSnap  = 1;      // selection precision in sheet tiles: 1 (16px), 0.5 (8px) or 0.25 (4px)
 let tsHover = null;   // {tx, ty} snap-unit under the cursor, for the readout
 const TS_ZOOMS = [1, 2, 3, 4, 6, 8];
 
@@ -2151,9 +2151,9 @@ tsScroll.addEventListener('wheel', e => {
 }, { passive: false });
 
 function tsToggleSnap() {
-  tsSnap = tsSnap === 1 ? 0.5 : 1;
+  tsSnap = tsSnap === 1 ? 0.5 : tsSnap === 0.5 ? 0.25 : 1;
   document.getElementById('tsSnapBtn').textContent =
-    'Snap: ' + (tsSnap === 1 ? '16px' : '8px');
+    'Snap: ' + (tsSnap === 1 ? '16px' : tsSnap === 0.5 ? '8px' : '4px');
 }
 
 // Sheet-tile coordinate under the mouse, floored to the current snap step
