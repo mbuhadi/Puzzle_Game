@@ -1736,7 +1736,12 @@ function playMap() {
     return;
   }
   const sp = startRoom.spawn;
-  const spawnBlocked = startRoom.objects.some(o => o.solid && objCovers(o, sp.col, sp.row));
+  // Match the game's collision: the player is a 0.28-half-width box at the
+  // tile center, and solid objects block by exact footprint (sub-tile precise)
+  const PLAYER_H = 0.28, px = sp.col + 0.5, py = sp.row + 0.5;
+  const spawnBlocked = startRoom.objects.some(o => o.solid &&
+    px + PLAYER_H > o.col && px - PLAYER_H < o.col + objW(o) &&
+    py + PLAYER_H > o.row && py - PLAYER_H < o.row + objH(o));
   if (spawnBlocked) {
     alert('The spawn point is inside a solid object — the player would be stuck. Move the spawn or change the object\'s collision to Walk-Over or Walk-Under.');
     return;

@@ -309,7 +309,9 @@ const PLACED = [];
 // Built-in: {col, row, type, solid} · Tileset sprite: {col, row, sx, sy, sw, sh, solid}
 // `under: true` marks walk-under objects (arches, hanging lamps) drawn over the player
 const OBJECTS   = [];
-const OBJ_SOLID = new Set(); // cell keys (row*GRID_W+col) that block movement
+const OBJ_RECTS = []; // solid object footprints {x0,y0,x1,y1} in tile units —
+                      // collision is against the exact rect, not whole tiles,
+                      // so a sprite covering half a tile only blocks that half
 
 // ── Rooms (multi-room custom maps from Map Studio) ───────────────────────────
 // ROOMS is null for procedural riads. Doors are objects carrying a
@@ -368,16 +370,21 @@ function animFrameIdx(o) {
 }
 
 function rebuildObjSolid() {
-  OBJ_SOLID.clear();
+  OBJ_RECTS.length = 0;
   for (const o of OBJECTS) {
     if (!o.solid) continue;
     const w = o.sw || 1, h = o.sh || 1;
-    // col/row may be fractional (editor sub-tile placement) — any cell the
-    // footprint overlaps becomes solid (epsilon keeps exact edges exclusive)
-    for (let r = Math.floor(o.row); r < Math.ceil(o.row + h - 1e-9); r++)
-      for (let c = Math.floor(o.col); c < Math.ceil(o.col + w - 1e-9); c++)
-        OBJ_SOLID.add(r * GRID_W + c);
+    OBJ_RECTS.push({ x0: o.col, y0: o.row, x1: o.col + w, y1: o.row + h });
   }
+}
+
+// Does the player box (center x,y, half-size h) overlap any solid object?
+// Strict inequalities keep exact edge contact non-blocking.
+function objBlocked(x, y, h) {
+  for (const r of OBJ_RECTS)
+    if (x + h > r.x0 && x - h < r.x1 && y + h > r.y0 && y - h < r.y1)
+      return true;
+  return false;
 }
 
 // ── Seed / persistence ────────────────────────────────────────────────────────
@@ -540,16 +547,20 @@ function generateRiad(seed) {
 // ── Collision ─────────────────────────────────────────────────────────────────
 function walkable(col, row) {
   if (row < 0 || row >= GRID_H || col < 0 || col >= GRID_W) return false;
-  if (OBJ_SOLID.has(row * GRID_W + col)) return false;
   const t = mapGrid[row][col];
   return t === T.FLOOR || t === T.COURTYARD;
+}
+// Can the player stand centered on this tile? (terrain + solid objects)
+function standable(col, row) {
+  return walkable(col, row) && !objBlocked(col + 0.5, row + 0.5, HITBOX);
 }
 function canMoveTo(x, y) {
   const h = HITBOX;
   return walkable(Math.floor(x-h), Math.floor(y-h))
       && walkable(Math.floor(x+h), Math.floor(y-h))
       && walkable(Math.floor(x-h), Math.floor(y+h))
-      && walkable(Math.floor(x+h), Math.floor(y+h));
+      && walkable(Math.floor(x+h), Math.floor(y+h))
+      && !objBlocked(x, y, h);
 }
 
 // ── Player ────────────────────────────────────────────────────────────────────
@@ -698,15 +709,15 @@ function adjacentWalkable(o) {
   for (let c = c0; c < c1; c++) cands.push([c, r0 - 1]);  // above
   for (let r = r0; r < r1; r++) { cands.push([c0 - 1, r]); cands.push([c1, r]); }
   for (const [c, r] of cands)
-    if (walkable(c, r)) return { x: c + 0.5, y: r + 0.5 };
-  if (!o.solid && walkable(c0, r0)) return { x: c0 + 0.5, y: r0 + 0.5 };
+    if (standable(c, r)) return { x: c + 0.5, y: r + 0.5 };
+  if (!o.solid && standable(c0, r0)) return { x: c0 + 0.5, y: r0 + 0.5 };
   return null;
 }
 
 function firstWalkable() {
   for (let r = 0; r < GRID_H; r++)
     for (let c = 0; c < GRID_W; c++)
-      if (walkable(c, r)) return { x: c + 0.5, y: r + 0.5 };
+      if (standable(c, r)) return { x: c + 0.5, y: r + 0.5 };
   return null;
 }
 
@@ -720,7 +731,7 @@ function doorTransit(targetRoomId) {
   let pos = null;
   const back = rm.objects.find(o => o.door === fromId);
   if (back) pos = adjacentWalkable(back);
-  if (!pos && rm.spawn && walkable(+rm.spawn.col, +rm.spawn.row))
+  if (!pos && rm.spawn && standable(+rm.spawn.col, +rm.spawn.row))
     pos = { x: +rm.spawn.col + 0.5, y: +rm.spawn.row + 0.5 };
   if (!pos) pos = firstWalkable();
   if (pos) { player.x = pos.x; player.y = pos.y; }
