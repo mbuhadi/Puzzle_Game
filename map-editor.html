@@ -392,9 +392,10 @@ select:focus { outline: none; border-color: var(--gold-dim); }
           <div class="hint-text" id="brushLabel"></div>
         </div>
         <div class="sec-title" style="margin-top:8px">COLLISION</div>
-        <div class="tool-grid">
-          <button id="solid-yes" class="active" onclick="setObjSolid(true)"  title="Player must walk around it">Solid</button>
-          <button id="solid-no"                 onclick="setObjSolid(false)" title="Player can walk over it">Walkable</button>
+        <div class="tool-grid" style="grid-template-columns:1fr">
+          <button id="pass-solid" class="active" onclick="setObjPass('solid')" title="Blocks the player — they must walk around it">Solid</button>
+          <button id="pass-over"                 onclick="setObjPass('over')"  title="Player walks on top of it (rugs, floor decals)">Walk-Over</button>
+          <button id="pass-under"                onclick="setObjPass('under')" title="Player passes underneath — it draws over the player (arches, hanging lamps)">Walk-Under</button>
         </div>
         <div class="sec-title" style="margin-top:8px">PLACEMENT SNAP</div>
         <div class="tool-grid" style="grid-template-columns:repeat(3,1fr)">
@@ -663,7 +664,7 @@ let panX = 0, panY = 0;
 let tool = 'paint';
 let selTile = T.FLOOR;
 let selSprite = null;       // {sx, sy, sw, sh} in sheet tiles — the object brush
-let objSolid = true;
+let objPass = 'solid';      // 'solid' | 'over' | 'under' — collision mode for new objects
 let selPuzzle = null;       // puzzle id to attach to the next placed object
 let selDoor = null;         // 'door:roomId' to attach to the next placed object
                             // (both set = locked door: puzzle must be solved
@@ -1106,11 +1107,14 @@ function drawEditorObject(o) {
   ctx.restore();
 }
 
-// Red outline = solid, dashed white = walk-over
+// Red outline = solid, dashed white = walk-over, dashed cyan = walk-under
 function drawCollisionOutline(o, x, y, fw, fh) {
   ctx.lineWidth = 1;
   if (o.solid) {
     ctx.strokeStyle = 'rgba(230,110,90,0.75)';
+  } else if (o.under) {
+    ctx.strokeStyle = 'rgba(90,200,230,0.6)';
+    ctx.setLineDash([3, 2]);
   } else {
     ctx.strokeStyle = 'rgba(255,255,255,0.45)';
     ctx.setLineDash([3, 2]);
@@ -1387,6 +1391,7 @@ function fromData(data) {
               obj = { col: +o.col, row: +o.row, sheet: SHEETS[o.sheet] ? o.sheet : 'interiors',
                       sx: +o.sx, sy: +o.sy, sw: +o.sw, sh: +o.sh, solid: !!o.solid };
             }
+            if (o.under && !obj.solid) obj.under = true;
             if (typeof o.inter === 'string' &&
                 INTERACTABLE_IDS.some(x => x.id === o.inter) && !seenInter.has(o.inter)) {
               obj.inter = o.inter;
@@ -1733,7 +1738,7 @@ function playMap() {
   const sp = startRoom.spawn;
   const spawnBlocked = startRoom.objects.some(o => o.solid && objCovers(o, sp.col, sp.row));
   if (spawnBlocked) {
-    alert('The spawn point is inside a solid object — the player would be stuck. Move the spawn or make the object walkable.');
+    alert('The spawn point is inside a solid object — the player would be stuck. Move the spawn or change the object\'s collision to Walk-Over or Walk-Under.');
     return;
   }
   // Doors into rooms with no walkable tile would have nowhere to drop the player
@@ -1766,9 +1771,10 @@ function placeObjectAt(col, row) {
     if (col < p.col + p.sw && col + sw > p.col &&
         row < p.row + p.sh && row + sh > p.row) return false;
   const obj = selSprite.anim
-    ? { col, row, sw, sh, solid: objSolid, anim: { ...selSprite.anim } }
+    ? { col, row, sw, sh, solid: objPass === 'solid', anim: { ...selSprite.anim } }
     : { col, row, sheet: selSprite.sheet || 'interiors',
-        sx: selSprite.sx, sy: selSprite.sy, sw, sh, solid: objSolid };
+        sx: selSprite.sx, sy: selSprite.sy, sw, sh, solid: objPass === 'solid' };
+  if (objPass === 'under') obj.under = true;   // drawn over the player in-game
   if (selDoor) {
     // Door attachment — this object teleports the player to that room
     const rid = selDoor.slice(5);
@@ -1902,7 +1908,7 @@ canvas.addEventListener('mousemove', e => {
     const oi = objAt(hoverCellF.col, hoverCellF.row);
     if (oi !== -1) {
       const o = objects[oi];
-      info += ` · ${o.anim ? 'Animated' : 'Sprite'} ${fmtn(o.sw)}×${fmtn(o.sh)} @ ${fmtn(o.col)},${fmtn(o.row)} (${o.solid ? 'solid' : 'walkable'})`;
+      info += ` · ${o.anim ? 'Animated' : 'Sprite'} ${fmtn(o.sw)}×${fmtn(o.sh)} @ ${fmtn(o.col)},${fmtn(o.row)} (${o.solid ? 'solid' : o.under ? 'walk-under' : 'walk-over'})`;
       if (o.inter) info += ' · ' + o.inter;
       if (o.door)  info += ' · door → ' + (findRoomById(o.door)?.name || '?');
     }
@@ -2252,8 +2258,8 @@ function tsUse() {
               stride: d.w, frames: d.frames, ms: d.ms, once: !!d.once },
     };
     // Sensible collision defaults: water is swimmable-over, doors block until used
-    if (d.cat === 'Water & Terrain') setObjSolid(false);
-    else if (d.once) setObjSolid(true);
+    if (d.cat === 'Water & Terrain') setObjPass('over');
+    else if (d.once) setObjPass('solid');
   } else {
     if (!tsPick) return;
     selSprite = { ...tsPick, sheet: tsSheet };
@@ -2454,10 +2460,10 @@ function updateBrushPreview() {
   document.getElementById('brushLabel').textContent = `${sw}×${sh} · ${packName}`;
 }
 
-function setObjSolid(v) {
-  objSolid = v;
-  document.getElementById('solid-yes').classList.toggle('active', v);
-  document.getElementById('solid-no').classList.toggle('active', !v);
+function setObjPass(v) {
+  objPass = v;
+  for (const m of ['solid', 'over', 'under'])
+    document.getElementById('pass-' + m).classList.toggle('active', v === m);
 }
 
 function setPlaceSnap(s) {

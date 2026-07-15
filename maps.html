@@ -307,6 +307,7 @@ const PLACED = [];
 
 // ── Objects (decor layer from the map editor) ─────────────────────────────────
 // Built-in: {col, row, type, solid} · Tileset sprite: {col, row, sx, sy, sw, sh, solid}
+// `under: true` marks walk-under objects (arches, hanging lamps) drawn over the player
 const OBJECTS   = [];
 const OBJ_SOLID = new Set(); // cell keys (row*GRID_W+col) that block movement
 
@@ -1177,9 +1178,10 @@ function render() {
     for (let c = c0; c < c1; c++)
       drawTile(mapGrid[r][c], c*TILE_PX, r*TILE_PX);
 
-  // Objects layer (above tiles, below interactables and player)
+  // Objects layer (above tiles, below interactables and player);
+  // walk-under objects are held back and drawn over the player instead
   for (const o of OBJECTS)
-    drawObject(o, o.col*TILE_PX, o.row*TILE_PX);
+    if (!o.under) drawObject(o, o.col*TILE_PX, o.row*TILE_PX);
 
   // Hover highlight during drag (green = valid, red = invalid)
   if (drag.active && hoverTile) {
@@ -1196,6 +1198,9 @@ function render() {
     drawPlacedItem(p.col*TILE_PX, p.row*TILE_PX, p.id, drag.active && drag.id === p.id);
 
   drawPlayer((player.x - 0.5)*TILE_PX, (player.y - 0.5)*TILE_PX);
+  // Walk-under objects (arches, canopies) — the player passes beneath them
+  for (const o of OBJECTS)
+    if (o.under) drawObject(o, o.col*TILE_PX, o.row*TILE_PX);
   drawThoughtBubble();   // world space — drawn above player, inside translate
   ctx.restore();
 
@@ -1334,6 +1339,7 @@ function sanitizeObjects(raw) {
     } else {
       obj = { col, row, type: String(o.type), solid: !!o.solid };
     }
+    if (o.under && !obj.solid) obj.under = true;
     if (typeof o.inter === 'string' && ALL.some(x => x.id === o.inter)) obj.inter = o.inter;
     if (typeof o.door === 'string') obj.door = o.door;
     out.push(obj);
