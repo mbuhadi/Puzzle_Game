@@ -39,24 +39,7 @@
     letter-spacing: 1px;
   }
   .bar-btn:hover { background: #1e1c18; border-color: #c8a84b; }
-  #btnSave { color: #7a9a6a; border-color: #2a3a1e; }
-  #btnSave:hover { border-color: #7a9a6a; }
-  #saveConfirm {
-    font-family: monospace; font-size: 11px; color: #4a7c59;
-    opacity: 0; transition: opacity 0.4s;
-    pointer-events: none;
-  }
-  #saveConfirm.show { opacity: 1; }
 
-  /* ── Layout ──────────────────────────────────────────────────────── */
-  .layout-row {
-    display: flex;
-    gap: 20px;
-    align-items: flex-start;
-  }
-  .map-side {
-    display: flex; flex-direction: column; gap: 10px; align-items: center;
-  }
   #mapCanvas {
     display: block;
     image-rendering: pixelated;
@@ -69,21 +52,6 @@
   #mapCanvas:focus { border-color: #c8a84b; }
   .hint { font-family: monospace; font-size: 11px; color: #3a3530; }
 
-
-  /* ── Interactables panel ─────────────────────────────────────────── */
-  .panel {
-    width: 190px;
-    flex-shrink: 0;
-    background: #0e0d0a;
-    border: 1px solid #2e2a1e;
-    border-radius: 8px;
-    padding: 14px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    max-height: 524px;
-    overflow-y: auto;
-  }
   .panel-title {
     font-family: monospace;
     font-size: 10px;
@@ -91,56 +59,9 @@
     letter-spacing: 1.5px;
     margin-bottom: 10px;
   }
-  .puzzle-group { margin-bottom: 8px; }
-  .puzzle-label {
-    font-family: monospace;
-    font-size: 9px;
-    color: #2e2a1e;
-    letter-spacing: 1px;
-    margin-bottom: 2px;
-    padding-left: 4px;
-  }
-  .pi-item {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 5px 6px;
-    border-radius: 4px;
-    cursor: grab;
-    user-select: none;
-    border: 1px solid transparent;
-    transition: background 0.1s, border-color 0.1s;
-  }
-  .pi-item:hover { background: #1a1814; border-color: #2e2a1e; }
-  .pi-item.is-placed { opacity: 0.4; }
-  .pi-handle { color: #2e2a24; font-size: 14px; line-height: 1; flex-shrink: 0; }
-  .pi-id { font-family: monospace; font-size: 12px; color: #c8a84b; flex: 1; }
-  .pi-dot {
-    width: 5px; height: 5px; border-radius: 50%;
-    background: #4a7c59; flex-shrink: 0; visibility: hidden;
-  }
-  .pi-item.is-placed .pi-dot { visibility: visible; }
   .panel-foot {
     font-family: monospace; font-size: 9px; color: #2a2520;
     text-align: center; margin-top: 10px; letter-spacing: 0.5px;
-  }
-
-  /* ── Drag ghost ──────────────────────────────────────────────────── */
-  #dragGhost {
-    position: fixed;
-    pointer-events: none;
-    z-index: 9999;
-    display: none;
-    background: #ff8c00;
-    color: #000;
-    font-family: monospace;
-    font-size: 11px;
-    font-weight: bold;
-    padding: 3px 9px;
-    border-radius: 3px;
-    transform: translate(-50%, -130%);
-    white-space: nowrap;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
   }
 
   /* ── Examine overlay ─────────────────────────────────────────────── */
@@ -182,15 +103,6 @@
   }
   #examineLeave:hover { background: #1a1814; color: #e8c860; }
 
-  /* ── Legend ──────────────────────────────────────────────────────── */
-  .legend {
-    display: flex; gap: 16px; flex-wrap: wrap;
-    justify-content: center;
-    font-family: monospace; font-size: 11px; color: #4a4540;
-  }
-  .legend-item { display: flex; align-items: center; gap: 6px; }
-  .swatch { width: 12px; height: 12px; border-radius: 2px; border: 1px solid rgba(255,255,255,0.07); flex-shrink: 0; }
-
   a { font-size: 12px; color: #4a4540; font-family: sans-serif; text-decoration: none; margin-top: 4px; }
   a:hover { color: #c8a84b; }
 
@@ -226,33 +138,10 @@
     &nbsp;|&nbsp; Area: <span id="sqftLabel">…</span>
   </div>
   <button class="bar-btn" id="btnRandomize">Randomize</button>
-  <button class="bar-btn" id="btnSave">Save Placements</button>
-  <span id="saveConfirm">saved ✓</span>
 </div>
 
-<div class="layout-row">
-
-  <div class="map-side">
-    <canvas id="mapCanvas" tabindex="0"></canvas>
-    <div class="hint">WASD / Arrows &nbsp;·&nbsp; E to examine &nbsp;·&nbsp; joystick on touch</div>
-  </div>
-
-  <div class="panel">
-    <div class="panel-title">INTERACTABLES</div>
-    <div id="panelList"></div>
-    <div class="panel-foot">drag onto map · drag off to remove</div>
-  </div>
-
-</div>
-
-<div class="legend">
-  <div class="legend-item"><div class="swatch" style="background:#1a1410;"></div>Exterior</div>
-  <div class="legend-item"><div class="swatch" style="background:#c8a86a;"></div>Room Floor</div>
-  <div class="legend-item"><div class="swatch" style="background:#d4ba88;"></div>Courtyard</div>
-  <div class="legend-item"><div class="swatch" style="background:#3a7aaa;"></div>Pond</div>
-  <div class="legend-item"><div class="swatch" style="background:#8a6a40;"></div>Wall</div>
-  <div class="legend-item"><div class="swatch" style="background:#c8a84b;border-radius:50%;"></div>Player</div>
-</div>
+<canvas id="mapCanvas" tabindex="0"></canvas>
+<div class="hint">WASD / Arrows &nbsp;·&nbsp; E to examine &nbsp;·&nbsp; joystick on touch</div>
 
 <div class="maps-lib">
   <div class="panel-title">MY MAPS — saved on the website (maps/ folder in the repo)</div>
@@ -264,8 +153,6 @@
 
 <a href="index.html">← Back to Home</a>
 <div style="font-family:monospace;font-size:10px;color:#3a3530;">art: Modern Interiors &amp; Modern Exteriors by LimeZu (limezu.itch.io)</div>
-
-<div id="dragGhost"></div>
 
 <div id="examineOverlay">
   <div id="examineBox">
@@ -297,8 +184,6 @@ const POND_R  = 3;                  // diamond pond radius (tiles)
 //    (puzzles_curated_data.js) ─────────────────────────────────────────────────
 const ALL = PUZZLE_CHUNKS;
 
-const PLACED = [];
-
 // ── Objects (decor layer from the map editor) ─────────────────────────────────
 // Built-in: {col, row, type, solid} · Tileset sprite: {col, row, sx, sy, sw, sh, solid}
 // `under: true` marks walk-under objects (arches, hanging lamps) drawn over the player
@@ -311,7 +196,7 @@ const OBJ_RECTS = []; // solid object footprints {x0,y0,x1,y1} in tile units —
 // ROOMS is null for procedural riads. Doors are objects carrying a
 // `door: roomId` attachment — walking near one and pressing E teleports the
 // player to that room.
-let ROOMS = null;        // [{id, name, grid, spawn, objects, interactables}]
+let ROOMS = null;        // [{id, name, grid, spawn, objects}]
 let curRoomIdx = 0;
 
 const SHEET_TILE = 16;
@@ -384,24 +269,6 @@ function objBlocked(x, y, h) {
 // ── Seed / persistence ────────────────────────────────────────────────────────
 const DEFAULT_SEED = 0x4b3c2a;
 let currentSeed = parseInt(localStorage.getItem('map1seed')) || DEFAULT_SEED;
-
-const PLACED_KEY = seed => 'map1placed_' + seed;
-
-function savePlaced() {
-  localStorage.setItem(PLACED_KEY(currentSeed), JSON.stringify(PLACED));
-  const el = document.getElementById('saveConfirm');
-  el.classList.add('show');
-  clearTimeout(savePlaced._t);
-  savePlaced._t = setTimeout(() => el.classList.remove('show'), 1800);
-}
-
-function loadPlaced(seed) {
-  PLACED.length = 0;
-  try {
-    const raw = localStorage.getItem(PLACED_KEY(seed));
-    if (raw) JSON.parse(raw).forEach(p => PLACED.push(p));
-  } catch(e) {}
-}
 
 // ── Map generation (Arabian riad with central courtyard) ──────────────────────
 let mapGrid = null;
@@ -653,11 +520,6 @@ function getNearbyInteractable() {
       return n;
     }
   }
-  // Standalone markers (legacy / drag-and-drop panel)
-  for (const p of PLACED) {
-    const dx = player.x - (p.col + 0.5), dy = player.y - (p.row + 0.5);
-    if (Math.sqrt(dx*dx + dy*dy) < INTERACT_RADIUS) return p;
-  }
   return null;
 }
 
@@ -669,7 +531,6 @@ function updateNearby() {
 
 // ── Update ────────────────────────────────────────────────────────────────────
 function update(dt) {
-  if (drag.active) return;
   let dx = JOY.dx, dy = JOY.dy;
   if (keys['ArrowLeft']  || keys['a'] || keys['A']) dx -= 1;
   if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 1;
@@ -754,11 +615,6 @@ function getCamera() {
     y: Math.round(Math.max(0, Math.min(GRID_H * TILE_PX - VIEWPORT_H, player.y * TILE_PX - VIEWPORT_H / 2))),
   };
 }
-function screenToTile(relX, relY) {
-  const cam = getCamera();
-  return { col: Math.floor((relX + cam.x) / TILE_PX), row: Math.floor((relY + cam.y) / TILE_PX) };
-}
-
 // ── Drawing ───────────────────────────────────────────────────────────────────
 const canvas = document.getElementById('mapCanvas');
 const ctx    = canvas.getContext('2d');
@@ -934,32 +790,6 @@ function drawObject(o, px, py) {
   }
 }
 
-function drawPlacedItem(px, py, id, dimmed) {
-  const S = TILE_PX;
-  ctx.globalAlpha = dimmed ? 0.3 : 1;
-
-  // Pulsing green glow
-  const pulse = 0.55 + 0.25 * Math.sin(performance.now() / 400);
-  ctx.shadowColor  = '#44ff88';
-  ctx.shadowBlur   = 12 * pulse;
-  ctx.fillStyle = `rgba(40,180,90,${(0.18 * pulse).toFixed(3)})`;
-  ctx.fillRect(px+1, py+1, S-2, S-2);
-  ctx.strokeStyle = `rgba(80,220,120,${pulse.toFixed(3)})`;
-  ctx.lineWidth = 1.8;
-  ctx.strokeRect(px+1.5, py+1.5, S-3, S-3);
-  ctx.shadowBlur = 0;
-
-  ctx.fillStyle = '#88ffb8';
-  ctx.font = 'bold 7px monospace';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(id, px+S/2, py+S/2);
-  ctx.globalAlpha = 1;
-  if (!dimmed && nearbyInteractable && nearbyInteractable.id === id &&
-      !examineOverlay.classList.contains('open'))
-    drawInteractBadge(px + S, py + S);
-}
-
 function drawPlayer(px, py) {
   const S = TILE_PX, cx = px+S/2, cy = py+S/2;
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
@@ -1075,97 +905,7 @@ function drawJoystick() {
   ctx.restore();
 }
 
-// ── Drag and drop ─────────────────────────────────────────────────────────────
-const ghost = document.getElementById('dragGhost');
-let hoverTile = null;
-const drag = { active: false, id: null, fromMap: false };
-
-function startDrag(id, fromMap, clientX, clientY) {
-  drag.active = true; drag.id = id; drag.fromMap = fromMap;
-  ghost.textContent = id;
-  ghost.style.display = 'block';
-  ghost.style.left = clientX + 'px';
-  ghost.style.top  = clientY + 'px';
-  document.body.style.cursor = 'grabbing';
-}
-function endDrag() {
-  drag.active = false; drag.id = null; drag.fromMap = false;
-  ghost.style.display = 'none';
-  hoverTile = null;
-  document.body.style.cursor = '';
-}
-
-function onItemDown(e, id) {
-  e.preventDefault();
-  startDrag(id, false, e.clientX, e.clientY);
-}
-
-canvas.addEventListener('mousedown', e => {
-  const rect = canvas.getBoundingClientRect();
-  const { col, row } = screenToTile(e.clientX - rect.left, e.clientY - rect.top);
-  const hit = PLACED.findIndex(p => p.col === col && p.row === row);
-  if (hit !== -1) { startDrag(PLACED[hit].id, true, e.clientX, e.clientY); e.preventDefault(); return; }
-  canvas.focus();
-});
-
-document.addEventListener('mousemove', e => {
-  if (!drag.active) return;
-  ghost.style.left = e.clientX + 'px';
-  ghost.style.top  = e.clientY + 'px';
-  const rect = canvas.getBoundingClientRect();
-  const over = e.clientX >= rect.left && e.clientX <= rect.right &&
-               e.clientY >= rect.top  && e.clientY <= rect.bottom;
-  hoverTile = over ? screenToTile(e.clientX - rect.left, e.clientY - rect.top) : null;
-});
-
-document.addEventListener('mouseup', e => {
-  if (!drag.active) return;
-  const rect = canvas.getBoundingClientRect();
-  const overCanvas = e.clientX >= rect.left && e.clientX <= rect.right &&
-                     e.clientY >= rect.top  && e.clientY <= rect.bottom;
-  if (overCanvas) {
-    const { col, row } = screenToTile(e.clientX - rect.left, e.clientY - rect.top);
-    const t = row >= 0 && row < GRID_H && col >= 0 && col < GRID_W ? mapGrid[row][col] : T.VOID;
-    const isPlaceable = t === T.FLOOR || t === T.COURTYARD || t === T.WALL;
-    const occupied    = PLACED.some(p => p.col === col && p.row === row && p.id !== drag.id);
-    if (isPlaceable && !occupied) {
-      const ex = PLACED.findIndex(p => p.id === drag.id);
-      if (ex !== -1) PLACED.splice(ex, 1);
-      PLACED.push({ id: drag.id, col, row });
-      canvas.focus();
-    }
-  } else {
-    const ex = PLACED.findIndex(p => p.id === drag.id);
-    if (drag.fromMap && ex !== -1) PLACED.splice(ex, 1);
-  }
-  updatePanel();
-  endDrag();
-});
-
-// ── Panel rendering ───────────────────────────────────────────────────────────
-function updatePanel() {
-  const list = document.getElementById('panelList');
-  list.innerHTML = '';
-  const groups = {};
-  for (const item of ALL) (groups[item.puzzle] ??= []).push(item.id);
-  for (const [puzzle, ids] of Object.entries(groups)) {
-    const grp = document.createElement('div');
-    grp.className = 'puzzle-group';
-    const lbl = document.createElement('div');
-    lbl.className = 'puzzle-label';
-    lbl.textContent = `PUZZLE ${puzzle}`;
-    grp.appendChild(lbl);
-    for (const id of ids) {
-      const isPlaced = PLACED.some(p => p.id === id) || OBJECTS.some(o => o.inter === id);
-      const el = document.createElement('div');
-      el.className = 'pi-item' + (isPlaced ? ' is-placed' : '');
-      el.innerHTML = `<span class="pi-handle">⠿</span><span class="pi-id">${id}</span><span class="pi-dot"></span>`;
-      el.addEventListener('mousedown', e => onItemDown(e, id));
-      grp.appendChild(el);
-    }
-    list.appendChild(grp);
-  }
-}
+canvas.addEventListener('mousedown', () => canvas.focus());
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function render() {
@@ -1187,20 +927,6 @@ function render() {
   // walk-under objects are held back and drawn over the player instead
   for (const o of OBJECTS)
     if (!o.under) drawObject(o, o.col*TILE_PX, o.row*TILE_PX);
-
-  // Hover highlight during drag (green = valid, red = invalid)
-  if (drag.active && hoverTile) {
-    const { col, row } = hoverTile;
-    const inBounds = row >= 0 && row < GRID_H && col >= 0 && col < GRID_W;
-    const t = inBounds ? mapGrid[row][col] : T.VOID;
-    const isPlaceable = t === T.FLOOR || t === T.COURTYARD || t === T.WALL;
-    const occupied = isPlaceable && PLACED.some(p => p.col === col && p.row === row && p.id !== drag.id);
-    ctx.fillStyle = (isPlaceable && !occupied) ? 'rgba(74,124,89,0.45)' : 'rgba(180,60,60,0.45)';
-    ctx.fillRect(col*TILE_PX, row*TILE_PX, TILE_PX, TILE_PX);
-  }
-
-  for (const p of PLACED)
-    drawPlacedItem(p.col*TILE_PX, p.row*TILE_PX, p.id, drag.active && drag.id === p.id);
 
   drawPlayer((player.x - 0.5)*TILE_PX, (player.y - 0.5)*TILE_PX);
   // Walk-under objects (arches, canopies) — the player passes beneath them
@@ -1300,7 +1026,6 @@ function applyMap(result, seed) {
   player.y = result.start.y;
   document.getElementById('sqftLabel').textContent =
     `~${(result.floorCount * SQFT_PER_TILE).toLocaleString()} sq ft`;
-  loadPlaced(seed);
 }
 
 // ── Playing custom maps (from the editor draft or My Maps) ────────────────────
@@ -1362,23 +1087,11 @@ function enterRoom(idx, px, py) {
   OBJECTS.length = 0;
   for (const o of rm.objects) OBJECTS.push(o);
   rebuildObjSolid();
-  // The editor is the source of truth for the map's interactables. Standalone
-  // markers (legacy maps / riads saved with dragged placements) still load.
-  PLACED.length = 0;
-  if (Array.isArray(rm.interactables)) {
-    for (const p of rm.interactables) {
-      const col = +p.col, row = +p.row;
-      const pid = typeof p.id === 'string' ? p.id.replace(/s$/, '') : null;
-      if (pid && ALL.some(x => x.id === pid) && col >= 0 && col < GRID_W && row >= 0 && row < GRID_H)
-        PLACED.push({ id: pid, col, row });
-    }
-  }
   player.x = px; player.y = py;
   const fc = rm.grid.flat().filter(t => t === T.FLOOR || t === T.COURTYARD).length;
   document.getElementById('sqftLabel').textContent =
     (ROOMS.length > 1 ? rm.name + ' · ' : '') +
     `~${(fc * SQFT_PER_TILE).toLocaleString()} sq ft`;
-  updatePanel();
 }
 
 // resume=true (page refresh) keeps the playthrough's solved puzzles
@@ -1387,8 +1100,7 @@ function loadCustomData(_data, resume) {
   // v2 = {rooms: […]} · legacy v1 = single {grid, spawn, objects}
   const roomsIn = Array.isArray(_data.rooms) && _data.rooms.length
     ? _data.rooms
-    : (_data.grid ? [{ grid: _data.grid, spawn: _data.spawn, objects: _data.objects,
-                       interactables: _data.interactables }] : null);
+    : (_data.grid ? [{ grid: _data.grid, spawn: _data.spawn, objects: _data.objects }] : null);
   if (!roomsIn) return false;
 
   if (!resume) resetSolved();   // fresh playthrough — puzzle-locked doors re-lock
@@ -1402,7 +1114,6 @@ function loadCustomData(_data, resume) {
       grid: rm.grid.map(row => row.map(Number)),
       spawn: rm.spawn ? { col: +rm.spawn.col, row: +rm.spawn.row } : null,
       objects: sanitizeObjects(rm.objects),
-      interactables: rm.interactables,
       // Per-room special instructions from Map Studio — no runtime behavior
       // yet, carried so future features can read them
       special: typeof rm.special === 'string' ? rm.special : '',
@@ -1426,7 +1137,6 @@ function loadCustomData(_data, resume) {
   };
   document.querySelector('h1').textContent = currentMapData.name;
   enterCustomUI();
-  updatePanel();
   return true;
 }
 
@@ -1441,7 +1151,6 @@ function loadProcedural(seed, resume) {
     spawn: { col: Math.floor(result.start.x), row: Math.floor(result.start.y) },
     name: 'Riad ' + (seed >>> 0).toString(16),
   };
-  updatePanel();
 }
 
 // ── My Maps — read from the website's maps/ folder in the GitHub repo ─────────
@@ -1537,11 +1246,6 @@ document.getElementById('btnRandomize').addEventListener('click', () => {
   currentSeed = Date.now() | 0;
   localStorage.setItem('map1seed', currentSeed);
   loadProcedural(currentSeed);
-  canvas.focus();
-});
-
-document.getElementById('btnSave').addEventListener('click', () => {
-  savePlaced();
   canvas.focus();
 });
 
