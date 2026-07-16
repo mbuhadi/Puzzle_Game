@@ -138,31 +138,9 @@ select {
 select:focus { outline: none; border-color: var(--gold-dim); }
 #interSelect { font-family: monospace; font-size: 11px; }
 
-/* Custom tile-type dropdown — options show the tile colours */
-.dd { position: relative; }
-.dd-btn {
-  width: 100%; display: flex; align-items: center; gap: 7px;
-  padding: 5px 7px; text-align: left;
-}
-.dd-arrow { margin-left: auto; font-size: 8px; color: var(--dim); }
-.dd-list {
-  position: absolute; top: calc(100% + 2px); left: 0; right: 0; z-index: 50;
-  background: var(--bg2); border: 1px solid var(--gold-dim); border-radius: 3px;
-  display: none; overflow: hidden;
-}
-.dd.open .dd-list { display: block; }
-.dd-item {
-  display: flex; align-items: center; gap: 7px;
-  padding: 5px 7px; cursor: pointer; font-size: 11px; letter-spacing: 0.5px;
-}
-.dd-item:hover { background: var(--hover); }
-.dd-item.active { color: var(--gold); }
-.dd-key { margin-left: auto; font-size: 9px; color: var(--dim); }
 .zoom-row   { display: flex; align-items: center; gap: 5px; }
 .zoom-row button { padding: 3px 8px; font-size: 13px; line-height: 1; }
 #zoomLabel { font-size: 10px; color: var(--dim); min-width: 38px; text-align: center; }
-
-.tile-swatch { width: 15px; height: 15px; border-radius: 2px; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.1); }
 
 .hint-text { font-size: 9px; color: var(--dim); line-height: 1.7; padding-left: 1px; }
 
@@ -363,21 +341,6 @@ select:focus { outline: none; border-color: var(--gold-dim); }
           <button id="tool-fill"                onclick="setTool('fill')"  title="Fill (G)">Fill</button>
           <button id="tool-rect"                onclick="setTool('rect')"  title="Rectangle (R)">Rect</button>
           <button id="tool-spawn"               onclick="setTool('spawn')" title="Set Spawn Point (S)">Set Spawn</button>
-        </div>
-      </div>
-
-      <div class="divider"></div>
-
-      <!-- Tiles -->
-      <div>
-        <div class="sec-title">TILE TYPE</div>
-        <div class="dd" id="tileDD">
-          <button class="dd-btn" onclick="toggleTileDD()">
-            <span id="tileSwatch" class="tile-swatch"></span>
-            <span id="tileDDLabel"></span>
-            <span class="dd-arrow">▾</span>
-          </button>
-          <div class="dd-list" id="tileDDList"></div>
         </div>
       </div>
 
@@ -1238,23 +1201,6 @@ function setTool(t) {
   updateCursor();
 }
 
-function selectTile(val) {
-  selTile = val;
-  document.getElementById('tileSwatch').style.background = TILE_COLORS[val];
-  document.getElementById('tileDDLabel').textContent = TILE_NAMES[val];
-  document.querySelectorAll('#tileDDList .dd-item').forEach((el, i) =>
-    el.classList.toggle('active', i === val));
-}
-
-function toggleTileDD() { document.getElementById('tileDD').classList.toggle('open'); }
-function closeTileDD()  { document.getElementById('tileDD').classList.remove('open'); }
-
-// Clicking anywhere outside the dropdown closes it
-document.addEventListener('mousedown', e => {
-  const dd = document.getElementById('tileDD');
-  if (dd.classList.contains('open') && !dd.contains(e.target)) closeTileDD();
-});
-
 function updateCursor() {
   const map = { paint:'crosshair', fill:'copy', rect:'crosshair', spawn:'pointer', object:'copy' };
   canvas.style.cursor = spaceHeld ? (isPanning ? 'grabbing' : 'grab') : (map[tool] || 'crosshair');
@@ -1726,7 +1672,7 @@ function playMap() {
   const si = startRoomIndex();
   const startRoom = rooms[si];
   if (!startRoom.spawn) {
-    alert('Set a spawn point first — use the "Set Spawn" tool, then click a floor tile in the room where the player should start.');
+    alert('Set a spawn point first — use the "Set Spawn" tool, then click where the player should start.');
     return;
   }
   const sp = startRoom.spawn;
@@ -1740,17 +1686,19 @@ function playMap() {
     alert('The spawn point is inside a solid object — the player would be stuck. Move the spawn or change the object\'s collision to Walk-Over or Walk-Under.');
     return;
   }
-  // Doors into rooms with no walkable tile would have nowhere to drop the player
+  // Doors into rooms with no walkable ground would have nowhere to drop the
+  // player — walk-over objects count as floor, exactly like FLOOR tiles
   const deadEnds = [];
   for (const rm of rooms)
     for (const o of rm.objects) {
       if (!o.door) continue;
       const target = findRoomById(o.door);
-      if (target && !target.grid.some(row => row.some(t => t === T.FLOOR || t === T.COURTYARD)))
+      if (target && !target.grid.some(row => row.some(t => t === T.FLOOR || t === T.COURTYARD)) &&
+          !target.objects.some(x => !x.solid && !x.under))
         deadEnds.push(`${rm.name} → ${target.name}`);
     }
   if (deadEnds.length &&
-      !confirm(`These doors lead to rooms with no floor tiles yet, so they won't work in the game:\n` +
+      !confirm(`These doors lead to rooms with no floor or walk-over ground yet, so they won't work in the game:\n` +
                deadEnds.join('\n') + `\n\nPlay anyway?`))
     return;
   // Transient handoff to maps.html only — real saves live in the GitHub repo
@@ -2001,12 +1949,6 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  // Any key closes an open tile dropdown; Escape does only that
-  if (document.getElementById('tileDD').classList.contains('open')) {
-    closeTileDD();
-    if (e.key === 'Escape') return;
-  }
-
   if (e.key === 'Escape' && selSprite) { clearSpriteBrush(); return; }
 
   if (e.key === ' ') { spaceHeld = true; updateCursor(); e.preventDefault(); return; }
@@ -2046,8 +1988,6 @@ window.addEventListener('keydown', e => {
   if (toolMap[e.key.toLowerCase()]) { setTool(toolMap[e.key.toLowerCase()]); return; }
 
   if (e.key.toLowerCase() === 't') { openTileset(); return; }
-
-  if ('01234'.includes(e.key)) selectTile(parseInt(e.key));
 });
 
 window.addEventListener('keyup', e => {
@@ -2060,22 +2000,6 @@ function flushNudge() {
   if (!nudgePending) return;
   nudgePending = false;
   pushHistory();
-}
-
-// ── Tile palette builder ──────────────────────────────────────────────────────
-function buildPalette() {
-  const list = document.getElementById('tileDDList');
-  Object.values(T).forEach(val => {
-    const item = document.createElement('div');
-    item.className = 'dd-item';
-    item.onclick = () => { selectTile(val); closeTileDD(); };
-    item.innerHTML =
-      `<span class="tile-swatch" style="background:${TILE_COLORS[val]}"></span>` +
-      `<span>${TILE_NAMES[val]}</span>` +
-      `<span class="dd-key">${val}</span>`;
-    list.appendChild(item);
-  });
-  selectTile(selTile);   // sync the closed button to the initial choice
 }
 
 // ── Tileset picker ────────────────────────────────────────────────────────────
@@ -2522,7 +2446,6 @@ function updateInterList() {
 rooms = [makeRoom('Room 1')];
 bindRoom(0);
 renderTabs();
-buildPalette();
 buildThemeSelect();
 applyTheme(localStorage.getItem('studioTheme') || 'desert');
 updateInterList();

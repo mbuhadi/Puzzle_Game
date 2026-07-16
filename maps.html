@@ -191,6 +191,9 @@ const OBJECTS   = [];
 const OBJ_RECTS = []; // solid object footprints {x0,y0,x1,y1} in tile units —
                       // collision is against the exact rect, not whole tiles,
                       // so a sprite covering half a tile only blocks that half
+const FLOOR_RECTS = []; // walk-over object footprints — ground the player can
+                        // stand on, exactly like FLOOR tiles (maps are built
+                        // from tileset sprites, not painted tiles)
 
 // ── Rooms (multi-room custom maps from Map Studio) ───────────────────────────
 // ROOMS is null for procedural riads. Doors are objects carrying a
@@ -250,10 +253,12 @@ function animFrameIdx(o) {
 
 function rebuildObjSolid() {
   OBJ_RECTS.length = 0;
+  FLOOR_RECTS.length = 0;
   for (const o of OBJECTS) {
-    if (!o.solid) continue;
     const w = o.sw || 1, h = o.sh || 1;
-    OBJ_RECTS.push({ x0: o.col, y0: o.row, x1: o.col + w, y1: o.row + h });
+    const rect = { x0: o.col, y0: o.row, x1: o.col + w, y1: o.row + h };
+    if (o.solid) OBJ_RECTS.push(rect);
+    else if (!o.under) FLOOR_RECTS.push(rect);   // walk-over = floor
   }
 }
 
@@ -406,21 +411,28 @@ function generateRiad(seed) {
 }
 
 // ── Collision ─────────────────────────────────────────────────────────────────
-function walkable(col, row) {
+// A point is on walkable ground if its tile is floor/courtyard, or a walk-over
+// object covers it — walk-over objects ARE floor, regardless of the tile below
+// (so a rug over void or a bridge sprite over water is solid ground).
+function walkable(x, y) {
+  const col = Math.floor(x), row = Math.floor(y);
   if (row < 0 || row >= GRID_H || col < 0 || col >= GRID_W) return false;
   const t = mapGrid[row][col];
-  return t === T.FLOOR || t === T.COURTYARD;
+  if (t === T.FLOOR || t === T.COURTYARD) return true;
+  for (const r of FLOOR_RECTS)
+    if (x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1) return true;
+  return false;
 }
-// Can the player stand centered on this tile? (terrain + solid objects)
+// Can the player stand centered on this tile? (ground + solid objects)
 function standable(col, row) {
-  return walkable(col, row) && !objBlocked(col + 0.5, row + 0.5, HITBOX);
+  return canMoveTo(col + 0.5, row + 0.5);
 }
 function canMoveTo(x, y) {
   const h = HITBOX;
-  return walkable(Math.floor(x-h), Math.floor(y-h))
-      && walkable(Math.floor(x+h), Math.floor(y-h))
-      && walkable(Math.floor(x-h), Math.floor(y+h))
-      && walkable(Math.floor(x+h), Math.floor(y+h))
+  return walkable(x-h, y-h)
+      && walkable(x+h, y-h)
+      && walkable(x-h, y+h)
+      && walkable(x+h, y+h)
       && !objBlocked(x, y, h);
 }
 
