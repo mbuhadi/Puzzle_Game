@@ -274,6 +274,7 @@
   </div>
 </div>
 
+<script src="puzzles_curated_data.js"></script>
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────────
 const TILE_PX       = 32;
@@ -292,16 +293,9 @@ const COURT_X = 27, COURT_Y = 19;   // courtyard top-left anchor
 const COURT_W = 13, COURT_H = 13;   // courtyard footprint
 const POND_R  = 3;                  // diamond pond radius (tiles)
 
-// ── All interactables ─────────────────────────────────────────────────────────
-const ALL = [
-  { id:'p1g1', puzzle:1 }, { id:'p1p1', puzzle:1 },
-  { id:'p2g1', puzzle:2 }, { id:'p2g2', puzzle:2 },
-  { id:'p3g1', puzzle:3 }, { id:'p3g2', puzzle:3 }, { id:'p3g3', puzzle:3 },
-  { id:'p4g1', puzzle:4 },
-  { id:'p5g1', puzzle:5 },
-  { id:'p6g1', puzzle:6 }, { id:'p6p1', puzzle:6 },
-  { id:'p7g1', puzzle:7 }, { id:'p7g2', puzzle:7 }, { id:'p7p1', puzzle:7 },
-];
+// ── All interactables — derived 1:1 from the curated page's chunks
+//    (puzzles_curated_data.js) ─────────────────────────────────────────────────
+const ALL = PUZZLE_CHUNKS;
 
 const PLACED = [];
 

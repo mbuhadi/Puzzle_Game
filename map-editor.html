@@ -561,6 +561,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
 </div><!-- /app -->
 
 <script src="assets/anim_manifest.js"></script>
+<script src="puzzles_curated_data.js"></script>
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────────
 const GRID_W = 72, GRID_H = 60;
@@ -635,16 +636,8 @@ function buildThemeSelect() {
   }
 }
 
-// Must stay in sync with the ALL list in maps.html
-const INTERACTABLE_IDS = [
-  { id:'p1g1', puzzle:1 }, { id:'p1p1', puzzle:1 },
-  { id:'p2g1', puzzle:2 }, { id:'p2g2', puzzle:2 },
-  { id:'p3g1', puzzle:3 }, { id:'p3g2', puzzle:3 }, { id:'p3g3', puzzle:3 },
-  { id:'p4g1', puzzle:4 },
-  { id:'p5g1', puzzle:5 },
-  { id:'p6g1', puzzle:6 }, { id:'p6p1', puzzle:6 },
-  { id:'p7g1', puzzle:7 }, { id:'p7g2', puzzle:7 }, { id:'p7p1', puzzle:7 },
-];
+// Derived 1:1 from the curated page's chunks (puzzles_curated_data.js)
+const INTERACTABLE_IDS = PUZZLE_CHUNKS;
 
 // ── State ─────────────────────────────────────────────────────────────────────
 // A map is a set of rooms (one editor tab each). The globals below (grid,
