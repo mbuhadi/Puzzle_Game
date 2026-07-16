@@ -637,13 +637,13 @@ function buildThemeSelect() {
 
 // Must stay in sync with the ALL list in maps.html
 const INTERACTABLE_IDS = [
-  { id:'p1g1s', puzzle:1 }, { id:'p1p1s', puzzle:1 },
-  { id:'p2g1s', puzzle:2 }, { id:'p2g2s', puzzle:2 },
-  { id:'p3g1s', puzzle:3 }, { id:'p3g2s', puzzle:3 }, { id:'p3g3s', puzzle:3 },
-  { id:'p4g1s', puzzle:4 },
-  { id:'p5g1s', puzzle:5 },
-  { id:'p6g1s', puzzle:6 }, { id:'p6p1s', puzzle:6 },
-  { id:'p7g1s', puzzle:7 }, { id:'p7g2s', puzzle:7 }, { id:'p7p1s', puzzle:7 },
+  { id:'p1g1', puzzle:1 }, { id:'p1p1', puzzle:1 },
+  { id:'p2g1', puzzle:2 }, { id:'p2g2', puzzle:2 },
+  { id:'p3g1', puzzle:3 }, { id:'p3g2', puzzle:3 }, { id:'p3g3', puzzle:3 },
+  { id:'p4g1', puzzle:4 },
+  { id:'p5g1', puzzle:5 },
+  { id:'p6g1', puzzle:6 }, { id:'p6p1', puzzle:6 },
+  { id:'p7g1', puzzle:7 }, { id:'p7g2', puzzle:7 }, { id:'p7p1', puzzle:7 },
 ];
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -1392,10 +1392,11 @@ function fromData(data) {
                       sx: +o.sx, sy: +o.sy, sw: +o.sw, sh: +o.sh, solid: !!o.solid };
             }
             if (o.under && !obj.solid) obj.under = true;
-            if (typeof o.inter === 'string' &&
-                INTERACTABLE_IDS.some(x => x.id === o.inter) && !seenInter.has(o.inter)) {
-              obj.inter = o.inter;
-              seenInter.add(o.inter);
+            // Older files used 's'-suffixed ids (p1g1s) — normalize on load
+            const inter = typeof o.inter === 'string' ? o.inter.replace(/s$/, '') : null;
+            if (inter && INTERACTABLE_IDS.some(x => x.id === inter) && !seenInter.has(inter)) {
+              obj.inter = inter;
+              seenInter.add(inter);
             }
             if (typeof o.door === 'string') obj.door = o.door;
             return obj;

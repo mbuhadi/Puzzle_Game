@@ -294,13 +294,13 @@ const POND_R  = 3;                  // diamond pond radius (tiles)
 
 // ── All interactables ─────────────────────────────────────────────────────────
 const ALL = [
-  { id:'p1g1s', puzzle:1 }, { id:'p1p1s', puzzle:1 },
-  { id:'p2g1s', puzzle:2 }, { id:'p2g2s', puzzle:2 },
-  { id:'p3g1s', puzzle:3 }, { id:'p3g2s', puzzle:3 }, { id:'p3g3s', puzzle:3 },
-  { id:'p4g1s', puzzle:4 },
-  { id:'p5g1s', puzzle:5 },
-  { id:'p6g1s', puzzle:6 }, { id:'p6p1s', puzzle:6 },
-  { id:'p7g1s', puzzle:7 }, { id:'p7g2s', puzzle:7 }, { id:'p7p1s', puzzle:7 },
+  { id:'p1g1', puzzle:1 }, { id:'p1p1', puzzle:1 },
+  { id:'p2g1', puzzle:2 }, { id:'p2g2', puzzle:2 },
+  { id:'p3g1', puzzle:3 }, { id:'p3g2', puzzle:3 }, { id:'p3g3', puzzle:3 },
+  { id:'p4g1', puzzle:4 },
+  { id:'p5g1', puzzle:5 },
+  { id:'p6g1', puzzle:6 }, { id:'p6p1', puzzle:6 },
+  { id:'p7g1', puzzle:7 }, { id:'p7g2', puzzle:7 }, { id:'p7p1', puzzle:7 },
 ];
 
 const PLACED = [];
@@ -1351,7 +1351,9 @@ function sanitizeObjects(raw) {
       obj = { col, row, type: String(o.type), solid: !!o.solid };
     }
     if (o.under && !obj.solid) obj.under = true;
-    if (typeof o.inter === 'string' && ALL.some(x => x.id === o.inter)) obj.inter = o.inter;
+    // Older maps used 's'-suffixed ids (p1g1s) — normalize on load
+    const inter = typeof o.inter === 'string' ? o.inter.replace(/s$/, '') : null;
+    if (inter && ALL.some(x => x.id === inter)) obj.inter = inter;
     if (typeof o.door === 'string') obj.door = o.door;
     out.push(obj);
   }
@@ -1372,8 +1374,9 @@ function enterRoom(idx, px, py) {
   if (Array.isArray(rm.interactables)) {
     for (const p of rm.interactables) {
       const col = +p.col, row = +p.row;
-      if (ALL.some(x => x.id === p.id) && col >= 0 && col < GRID_W && row >= 0 && row < GRID_H)
-        PLACED.push({ id: p.id, col, row });
+      const pid = typeof p.id === 'string' ? p.id.replace(/s$/, '') : null;
+      if (pid && ALL.some(x => x.id === pid) && col >= 0 && col < GRID_W && row >= 0 && row < GRID_H)
+        PLACED.push({ id: pid, col, row });
     }
   }
   player.x = px; player.y = py;
