@@ -45,21 +45,25 @@ const PUZZLES = [
   {
     num:'2', name:'أمام أعين الجميع', loc:'Study Door · Lock 1', build:'windows',
     given:`
-      <div class="windows-wrap">
-        <div class="chunk"><span class="clabel">p2g1</span>
-          <div class="window-card">
-            <canvas id="kitchenWin" width="300" height="210"></canvas>
-            <div class="wlabel">Kitchen Window — top half</div>
-          </div>
+      <div class="chunk"><span class="clabel">p2g2</span>
+        <div class="clue arabic">
+          <div class="head">ملاحظة ملزوقة يم الشباك:</div>
+          اليهال لزقوا ملصقات على قزاز الشباك...<br>
+          كل ما ازحلق الشباك، الملصقات تركب على بيوت الفريج!<br>
+          يمكن لو ركبت صح، يبين لك شي ينقرا.
         </div>
-        <div class="chunk"><span class="clabel">p2g2</span>
-          <div class="window-card">
-            <canvas id="livingWin" width="300" height="210"></canvas>
-            <div class="wlabel">Living Room Window — bottom half</div>
+      </div>`,
+    problem:`<div class="chunk"><span class="clabel">p2g1</span>
+        <p class="play-hint"><b>Drag</b> the sliding pane (or use the buttons / arrow keys) until the stickers line up with the houses outside.</p>
+        <div class="slide-wrap">
+          <canvas id="slideWin" width="720" height="430" tabindex="0"></canvas>
+          <div class="slide-controls">
+            <button class="reveal-btn" id="slideLeft">◀</button>
+            <button class="reveal-btn" id="slideRight">▶</button>
+            <button class="reveal-btn" id="slideReset">↺ RESET</button>
           </div>
         </div>
       </div>`,
-    problem:``,
   },
   {
     num:'3', name:'الذكية', loc:'Study Door · Lock 2', build:'clothes',

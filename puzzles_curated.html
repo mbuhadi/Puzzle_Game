@@ -100,11 +100,10 @@
   .tree-banner{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:none; background:#fffcf0; border:2px solid var(--gold); border-radius:12px; padding:18px 36px; font-family:'Amiri',serif; font-size:24px; font-weight:bold; color:#8a6820; z-index:20; box-shadow:0 10px 30px rgba(0,0,0,.18);}
   .tree-clues{flex:1; min-width:300px;}
 
-  /* ── Windows interactive ── */
-  .windows-wrap{display:flex; gap:30px; flex-wrap:wrap;}
-  .window-card{position:relative; width:300px;}
-  .window-card canvas{display:block; width:300px; height:210px; border:6px solid #5a3e1e; border-radius:4px; box-shadow:0 6px 18px rgba(0,0,0,.5);}
-  .window-card .wlabel{margin-top:10px; text-align:center; color:#7ab8d0; font-size:15px;}
+  /* ── Sliding window interactive ── */
+  .slide-wrap canvas{display:block; max-width:100%; border-radius:6px; box-shadow:0 6px 20px rgba(0,0,0,.5); cursor:grab; touch-action:none;}
+  .slide-controls{display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;}
+  .slide-controls .reveal-btn{padding:10px 22px;}
 
   /* ── TV / Morse reference ── */
   .tv{max-width:680px; background:#111008; border:3px solid #2a2818; border-radius:8px; padding:18px; box-shadow:0 8px 30px rgba(0,0,0,.7);}
@@ -154,9 +153,6 @@
   @media(max-width:640px){
     .tree-layout{flex-direction:column;}
     .tree-clues{min-width:0;}
-    .windows-wrap{flex-direction:column;}
-    .window-card{width:100%; max-width:300px;}
-    .window-card canvas{width:100% !important; height:auto !important;}
     .shapes-grid{grid-template-columns:repeat(2,1fr); gap:12px;}
     .shape-item{padding:8px;}
     .shape-item svg{width:100%; height:auto;}
@@ -175,54 +171,34 @@
 <script>
 /* ───────────────── Ported game logic ───────────────── */
 
-// 7-segment primitives (from the game)
-function fillHSeg(c,x,y,w,h){const b=h/2;c.beginPath();c.moveTo(x+b,y);c.lineTo(x+w-b,y);c.lineTo(x+w,y+b);c.lineTo(x+w-b,y+h);c.lineTo(x+b,y+h);c.lineTo(x,y+b);c.closePath();c.fill();}
-function fillVSeg(c,x,y,w,h){const b=w/2;c.beginPath();c.moveTo(x+b,y);c.lineTo(x+w,y+b);c.lineTo(x+w,y+h-b);c.lineTo(x+b,y+h);c.lineTo(x,y+h-b);c.lineTo(x,y+b);c.closePath();c.fill();}
-function draw613TopHalf(c,x,y,scale){
-  const t=2.5*scale,dw=14*scale,mh=11*scale,sp=4*scale,g=0.6*scale;
-  const D=[{a:1,b:0,f:1,g:0},{a:0,b:1,f:0,g:0},{a:0,b:1,f:0,g:1}];
-  D.forEach((s,i)=>{const ox=x+i*(dw+sp);
-    if(s.a)fillHSeg(c,ox+t+g,y,dw-2*(t+g),t);
-    if(s.f)fillVSeg(c,ox,y+t+g,t,mh-2*t-g);
-    if(s.b)fillVSeg(c,ox+dw-t,y+t+g,t,mh-2*t-g);
-    if(s.g)fillHSeg(c,ox+t+g,y+mh-t/2,dw-2*(t+g),t);});
-}
-function draw613BottomHalf(c,x,y,scale){
-  const t=2.5*scale,dw=14*scale,mh=11*scale,sp=4*scale,g=0.6*scale;
-  const D=[{g:1,e:1,c:1,d:1},{g:0,e:0,c:1,d:0},{g:1,e:0,c:1,d:1}];
-  D.forEach((s,i)=>{const ox=x+i*(dw+sp);
-    if(s.g)fillHSeg(c,ox+t+g,y,dw-2*(t+g),t);
-    if(s.e)fillVSeg(c,ox,y+t+g,t,mh-2*t-g);
-    if(s.c)fillVSeg(c,ox+dw-t,y+t+g,t,mh-2*t-g);
-    if(s.d)fillHSeg(c,ox+t+g,y+mh-t,dw-2*(t+g),t);});
-}
+/* ── Puzzle 2 — Sliding window ──
+   Each digit of the combination is a 7-segment figure split in two: the lit
+   windows of the houses outside hold some segments, the stickers on the
+   sliding pane hold the rest. Slide the pane until the stickers sit on the
+   houses and the combination becomes readable. */
+const SLIDE_DIGITS  = ['6','1','3'];
+const SLIDE_SEGS    = { '6':['a','f','g','e','d','c'], '1':['b','c'], '3':['a','b','g','c','d'] };
+const SLIDE_STICKER = { '6':['f','e','c'],             '1':['c'],     '3':['b','c'] };
 
-// Window scene
-function drawWindowScene(c,W,H,which,bgImg){
-  c.clearRect(0,0,W,H);
-  if(bgImg&&(which==='top'||which==='full')){
-    try{c.drawImage(bgImg,0,0,W,which==='full'?H*0.5:H);}catch(e){}
-    if(which==='full'){
-      const sky=c.createLinearGradient(0,H*0.5,0,H); sky.addColorStop(0,'#1a3a5c'); sky.addColorStop(1,'#4a8ab0');
-      c.fillStyle=sky; c.fillRect(0,H*0.5,W,H*0.5);
-      c.fillStyle='#2a4a2a'; c.fillRect(0,H*0.86,W,H*0.14);
-    }
-  } else {
-    const sky=c.createLinearGradient(0,0,0,H); sky.addColorStop(0,'#1a3a5c'); sky.addColorStop(1,'#4a8ab0');
-    c.fillStyle=sky; c.fillRect(0,0,W,H);
-    c.fillStyle='#2a4a2a'; c.fillRect(0,H*0.72,W,H*0.28);
-    c.save(); c.shadowColor='#ffe066'; c.shadowBlur=24; c.fillStyle='#ffe066';
-    c.beginPath(); c.arc(W-54,46,20,0,Math.PI*2); c.fill(); c.restore();
-    [[64,58,32],[140,44,22],[112,90,26]].forEach(([x,y,r])=>{c.fillStyle='rgba(255,255,255,0.18)';c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.fill();});
-  }
-  const sc=3.2, stickerW=50*sc, sx=(W-stickerW)/2;
-  // Shared top-of-digit baseline: the top half sits at y0, the bottom half one
-  // half-digit (11*sc) lower — so overlapping the two windows aligns the halves.
-  const y0=H*0.30;
-  c.fillStyle='#ff8c00';
-  if(which==='top')         draw613TopHalf(c,sx,y0,sc);
-  else if(which==='bottom') draw613BottomHalf(c,sx,y0+11*sc,sc);
-  else { draw613TopHalf(c,sx,y0,sc); draw613BottomHalf(c,sx,y0+11*sc,sc); }
+function slideSegRect(seg,x,y,dw,dh,t){
+  const half=dh/2;
+  return {
+    a:[x+t,        y,            dw-2*t, t],
+    b:[x+dw-t,     y+t,          t,      half-1.5*t],
+    c:[x+dw-t,     y+half+t/2,   t,      half-1.5*t],
+    d:[x+t,        y+dh-t,       dw-2*t, t],
+    e:[x,          y+half+t/2,   t,      half-1.5*t],
+    f:[x,          y+t,          t,      half-1.5*t],
+    g:[x+t,        y+half-t/2,   dw-2*t, t],
+  }[seg];
+}
+function slideRounded(g,x,y,w,h,r){
+  g.beginPath();
+  g.moveTo(x+r,y); g.lineTo(x+w-r,y); g.quadraticCurveTo(x+w,y,x+w,y+r);
+  g.lineTo(x+w,y+h-r); g.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  g.lineTo(x+r,y+h); g.quadraticCurveTo(x,y+h,x,y+h-r);
+  g.lineTo(x,y+r); g.quadraticCurveTo(x,y,x+r,y);
+  g.closePath();
 }
 
 /* ───────────────── Family-tree data ───────────────── */
@@ -300,16 +276,188 @@ function buildFamilyTree(){
   }
 }
 
-function buildWindows(){
-  const redraw=(bgImg)=>{
-    const k=document.getElementById('kitchenWin'); if(k)drawWindowScene(k.getContext('2d'),k.width,k.height,'top',bgImg);
-    const l=document.getElementById('livingWin'); if(l)drawWindowScene(l.getContext('2d'),l.width,l.height,'bottom');
-    const f=document.getElementById('combinedWin'); if(f)drawWindowScene(f.getContext('2d'),f.width,f.height,'full',bgImg);
-  };
-  redraw(null);
-  const desert=new Image();
-  desert.onload=()=>redraw(desert);
-  desert.src='desert_bg.png';
+function buildSlidingWindow(){
+  const cv=document.getElementById('slideWin'); if(!cv)return;
+  const g=cv.getContext('2d'), W=cv.width, H=cv.height;
+  const FR=22, gx=FR, gy=FR, gw=W-2*FR, gh=H-2*FR;   // glass area inside the wooden frame
+  const groundY=gy+gh-42;
+
+  // Digit geometry (positions in the background scene)
+  const dw=54, dh=96, t=10, gap=64;
+  const totalW=3*dw+2*gap;
+  const digX=[0,1,2].map(i=>gx+gw/2-totalW/2+i*(dw+gap));
+  const digY=groundY-dh-26;
+
+  // Sliding sash
+  const sashW=Math.round(gw*0.62), MAXOFF=gw-sashW;
+  const CORRECT=Math.round(MAXOFF*0.68), TOL=7, START=8;
+  let off=START, solved=false;
+
+  // Fixed star field (deterministic so redraws don't shimmer)
+  const stars=[]; let seed=7;
+  const rnd=()=>{ seed=(seed*16807)%2147483647; return seed/2147483647; };
+  for(let i=0;i<70;i++) stars.push({x:gx+rnd()*gw, y:gy+rnd()*gh*0.55, r:rnd()*1.4+0.4, a:rnd()*0.5+0.3});
+
+  function drawHouses(){
+    // Background filler houses (scenery only)
+    [[gx+16,60,44],[gx+gw-92,72,52]].forEach(([fx,fw,fh])=>{
+      g.fillStyle='#2c2318'; g.fillRect(fx,groundY-fh,fw,fh);
+      g.fillStyle='#241c12'; g.fillRect(fx-4,groundY-fh-8,fw+8,8);
+      g.fillStyle='#171208';
+      g.fillRect(fx+10,groundY-fh+12,10,12); g.fillRect(fx+fw-20,groundY-fh+12,10,12);
+    });
+    const cols=['#4a3a2a','#54432e','#473b31'];
+    for(let i=0;i<3;i++){
+      const pad=(i===1?18:26), fx=digX[i]-pad, fw=dw+2*pad, topY=digY-16;
+      g.fillStyle=cols[i];
+      g.fillRect(fx,topY,fw,groundY-topY);
+      g.strokeStyle='rgba(0,0,0,0.35)'; g.lineWidth=2; g.strokeRect(fx,topY,fw,groundY-topY);
+      if(i===0){          // gabled roof
+        g.fillStyle='#33261a';
+        g.beginPath(); g.moveTo(fx-10,topY); g.lineTo(fx+fw/2,topY-46); g.lineTo(fx+fw+10,topY); g.closePath(); g.fill();
+      } else if(i===1){   // tower with crenellations
+        g.fillStyle=cols[1]; g.fillRect(fx,topY-30,fw,30);
+        g.fillStyle='#33261a';
+        const m=5, mw=fw/(2*m-1);
+        for(let k=0;k<m;k++) g.fillRect(fx+k*2*mw, topY-44, mw, 16);
+      } else {            // dome
+        g.fillStyle='#33261a';
+        g.beginPath(); g.arc(fx+fw/2, topY, fw/2, Math.PI, 0); g.closePath(); g.fill();
+        g.fillStyle='#c8a84b'; g.fillRect(fx+fw/2-2, topY-fw/2-10, 4, 10);
+      }
+      // door
+      const drw=18, dx0=fx+fw/2-drw/2;
+      g.fillStyle='#1e150c';
+      g.beginPath(); g.moveTo(dx0,groundY); g.lineTo(dx0,groundY-24);
+      g.arc(fx+fw/2,groundY-24,drw/2,Math.PI,0); g.lineTo(dx0+drw,groundY); g.closePath(); g.fill();
+      // lit segment windows — the house's share of the digit
+      g.save(); g.shadowColor='#ffd875'; g.shadowBlur=14; g.fillStyle='#ffd875';
+      const key=SLIDE_DIGITS[i];
+      SLIDE_SEGS[key].forEach(s=>{
+        if(SLIDE_STICKER[key].includes(s))return;
+        const [rx,ry,rw,rh]=slideSegRect(s,digX[i],digY,dw,dh,t);
+        slideRounded(g,rx,ry,rw,rh,3); g.fill();
+      });
+      g.restore();
+    }
+  }
+
+  function drawScene(){
+    const sky=g.createLinearGradient(0,gy,0,gy+gh);
+    sky.addColorStop(0,'#0b1526'); sky.addColorStop(0.7,'#1d3350'); sky.addColorStop(1,'#2c4a6a');
+    g.fillStyle=sky; g.fillRect(gx,gy,gw,gh);
+    stars.forEach(s=>{ g.fillStyle=`rgba(255,255,255,${s.a.toFixed(2)})`; g.beginPath(); g.arc(s.x,s.y,s.r,0,Math.PI*2); g.fill(); });
+    // crescent moon
+    g.save(); g.shadowColor='#fff2c0'; g.shadowBlur=26; g.fillStyle='#f5ecc8';
+    g.beginPath(); g.arc(gx+gw-64,gy+52,20,0,Math.PI*2); g.fill(); g.restore();
+    g.fillStyle='#0b1526'; g.beginPath(); g.arc(gx+gw-73,gy+46,17,0,Math.PI*2); g.fill();
+    // ground
+    g.fillStyle='#4e3f29'; g.fillRect(gx,groundY,gw,gy+gh-groundY);
+    g.fillStyle='#42351f';
+    g.beginPath(); g.moveTo(gx,groundY+16);
+    g.quadraticCurveTo(gx+gw*0.3,groundY+4,gx+gw*0.55,groundY+18);
+    g.quadraticCurveTo(gx+gw*0.8,groundY+30,gx+gw,groundY+14);
+    g.lineTo(gx+gw,gy+gh); g.lineTo(gx,gy+gh); g.closePath(); g.fill();
+    drawHouses();
+  }
+
+  function drawDecoys(sx){
+    // star sticker (top-right of the pane)
+    g.save(); g.translate(sx+sashW-58, gy+56); g.fillStyle='rgba(120,200,255,0.9)';
+    g.beginPath();
+    for(let k=0;k<10;k++){ const r=k%2?7:16, a=k*Math.PI/5-Math.PI/2; g.lineTo(Math.cos(a)*r,Math.sin(a)*r); }
+    g.closePath(); g.fill();
+    g.strokeStyle='rgba(255,255,255,0.55)'; g.lineWidth=1.5; g.stroke();
+    g.restore();
+    // sun sticker (bottom-left of the pane)
+    g.save(); g.translate(sx+56, gy+gh-60);
+    g.fillStyle='rgba(255,210,80,0.9)'; g.beginPath(); g.arc(0,0,12,0,Math.PI*2); g.fill();
+    g.strokeStyle='rgba(255,210,80,0.9)'; g.lineWidth=2.5;
+    for(let k=0;k<8;k++){ const a=k*Math.PI/4; g.beginPath(); g.moveTo(Math.cos(a)*16,Math.sin(a)*16); g.lineTo(Math.cos(a)*22,Math.sin(a)*22); g.stroke(); }
+    g.restore();
+  }
+
+  function drawSash(){
+    const sx=gx+off;
+    // rails
+    g.fillStyle='rgba(0,0,0,0.45)'; g.fillRect(gx,gy,gw,5); g.fillRect(gx,gy+gh-5,gw,5);
+    g.save();
+    g.beginPath(); g.rect(sx,gy,sashW,gh); g.clip();
+    // glass tint + sheen
+    g.fillStyle='rgba(175,215,255,0.08)'; g.fillRect(sx,gy,sashW,gh);
+    g.strokeStyle='rgba(255,255,255,0.10)'; g.lineWidth=14;
+    [-40,10].forEach(o=>{ g.beginPath(); g.moveTo(sx+o+40,gy+gh); g.lineTo(sx+o+160,gy); g.stroke(); });
+    // stickers — the pane's share of each digit, drawn relative to the sash
+    for(let i=0;i<3;i++){
+      const key=SLIDE_DIGITS[i];
+      SLIDE_STICKER[key].forEach(s=>{
+        const [rx,ry,rw,rh]=slideSegRect(s,digX[i]-CORRECT+off,digY,dw,dh,t);
+        slideRounded(g,rx,ry,rw,rh,3);
+        g.fillStyle='rgba(255,140,0,0.95)'; g.fill();
+        g.strokeStyle='rgba(255,255,255,0.55)'; g.lineWidth=1.5; g.stroke();
+      });
+    }
+    drawDecoys(sx);
+    g.restore();
+    // sash frame + handle
+    g.strokeStyle='#6a4a26'; g.lineWidth=10; g.strokeRect(sx+5,gy+5,sashW-10,gh-10);
+    g.strokeStyle='rgba(0,0,0,0.4)'; g.lineWidth=2; g.strokeRect(sx+10,gy+10,sashW-20,gh-20);
+    g.fillStyle='#c8b088'; g.fillRect(sx+14,gy+gh/2-28,8,56);
+  }
+
+  function draw(){
+    g.clearRect(0,0,W,H);
+    g.fillStyle='#5a3e1e'; g.fillRect(0,0,W,H);
+    g.fillStyle='#4a3218'; g.fillRect(8,8,W-16,H-16);
+    drawScene();
+    drawSash();
+    if(solved){
+      g.save(); g.shadowColor='#ffe066'; g.shadowBlur=18;
+      g.strokeStyle='#ffe066'; g.lineWidth=3; g.strokeRect(gx-2,gy-2,gw+4,gh+4); g.restore();
+      const bw=310,bh=44,bx=W/2-bw/2,by=gy+10;
+      g.fillStyle='rgba(26,22,8,0.9)'; g.fillRect(bx,by,bw,bh);
+      g.strokeStyle='#c8a84b'; g.lineWidth=2; g.strokeRect(bx,by,bw,bh);
+      g.save(); g.fillStyle='#ffe066'; g.font='bold 20px Amiri, serif';
+      g.textAlign='center'; g.textBaseline='middle'; g.direction='rtl';
+      g.fillText('اصطفت الملصقات — اقرأ الرقم!', W/2, by+bh/2+2); g.restore();
+    }
+  }
+
+  const clamp=v=>Math.max(0,Math.min(MAXOFF,v));
+  function tryLock(){
+    if(!solved && Math.abs(off-CORRECT)<=TOL){ off=CORRECT; solved=true; notifyPuzzleSolved(); }
+    draw();
+  }
+
+  let dragging=false, dragX=0, dragOff=0;
+  cv.addEventListener('pointerdown',e=>{
+    if(solved)return;
+    dragging=true; cv.setPointerCapture(e.pointerId);
+    dragX=e.clientX; dragOff=off; cv.style.cursor='grabbing';
+  });
+  cv.addEventListener('pointermove',e=>{
+    if(!dragging)return;
+    const rect=cv.getBoundingClientRect(), scale=cv.width/rect.width;
+    off=clamp(dragOff+(e.clientX-dragX)*scale); draw();
+  });
+  const endDrag=()=>{ if(!dragging)return; dragging=false; cv.style.cursor='grab'; tryLock(); };
+  cv.addEventListener('pointerup',endDrag);
+  cv.addEventListener('pointercancel',endDrag);
+  cv.addEventListener('keydown',e=>{
+    if(solved)return;
+    if(e.key==='ArrowLeft'){ e.preventDefault(); off=clamp(off-5); tryLock(); }
+    if(e.key==='ArrowRight'){ e.preventDefault(); off=clamp(off+5); tryLock(); }
+  });
+  const bl=document.getElementById('slideLeft'), br=document.getElementById('slideRight'), rs=document.getElementById('slideReset');
+  if(bl)bl.onclick=()=>{ if(!solved){ off=clamp(off-6); tryLock(); } };
+  if(br)br.onclick=()=>{ if(!solved){ off=clamp(off+6); tryLock(); } };
+  if(rs)rs.onclick=()=>{ solved=false; off=START; draw(); };
+
+  // test hook for verification
+  window.__slideTest=v=>{ off=clamp(v==null?CORRECT:v); tryLock(); return {off,CORRECT,MAXOFF,solved}; };
+
+  draw();
+  return ()=>{ delete window.__slideTest; };
 }
 
 /* ── Courtyard minigame: walk the clock numbers in the game's CLOCK_SEQ order ── */
@@ -983,7 +1131,7 @@ function buildPuzzleSeven() {
 
 /* ───────────────── Rendering ───────────────── */
 function buildPuzzle5(){ buildCircles(); buildCylinderLock(); }
-const BUILDERS={tree:buildFamilyTree, windows:buildWindows, courtyard:buildCourtyard, circles:buildCircles, clothes:buildClothes, puzzle5:buildPuzzle5, puzzle6:buildPuzzleSix, puzzle7:buildPuzzleSeven};
+const BUILDERS={tree:buildFamilyTree, windows:buildSlidingWindow, courtyard:buildCourtyard, circles:buildCircles, clothes:buildClothes, puzzle5:buildPuzzle5, puzzle6:buildPuzzleSix, puzzle7:buildPuzzleSeven};
 const plist=document.getElementById('plist'), detail=document.getElementById('detail');
 let teardown=null;   // cleanup for the previously-built interactive puzzle
 const CHUNK_PARAM = new URLSearchParams(location.search).get('chunk');
