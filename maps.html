@@ -170,8 +170,8 @@ const SPEED         = 8.5;
 const HITBOX        = 0.28;
 const VIEWPORT_W    = 800;
 const VIEWPORT_H    = 520;
-const GRID_W        = 72;
-const GRID_H        = 60;
+const GRID_W        = 144;
+const GRID_H        = 120;
 
 const T = { VOID:0, FLOOR:1, WALL:2, WATER:3, COURTYARD:4 };
 
@@ -1119,11 +1119,20 @@ function loadCustomData(_data, resume) {
 
   const parsed = [];
   for (const rm of roomsIn) {
-    if (!rm.grid || rm.grid.length !== GRID_H || rm.grid[0].length !== GRID_W) return false;
+    if (!rm.grid || !rm.grid.length || !rm.grid[0].length ||
+        rm.grid.length > GRID_H || rm.grid[0].length > GRID_W) return false;
+    // Maps saved before the canvas grew (72×60) are padded with void to the
+    // current size; content stays anchored top-left so coordinates keep working
+    const g = rm.grid.map(row => {
+      const r = row.map(Number);
+      while (r.length < GRID_W) r.push(T.VOID);
+      return r;
+    });
+    while (g.length < GRID_H) g.push(new Array(GRID_W).fill(T.VOID));
     parsed.push({
       id: typeof rm.id === 'string' ? rm.id : 'r' + (parsed.length + 1),
       name: (typeof rm.name === 'string' && rm.name.trim()) ? rm.name.trim() : 'Room ' + (parsed.length + 1),
-      grid: rm.grid.map(row => row.map(Number)),
+      grid: g,
       spawn: rm.spawn ? { col: +rm.spawn.col, row: +rm.spawn.row } : null,
       objects: sanitizeObjects(rm.objects),
       // Per-room special instructions from Map Studio — no runtime behavior

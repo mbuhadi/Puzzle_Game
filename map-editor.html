@@ -390,6 +390,8 @@ select:focus { outline: none; border-color: var(--gold-dim); }
       <div>
         <div class="sec-title">VIEW</div>
         <button id="btnGrid" class="active" onclick="toggleGrid()" style="width:100%;margin-bottom:5px">Grid: On</button>
+        <button id="btnPView" onclick="togglePView()" style="width:100%;margin-bottom:5px"
+                title="Show the area the game camera displays around the player — follows the cursor, or sits on the spawn point">Player View: Off</button>
         <div class="zoom-row">
           <button onclick="adjustZoom(0.667)" title="Zoom out">−</button>
           <span id="zoomLabel">12px</span>
@@ -527,7 +529,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
 <script src="puzzles_curated_data.js"></script>
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────────
-const GRID_W = 72, GRID_H = 60;
+const GRID_W = 144, GRID_H = 120;
 const T = { VOID: 0, FLOOR: 1, WALL: 2, WATER: 3, COURTYARD: 4 };
 const TILE_COLORS = ['#1a1410', '#c8a86a', '#8a6a40', '#2a6898', '#d4ba88'];
 const TILE_NAMES  = ['Void', 'Floor', 'Wall', 'Water', 'Courtyard'];
@@ -626,6 +628,9 @@ let selDoor = null;         // 'door:roomId' to attach to the next placed object
                             // (both set = locked door: puzzle must be solved
                             // in-game before the door works)
 let showGrid = true;
+let showPView = false;      // player-view overlay: outline of the game camera
+// Game camera size in tiles — VIEWPORT_W/H ÷ TILE_PX from maps.html (800×520 @ 32px)
+const PVIEW_W = 800 / 32, PVIEW_H = 520 / 32;
 
 // History — stores post-operation snapshots
 const MAX_HIST = 60;
@@ -1000,6 +1005,41 @@ function render() {
     ctx.lineWidth   = 1;
     ctx.strokeRect(x + 0.5, y + 0.5, zoom - 1, zoom - 1);
   }
+
+  // Player-view overlay — the exact area the game camera shows around the
+  // player, with the game's edge clamping. Anchored on the cursor, or on the
+  // spawn point when the mouse is off the canvas.
+  if (showPView) {
+    const anchor = (hoverCell && inBounds(hoverCell.col, hoverCell.row) && !isPanning)
+      ? { c: hoverCell.col + 0.5, r: hoverCell.row + 0.5 }
+      : (spawn ? { c: spawn.col + 0.5, r: spawn.row + 0.5 } : null);
+    if (anchor) {
+      const camC = Math.max(0, Math.min(GRID_W - PVIEW_W, anchor.c - PVIEW_W / 2));
+      const camR = Math.max(0, Math.min(GRID_H - PVIEW_H, anchor.r - PVIEW_H / 2));
+      const x = camC * zoom + panX, y = camR * zoom + panY;
+      const w = PVIEW_W * zoom,     h = PVIEW_H * zoom;
+      ctx.save();
+      // Dim everything the camera can't see
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(0, 0, W, y);
+      ctx.fillRect(0, y + h, W, H - y - h);
+      ctx.fillRect(0, y, x, h);
+      ctx.fillRect(x + w, y, W - x - w, h);
+      ctx.strokeStyle = '#5bc8ff';
+      ctx.lineWidth   = 2;
+      ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+      // Player marker at the anchor tile
+      ctx.fillStyle = '#5bc8ff';
+      ctx.beginPath();
+      ctx.arc(anchor.c * zoom + panX, anchor.r * zoom + panY,
+              Math.max(2.5, zoom * 0.3), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+      ctx.fillText('PLAYER VIEW', x + 4, y >= 16 ? y - 4 : y + 15);
+      ctx.restore();
+    }
+  }
 }
 
 // ── Object drawing (editor-scale glyphs) ──────────────────────────────────────
@@ -1215,6 +1255,14 @@ function toggleGrid() {
   render();
 }
 
+function togglePView() {
+  showPView = !showPView;
+  const btn = document.getElementById('btnPView');
+  btn.textContent = 'Player View: ' + (showPView ? 'On' : 'Off');
+  btn.classList.toggle('active', showPView);
+  render();
+}
+
 function zoomAt(cx, cy, factor) {
   const raw     = zoom * factor;
   const newZoom = Math.max(4, Math.min(48, raw < zoom ? Math.floor(raw) : Math.ceil(raw)));
@@ -1299,14 +1347,22 @@ function fromData(data) {
   roomIdSeq = 1;
 
   const newRooms = roomsIn.map((rm, i) => {
-    if (!rm.grid || rm.grid.length !== GRID_H || rm.grid[0].length !== GRID_W)
-      throw new Error(`Room ${i + 1}: expected ${GRID_W}×${GRID_H} grid, got ${rm.grid?.[0]?.length}×${rm.grid?.length}`);
+    if (!rm.grid || !rm.grid.length || !rm.grid[0].length ||
+        rm.grid.length > GRID_H || rm.grid[0].length > GRID_W)
+      throw new Error(`Room ${i + 1}: expected up to ${GRID_W}×${GRID_H} grid, got ${rm.grid?.[0]?.length}×${rm.grid?.length}`);
     let id = (typeof rm.id === 'string' && rm.id && !seenRoomIds.has(rm.id)) ? rm.id : null;
     if (!id) { while (seenRoomIds.has('r' + roomIdSeq)) roomIdSeq++; id = 'r' + (roomIdSeq++); }
     seenRoomIds.add(id);
     const room = makeRoom((typeof rm.name === 'string' && rm.name.trim()) ? rm.name.trim() : 'Room ' + (i + 1));
     room.id = id;
-    room.grid  = rm.grid.map(row => row.map(Number));
+    // Maps saved before the canvas grew (72×60) are padded with void to the
+    // current size; content stays anchored top-left so coordinates keep working
+    room.grid  = rm.grid.map(row => {
+      const r = row.map(Number);
+      while (r.length < GRID_W) r.push(T.VOID);
+      return r;
+    });
+    while (room.grid.length < GRID_H) room.grid.push(new Array(GRID_W).fill(T.VOID));
     room.spawn = rm.spawn ? { col: +rm.spawn.col, row: +rm.spawn.row } : null;
     room.special = typeof rm.special === 'string' ? rm.special : '';
     // Legacy shape objects (palm/pot/…) are no longer supported and get dropped
