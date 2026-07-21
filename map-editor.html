@@ -337,10 +337,13 @@ select:focus { outline: none; border-color: var(--gold-dim); }
       <div>
         <div class="sec-title">TOOLS</div>
         <div class="tool-grid">
-          <button id="tool-paint" class="active" onclick="setTool('paint')" title="Paint (B)">Paint</button>
-          <button id="tool-fill"                onclick="setTool('fill')"  title="Fill (G)">Fill</button>
-          <button id="tool-rect"                onclick="setTool('rect')"  title="Rectangle (R)">Rect</button>
-          <button id="tool-spawn"               onclick="setTool('spawn')" title="Set Spawn Point (S)">Set Spawn</button>
+          <button id="tool-select" class="active" style="grid-column:1/-1"
+                  onclick="setTool('select')"
+                  title="Select (V) — click an object, or drag an area to select several. Drag to move, Del deletes, Ctrl+C/V copies, collision & puzzle/door apply to the selection">Select</button>
+          <button id="tool-paint"                onclick="setTool('paint')" title="Paint (B)">Paint</button>
+          <button id="tool-fill"                 onclick="setTool('fill')"  title="Fill (G)">Fill</button>
+          <button id="tool-rect"                 onclick="setTool('rect')"  title="Rectangle (R)">Rect</button>
+          <button id="tool-spawn"                onclick="setTool('spawn')" title="Set Spawn Point (S)">Set Spawn</button>
         </div>
       </div>
 
@@ -366,7 +369,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
           <button id="snap-2"                onclick="setPlaceSnap(0.5)"  title="Snap to half tiles">½</button>
           <button id="snap-4"                onclick="setPlaceSnap(0.25)" title="Snap to quarter tiles">¼</button>
         </div>
-        <div class="hint-text" style="margin-top:4px">Arrow keys nudge the<br>object under the cursor</div>
+        <div class="hint-text" style="margin-top:4px">Arrow keys nudge the<br>selection (or the object<br>under the cursor)</div>
       </div>
 
       <div class="divider"></div>
@@ -375,7 +378,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
       <div>
         <div class="sec-title">INTERACTABLE</div>
         <div class="hint-text" style="margin-bottom:5px">
-          Optional — attaches to the<br>next object you place.<br>
+          Optional — attaches to the<br>selected object(s), or to the<br>next object you place.<br>
           Pick both to make a locked<br>door: it won't open until<br>its puzzle is solved
         </div>
         <div class="sec-title">PUZZLE</div>
@@ -521,6 +524,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
     <span id="stTile">—</span>
     <span id="stZoom">zoom 12×</span>
     <span id="stSpawn">spawn: not set</span>
+    <span id="stSel" style="color:var(--gold)"></span>
   </div>
 
 </div><!-- /app -->
@@ -619,7 +623,7 @@ let objects = [];           // {col, row, sx, sy, sw, sh, solid, inter?, door?}
                             // door: id of the room this object teleports to
 let zoom = 12;
 let panX = 0, panY = 0;
-let tool = 'paint';
+let tool = 'select';
 let selTile = T.FLOOR;
 let selSprite = null;       // {sx, sy, sw, sh} in sheet tiles — the object brush
 let objPass = 'solid';      // 'solid' | 'over' | 'under' — collision mode for new objects
@@ -652,6 +656,13 @@ let placeSnap  = 1;       // object placement snap in tiles: 1, 0.5 or 0.25
 let nudgePending = false; // arrow-key nudges made since the last history push
 let nudgeTarget  = null;  // object of the current nudge burst — keeps moving
                           // even after it slides out from under the cursor
+
+// Select tool — holds references into the active room's objects[], so it is
+// cleared whenever those references die (undo/redo, room switch, clear)
+let selectedObjs = new Set();
+let marquee   = null;     // {a, b, base} — drag rect in grid coords + prior selection (shift)
+let dragMove  = null;     // {anchor, orig:[{o, col, row}], moved} — moving the selection
+let clipboard = null;     // {origin, items} — copied objects, positions relative to origin
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const canvas = document.getElementById('editorCanvas');
@@ -720,6 +731,7 @@ function bindRoom(i) {
   const r = rooms[i];
   grid = r.grid; spawn = r.spawn; objects = r.objects;
   history = r._hist; histIdx = r._histIdx;
+  clearSelection();
 }
 
 // A map has a single spawn point — placing one removes any spawn in the other
@@ -958,6 +970,35 @@ function render() {
   ctx.lineWidth   = 1.5;
   ctx.strokeRect(gx + 0.75, gy + 0.75, gw - 1.5, gh - 1.5);
 
+  // Selection highlights (Select tool)
+  if (selectedObjs.size) {
+    ctx.save();
+    ctx.strokeStyle = CANVAS_THEME.accent;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    for (const o of selectedObjs) {
+      const { x, y } = cellXY(o.col, o.row);
+      ctx.strokeRect(x - 1.5, y - 1.5, objW(o) * zoom + 3, objH(o) * zoom + 3);
+    }
+    ctx.restore();
+  }
+
+  // Marquee (area-select drag)
+  if (marquee) {
+    const mx = Math.min(marquee.a.col, marquee.b.col) * zoom + panX;
+    const my = Math.min(marquee.a.row, marquee.b.row) * zoom + panY;
+    const mw = Math.abs(marquee.a.col - marquee.b.col) * zoom;
+    const mh = Math.abs(marquee.a.row - marquee.b.row) * zoom;
+    ctx.save();
+    ctx.fillStyle = CANVAS_THEME.glow;
+    ctx.fillRect(mx, my, mw, mh);
+    ctx.strokeStyle = CANVAS_THEME.accent;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(mx + 0.5, my + 0.5, mw, mh);
+    ctx.restore();
+  }
+
   // Rect preview
   if (tool === 'rect' && rectStart && hoverCell) {
     const cc0 = Math.min(rectStart.col, hoverCell.col);
@@ -1141,6 +1182,7 @@ function restoreSnapshot(s) {
   grid  = s.grid.map(r => r.slice());
   spawn = s.spawn ? { ...s.spawn } : null;
   objects = (s.objects || []).map(o => ({ ...o }));
+  clearSelection();   // the selected references were just replaced by clones
   syncRoomFromGlobals();
   updateInterList();
 }
@@ -1217,7 +1259,7 @@ function autoWall() {
 function clearMap() {
   if (!confirm(`Clear the room "${rooms[curRoom].name}"? (Other rooms are kept.)`)) return;
   grid = makeGrid(); spawn = null;
-  objects = []; updateInterList();
+  objects = []; clearSelection(); updateInterList();
   pushHistory(); render(); updateStatus();
 }
 
@@ -1235,6 +1277,7 @@ function newMap() {
 // ── Tool / tile selection ─────────────────────────────────────────────────────
 function setTool(t) {
   tool = t; rectStart = null;
+  if (t !== 'select') { clearSelection(); render(); }
   document.querySelectorAll('[id^="tool-"]').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('tool-' + t);
   if (btn) btn.classList.add('active');
@@ -1242,7 +1285,8 @@ function setTool(t) {
 }
 
 function updateCursor() {
-  const map = { paint:'crosshair', fill:'copy', rect:'crosshair', spawn:'pointer', object:'copy' };
+  const map = { select: dragMove ? 'move' : 'default',
+                paint:'crosshair', fill:'copy', rect:'crosshair', spawn:'pointer', object:'copy' };
   canvas.style.cursor = spaceHeld ? (isPanning ? 'grabbing' : 'grab') : (map[tool] || 'crosshair');
 }
 
@@ -1808,6 +1852,76 @@ function eraseObjectAt(col, row) {
   return true;
 }
 
+// ── Select tool ───────────────────────────────────────────────────────────────
+function clearSelection() {
+  if (selectedObjs.size) selectedObjs.clear();
+  updateSelStatus();
+}
+
+function updateSelStatus() {
+  document.getElementById('stSel').textContent =
+    selectedObjs.size ? selectedObjs.size + ' selected' : '';
+}
+
+// Objects whose footprint intersects the marquee rect (grid coords, any corner order)
+function objsInRect(a, b) {
+  const x0 = Math.min(a.col, b.col), x1 = Math.max(a.col, b.col);
+  const y0 = Math.min(a.row, b.row), y1 = Math.max(a.row, b.row);
+  return objects.filter(o => o.col < x1 && o.col + objW(o) > x0 &&
+                             o.row < y1 && o.row + objH(o) > y0);
+}
+
+// Clamp a group move so the whole selection stays in bounds without the
+// group's shape distorting at the edges
+function clampGroupDelta(recs, dc, dr) {
+  for (const rec of recs) {
+    dc = Math.max(-rec.col, Math.min(GRID_W - objW(rec.o) - rec.col, dc));
+    dr = Math.max(-rec.row, Math.min(GRID_H - objH(rec.o) - rec.row, dr));
+  }
+  return [dc, dr];
+}
+
+function deleteSelection() {
+  if (!selectedObjs.size) return;
+  objects = objects.filter(o => !selectedObjs.has(o));
+  clearSelection();
+  updateInterList(); pushHistory(); render();
+}
+
+function copySelection() {
+  if (!selectedObjs.size) return;
+  const sel = [...selectedObjs];
+  const origin = { col: Math.min(...sel.map(o => o.col)),
+                   row: Math.min(...sel.map(o => o.row)) };
+  clipboard = { origin, items: sel.map(o => {
+    const c = { ...o, col: o.col - origin.col, row: o.row - origin.row };
+    if (c.anim) c.anim = { ...c.anim };
+    delete c.inter;   // puzzle ids are map-unique — copies never carry one
+    return c;
+  }) };
+}
+
+// atCursor=true pastes at the mouse position; false drops one tile down-right
+// of where the copy was taken (Ctrl+D duplicate)
+function pasteClipboard(atCursor) {
+  if (!clipboard || !clipboard.items.length) return;
+  const base = (atCursor && hoverCellF &&
+                inBounds(Math.floor(hoverCellF.col), Math.floor(hoverCellF.row)))
+    ? { col: snapCoord(hoverCellF.col), row: snapCoord(hoverCellF.row) }
+    : { col: clipboard.origin.col + 1, row: clipboard.origin.row + 1 };
+  setTool('select');
+  clearSelection();
+  for (const it of clipboard.items) {
+    const o = { ...it, col: it.col + base.col, row: it.row + base.row };
+    if (o.anim) o.anim = { ...o.anim };
+    o.col = Math.max(0, Math.min(GRID_W - objW(o), o.col));
+    o.row = Math.max(0, Math.min(GRID_H - objH(o), o.row));
+    objects.push(o);
+    selectedObjs.add(o);
+  }
+  updateSelStatus(); updateInterList(); pushHistory(); render();
+}
+
 // ── Mouse events ──────────────────────────────────────────────────────────────
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
@@ -1825,6 +1939,28 @@ canvas.addEventListener('mousedown', e => {
   }
 
   const erasing = e.button === 2;
+
+  if (tool === 'select') {
+    if (erasing) { clearSelection(); render(); return; }
+    const i = objAt(cellF.col, cellF.row);
+    if (i !== -1) {
+      const o = objects[i];
+      if (e.shiftKey) {
+        // Shift-click toggles membership without starting a drag
+        selectedObjs.has(o) ? selectedObjs.delete(o) : selectedObjs.add(o);
+        updateSelStatus(); render(); return;
+      }
+      if (!selectedObjs.has(o)) { selectedObjs.clear(); selectedObjs.add(o); }
+      dragMove = { anchor: { ...cellF }, moved: false,
+                   orig: [...selectedObjs].map(s => ({ o: s, col: s.col, row: s.row })) };
+      updateSelStatus(); updateCursor(); render(); return;
+    }
+    // Empty space — start a marquee (shift keeps what's already selected)
+    marquee = { a: { ...cellF }, b: { ...cellF },
+                base: e.shiftKey ? [...selectedObjs] : [] };
+    if (!e.shiftKey) clearSelection();
+    render(); return;
+  }
 
   if (tool === 'spawn') {
     if (!inBounds(col, row)) return;
@@ -1918,6 +2054,23 @@ canvas.addEventListener('mousemove', e => {
     document.getElementById('stTile').textContent = info;
   }
 
+  if (dragMove) {
+    // Move the whole selection by a snapped delta from the drag anchor
+    let dc = Math.round((hoverCellF.col - dragMove.anchor.col) / placeSnap) * placeSnap;
+    let dr = Math.round((hoverCellF.row - dragMove.anchor.row) / placeSnap) * placeSnap;
+    [dc, dr] = clampGroupDelta(dragMove.orig, dc, dr);
+    for (const rec of dragMove.orig) { rec.o.col = rec.col + dc; rec.o.row = rec.row + dr; }
+    if (dc || dr) dragMove.moved = true;
+    render(); return;
+  }
+
+  if (marquee) {
+    marquee.b = { ...hoverCellF };
+    selectedObjs = new Set([...marquee.base, ...objsInRect(marquee.a, marquee.b)]);
+    updateSelStatus();
+    render(); return;
+  }
+
   if (!painting) { render(); return; } // hover highlight
 
   if (tool === 'rect') { render(); return; } // preview only
@@ -1945,6 +2098,15 @@ window.addEventListener('mouseup', e => {
   if (isPanning) {
     isPanning = false;
     updateCursor(); return;
+  }
+  if (dragMove) {
+    if (dragMove.moved) pushHistory();
+    dragMove = null;
+    updateCursor(); render(); return;
+  }
+  if (marquee) {
+    marquee = null;
+    render(); return;
   }
   if (!painting) return;
   painting = false;
@@ -2005,7 +2167,12 @@ window.addEventListener('keydown', e => {
     return;
   }
 
+  if (e.key === 'Escape' && selectedObjs.size) { clearSelection(); render(); return; }
   if (e.key === 'Escape' && selSprite) { clearSpriteBrush(); return; }
+
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selectedObjs.size) {
+    deleteSelection(); e.preventDefault(); return;
+  }
 
   if (e.key === ' ') { spaceHeld = true; updateCursor(); e.preventDefault(); return; }
 
@@ -2013,6 +2180,12 @@ window.addEventListener('keydown', e => {
     if (e.key === 'z') { e.shiftKey ? redo() : undo(); e.preventDefault(); return; }
     if (e.key === 'y') { redo(); e.preventDefault(); return; }
     if (e.key === 's') { quickSave(); e.preventDefault(); return; }
+    if (e.key === 'c') { copySelection(); e.preventDefault(); return; }
+    if (e.key === 'v') { pasteClipboard(true); e.preventDefault(); return; }
+    if (e.key === 'd') {
+      if (selectedObjs.size) { copySelection(); pasteClipboard(false); }
+      e.preventDefault(); return;
+    }
     return;
   }
 
@@ -2021,6 +2194,18 @@ window.addEventListener('keydown', e => {
   const arrow = { ArrowLeft: [-1, 0], ArrowRight: [1, 0],
                   ArrowUp: [0, -1],  ArrowDown: [0, 1] }[e.key];
   if (arrow) {
+    // A selection nudges as one group (single undo entry via flushNudge)
+    if (selectedObjs.size) {
+      const recs = [...selectedObjs].map(o => ({ o, col: o.col, row: o.row }));
+      const [dc, dr] = clampGroupDelta(recs, arrow[0] * placeSnap, arrow[1] * placeSnap);
+      if (dc || dr) {
+        for (const rec of recs) { rec.o.col += dc; rec.o.row += dr; }
+        nudgePending = true;
+        render();
+      }
+      e.preventDefault();
+      return;
+    }
     // Prefer the object under the cursor; if the burst already moved it out
     // from under a stationary cursor, keep moving that same object
     let o = null;
@@ -2040,7 +2225,7 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  const toolMap = { b:'paint', g:'fill', r:'rect', s:'spawn' };
+  const toolMap = { v:'select', b:'paint', g:'fill', r:'rect', s:'spawn' };
   if (toolMap[e.key.toLowerCase()]) { setTool(toolMap[e.key.toLowerCase()]); return; }
 
   if (e.key.toLowerCase() === 't') { openTileset(); return; }
@@ -2443,6 +2628,17 @@ function setObjPass(v) {
   objPass = v;
   for (const m of ['solid', 'over', 'under'])
     document.getElementById('pass-' + m).classList.toggle('active', v === m);
+  // With a selection the buttons also change the selected objects' collision
+  if (selectedObjs.size) {
+    let changed = false;
+    for (const o of selectedObjs) {
+      const solid = v === 'solid', under = v === 'under';
+      if (o.solid !== solid || !!o.under !== under) changed = true;
+      o.solid = solid;
+      if (under) o.under = true; else delete o.under;
+    }
+    if (changed) { pushHistory(); render(); }
+  }
 }
 
 function setPlaceSnap(s) {
@@ -2455,11 +2651,39 @@ function setPlaceSnap(s) {
 
 // ── Interactable attachment dropdowns ─────────────────────────────────────────
 function selectPuzzle(id) {
+  // With a selection the dropdown edits it directly instead of arming the brush
+  if (selectedObjs.size) {
+    if (id && selectedObjs.size > 1) {
+      alert('A puzzle attaches to a single object — select just one.');
+      updateInterList(); return;
+    }
+    syncRoomFromGlobals();
+    for (const o of selectedObjs) delete o.inter;   // "none" detaches
+    if (id) {
+      // Each puzzle id lives on exactly one object map-wide — steal it if reused
+      for (const rm of rooms)
+        for (const o of rm.objects) if (o.inter === id) delete o.inter;
+      [...selectedObjs][0].inter = id;
+    }
+    selPuzzle = null;
+    updateInterList(); pushHistory(); render();
+    return;
+  }
   selPuzzle = id;
   updateInterList();
   if (id) setTool('object');   // attaching implies placing an object next
 }
 function selectDoor(id) {
+  if (selectedObjs.size) {
+    const rid = id ? id.slice(5) : null;
+    for (const o of selectedObjs) {
+      if (rid && findRoomById(rid)) o.door = rid;
+      else delete o.door;                            // "none" detaches
+    }
+    selDoor = null;
+    updateInterList(); pushHistory(); render();
+    return;
+  }
   selDoor = id;
   updateInterList();
   if (id) setTool('object');
