@@ -1271,7 +1271,7 @@ function newMap() {
   bindRoom(0);
   updateInterList();
   fitGrid();
-  pushHistory(); renderTabs(); render(); updateStatus(); updateHistBtns();
+  pushHistory(); markMapSaved(); renderTabs(); render(); updateStatus(); updateHistBtns();
 }
 
 // ── Tool / tile selection ─────────────────────────────────────────────────────
@@ -1503,6 +1503,45 @@ async function quickSave() {
   }
 }
 
+// ── Auto-save ─────────────────────────────────────────────────────────────────
+// Commits the map to the website when both hold: the map differs from the last
+// saved/loaded state, and 5+ minutes have passed since the last save or
+// auto-save. Skips silently when it can't help (no token, unnamed map, or an
+// edit in progress) and never alerts on failure — a failed attempt just waits
+// out another full window before retrying.
+const AUTOSAVE_MS = 5 * 60 * 1000;
+let savedBaseline = '';   // JSON of the map as of the last save/load — the
+let lastSaveTime  = 0;    // "unsaved change" test is a diff against this
+let autoSaveBusy  = false;
+
+// Called after load/import/new — points where the editor content is exactly
+// the state the user chose, so auto-save has nothing to add yet. (Saves
+// re-baseline inside writeCloudMap instead, against the data actually sent.)
+function markMapSaved() {
+  savedBaseline = JSON.stringify(toData());
+  lastSaveTime  = Date.now();
+}
+
+async function autoSaveTick() {
+  if (autoSaveBusy || Date.now() - lastSaveTime < AUTOSAVE_MS) return;
+  if (!ghToken() || mapName === 'Custom Map') return;   // Ctrl+S walks the user
+                                                        // through these; a timer can't
+  if (painting || dragMove || nudgePending) return;     // mid-edit — next tick gets it
+  if (JSON.stringify(toData()) === savedBaseline) return;
+  autoSaveBusy = true;
+  showFlash('auto-saving…', '#b8a06a');
+  try {
+    await writeCloudMap(mapName);   // success re-baselines + resets the window
+    showFlash('auto-saved ✓');
+  } catch (e) {
+    lastSaveTime = Date.now();      // back off a full window instead of every tick
+    showFlash('auto-save failed ✗', '#cc7070');
+  } finally {
+    autoSaveBusy = false;
+  }
+}
+setInterval(autoSaveTick, 30 * 1000);
+
 // ── My Maps panel — named saves stored on the website ────────────────────────
 // Maps are committed to the GitHub repo behind the site via the GitHub
 // contents API, so they can be loaded from any PC. Reading a public repo
@@ -1551,7 +1590,7 @@ function mpLoadData(data, label) {
   if (!confirm(`Load "${label}"? It replaces the map currently open in the editor.`)) return;
   try {
     fromData(data);
-    pushHistory(); render(); updateStatus();
+    pushHistory(); markMapSaved(); render(); updateStatus();
     closeMapsPanel();
   } catch (e) { mpStatus('Error loading: ' + e.message); }
 }
@@ -1671,11 +1710,16 @@ async function writeCloudMap(name) {
   const path = GH.dir + '/' + slugify(name) + '.json';
   const sha = await ghSha(path);   // required by GitHub to overwrite
   mapName = name;
-  const payload = JSON.stringify({ updated: Date.now(), data: toData() });
+  const data = toData();
+  const payload = JSON.stringify({ updated: Date.now(), data });
   const body = { message: `Save map "${name}" from Map Studio`, content: b64EncodeUtf8(payload) };
   if (sha) body.sha = sha;
   const r = await fetch(ghApi(path), { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) });
   if (!r.ok) throw new Error(await ghErrMsg(r));
+  // Baseline exactly what was written — edits made while the request was in
+  // flight stay "unsaved" and the next auto-save window picks them up
+  savedBaseline = JSON.stringify(data);
+  lastSaveTime  = Date.now();
   updateStatus();
 }
 
@@ -1761,6 +1805,7 @@ function importJSON(e) {
     try {
       fromData(JSON.parse(ev.target.result));
       pushHistory();
+      markMapSaved();   // don't auto-publish an import the user hasn't touched
       render(); updateStatus();
     } catch (err) { alert('Import error: ' + err.message); }
   };
@@ -2734,6 +2779,7 @@ new ResizeObserver(resizeCanvas).observe(wrap);
 resizeCanvas();
 fitGrid();
 pushHistory(); // baseline history state
+markMapSaved(); // baseline auto-save state
 updateStatus();
 
 // No local drafts — open My Maps on startup so the latest website save is one
