@@ -919,23 +919,6 @@ function drawJoystick() {
 
 canvas.addEventListener('mousedown', () => canvas.focus());
 
-// ── Depth ordering ────────────────────────────────────────────────────────────
-// Painter's algorithm: whatever sits lower on screen is closer to the camera
-// and draws in front. An object's depth is the bottom edge of its footprint
-// (row + height); the player's is their feet. Three bands keep the collision
-// classes apart — walk-over decals are floor and stay below everything,
-// walk-under objects (arches, canopies) stay above the player, and solid
-// objects share the middle band with the player so you can stand in front of
-// or behind them. Compare depthOf(a) < depthOf(b) to ask "does a draw behind b?".
-const DEPTH_BAND  = 10000;   // larger than any possible row + height
-const PLAYER_FEET = 0.28;    // feet offset from center — matches collision half-size
-function depthOf(o) {
-  if (o.under) return 2 * DEPTH_BAND + o.row + (o.sh || 1);
-  if (o.solid) return     DEPTH_BAND + o.row + (o.sh || 1);
-  return 0;   // walk-over floor decals keep insertion order (rug stacking)
-}
-function playerDepth() { return DEPTH_BAND + player.y + PLAYER_FEET; }
-
 // ── Render ────────────────────────────────────────────────────────────────────
 function render() {
   const cam = getCamera();
@@ -952,20 +935,15 @@ function render() {
     for (let c = c0; c < c1; c++)
       drawTile(mapGrid[r][c], c*TILE_PX, r*TILE_PX);
 
-  // Objects + player in depth order (see depthOf). The sort is stable, so
-  // objects at equal depth keep their placement order from the editor.
-  const drawList = OBJECTS.slice().sort((a, b) => depthOf(a) - depthOf(b));
-  const pDepth = playerDepth();
-  let playerDrawn = false;
-  for (const o of drawList) {
-    if (!playerDrawn && depthOf(o) > pDepth) {
-      drawPlayer((player.x - 0.5)*TILE_PX, (player.y - 0.5)*TILE_PX);
-      playerDrawn = true;
-    }
-    drawObject(o, o.col*TILE_PX, o.row*TILE_PX);
-  }
-  if (!playerDrawn)
-    drawPlayer((player.x - 0.5)*TILE_PX, (player.y - 0.5)*TILE_PX);
+  // Objects layer (above tiles, below interactables and player);
+  // walk-under objects are held back and drawn over the player instead
+  for (const o of OBJECTS)
+    if (!o.under) drawObject(o, o.col*TILE_PX, o.row*TILE_PX);
+
+  drawPlayer((player.x - 0.5)*TILE_PX, (player.y - 0.5)*TILE_PX);
+  // Walk-under objects (arches, canopies) — the player passes beneath them
+  for (const o of OBJECTS)
+    if (o.under) drawObject(o, o.col*TILE_PX, o.row*TILE_PX);
   drawThoughtBubble();   // world space — drawn above player, inside translate
   ctx.restore();
 

@@ -699,15 +699,6 @@ function inBounds(c, r) {
 // Footprint helpers — sprite objects can span several tiles (sw×sh)
 function objW(o) { return o.sw || 1; }
 function objH(o) { return o.sh || 1; }
-// Draw depth, mirroring the game's depthOf() in maps.html: walk-over decals
-// under everything, solid objects y-sorted by their bottom edge (they share
-// this band with the player in-game), walk-under objects above everything.
-const DEPTH_BAND = 10000;
-function objDepth(o) {
-  if (o.under) return 2 * DEPTH_BAND + o.row + objH(o);
-  if (o.solid) return     DEPTH_BAND + o.row + objH(o);
-  return 0;   // walk-over floor decals keep placement order
-}
 function objCovers(o, col, row) {
   return col >= o.col && col < o.col + objW(o) &&
          row >= o.row && row < o.row + objH(o);
@@ -945,15 +936,11 @@ function render() {
     ctx.stroke();
   }
 
-  // Objects layer (above tiles) — same depth order the game uses: walk-over
-  // decals first in placement order, then solid objects sorted by the bottom
-  // edge of their footprint (lower on screen draws in front), then walk-under
-  // objects on top. The sort is stable, so equal-depth objects keep placement
-  // order.
-  const visObjs = objects.filter(o =>
-    !(o.col + objW(o) - 1 < c0 || o.col > c1 || o.row + objH(o) - 1 < r0 || o.row > r1));
-  visObjs.sort((a, b) => objDepth(a) - objDepth(b));
-  for (const o of visObjs) drawEditorObject(o);
+  // Objects layer (above tiles)
+  for (const o of objects) {
+    if (o.col + objW(o) - 1 < c0 || o.col > c1 || o.row + objH(o) - 1 < r0 || o.row > r1) continue;
+    drawEditorObject(o);
+  }
 
   // Ghost preview of the sprite brush under the cursor (snapped to placeSnap)
   if (tool === 'object' && selSprite && hoverCellF && !painting && !isPanning &&
