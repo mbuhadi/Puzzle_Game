@@ -369,6 +369,12 @@ select:focus { outline: none; border-color: var(--gold-dim); }
           <button id="snap-2"                onclick="setPlaceSnap(0.5)"  title="Snap to half tiles">½</button>
           <button id="snap-4"                onclick="setPlaceSnap(0.25)" title="Snap to quarter tiles">¼</button>
         </div>
+        <div class="sec-title" style="margin-top:8px">LAYER</div>
+        <div class="tool-grid" style="grid-template-columns:1fr 1fr">
+          <button onclick="layerSelection(false)" title="Send the selected object(s) behind overlapping objects — shortcut [">Behind</button>
+          <button onclick="layerSelection(true)"  title="Bring the selected object(s) in front of overlapping objects — shortcut ]">In Front</button>
+        </div>
+        <div class="hint-text" style="margin-top:4px">New objects land on top of<br>what's already there — select<br>one to change its layer</div>
         <div class="hint-text" style="margin-top:4px">Arrow keys nudge the<br>selection (or the object<br>under the cursor)</div>
       </div>
 
@@ -1933,6 +1939,21 @@ function deleteSelection() {
   updateInterList(); pushHistory(); render();
 }
 
+// ── Layer order ───────────────────────────────────────────────────────────────
+// Objects draw in array order (first = bottom) in the editor and the game
+// alike, so stacking is just position in the array. Moves the selection
+// behind everything or in front of everything, keeping the selected objects'
+// order relative to each other. Saves and undo keep the order automatically.
+function layerSelection(toFront) {
+  if (!selectedObjs.size) return;
+  const sel  = objects.filter(o =>  selectedObjs.has(o));
+  const rest = objects.filter(o => !selectedObjs.has(o));
+  const next = toFront ? rest.concat(sel) : sel.concat(rest);
+  if (next.every((o, i) => o === objects[i])) return;   // order unchanged
+  objects = next;
+  pushHistory(); render();
+}
+
 function copySelection() {
   if (!selectedObjs.size) return;
   const sel = [...selectedObjs];
@@ -2269,6 +2290,10 @@ window.addEventListener('keydown', e => {
     e.preventDefault();
     return;
   }
+
+  // [ / ] send the selection behind / bring it in front of other objects
+  if (e.key === '[' && selectedObjs.size) { layerSelection(false); return; }
+  if (e.key === ']' && selectedObjs.size) { layerSelection(true);  return; }
 
   const toolMap = { v:'select', b:'paint', g:'fill', r:'rect', s:'spawn' };
   if (toolMap[e.key.toLowerCase()]) { setTool(toolMap[e.key.toLowerCase()]); return; }
