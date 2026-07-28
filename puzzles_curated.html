@@ -260,7 +260,7 @@ function buildSlidingWindow(){
 
   // Where the gap in the "6 29" house number sits in villa_bg.png, as
   // fractions of the picture — a same-layout replacement image stays aligned.
-  const GAP_X=0.3104, GAP_Y=0.8346, DIGIT_H=0.049;
+  const GAP_X=0.3053, GAP_Y=0.8370, DIGIT_H=0.048;
 
   // Sliding sash — the colon sticker rides on it. CORRECT is the offset that
   // parks the colon between the 6 and the 2; nothing locks or fires there.
@@ -279,7 +279,7 @@ function buildSlidingWindow(){
   }
 
   function drawColon(sx){
-    const cx=sx+COLON_X, cy=gy+GAP_Y*gh, r=Math.max(2.6,DIGIT_H*gh*0.17);
+    const cx=sx+COLON_X, cy=gy+GAP_Y*gh, r=Math.max(2.2,DIGIT_H*gh*0.13);
     g.save();
     g.shadowColor='#ffe000'; g.shadowBlur=10;
     g.fillStyle='#ffe000'; g.strokeStyle='rgba(140,100,0,0.85)'; g.lineWidth=1.2;
