@@ -285,13 +285,13 @@ function buildSlidingWindow(){
     else{ g.fillStyle='#9cc4e4'; g.fillRect(gx,gy,gw,gh); }
   }
 
+  // COLON_DROP shifts the colon down from the digits' vertical center, in
+  // logical canvas px (1 canvas px ≈ 2.15 px of the full-res picture).
+  const COLON_DROP=2;
   function drawColon(sx){
-    const cx=sx+COLON_X, cy=gy+GAP_Y*gh, r=Math.max(2.2,DIGIT_H*gh*0.13);
-    g.save();
-    g.shadowColor='#ffe000'; g.shadowBlur=10;
-    g.fillStyle='#ffe000'; g.strokeStyle='rgba(140,100,0,0.85)'; g.lineWidth=1.2;
-    [-1,1].forEach(k=>{ g.beginPath(); g.arc(cx,cy+k*r*1.9,r,0,Math.PI*2); g.fill(); g.stroke(); });
-    g.restore();
+    const cx=sx+COLON_X, cy=gy+GAP_Y*gh+COLON_DROP, s=Math.max(4.4,DIGIT_H*gh*0.26);
+    g.fillStyle='#ffe000'; g.strokeStyle='rgba(140,100,0,0.85)'; g.lineWidth=1;
+    [-1,1].forEach(k=>{ const y=cy+k*s*0.95-s/2; g.fillRect(cx-s/2,y,s,s); g.strokeRect(cx-s/2,y,s,s); });
   }
 
   function drawSash(){
