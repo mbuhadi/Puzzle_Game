@@ -290,7 +290,7 @@ function buildSlidingWindow(){
   const COLON_DROP=2;
   function drawColon(sx){
     const cx=sx+COLON_X, cy=gy+GAP_Y*gh+COLON_DROP, s=Math.max(3.8,DIGIT_H*gh*0.22);
-    g.fillStyle='#ffe000';
+    g.fillStyle='#5a4632';
     [-1,1].forEach(k=>{ const y=cy+k*s*0.95-s/2; g.fillRect(cx-s/2,y,s,s); });
   }
 
