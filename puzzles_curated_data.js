@@ -116,7 +116,7 @@ const PUZZLES = [
     problem:``,
   },
   {
-    num:'4', name:'لعب جهال', loc:'The Courtyard', build:'courtyard',
+    num:'4', name:'لعب جهال', loc:'The Courtyard',
     given:`
       <div class="chunk"><span class="clabel">p4g1</span>
         <div class="clue arabic" style="direction:rtl;text-align:right;font-size:1.1rem;line-height:2;">
@@ -126,12 +126,7 @@ const PUZZLES = [
           مادري وين يروحون
         </div>
       </div>`,
-    problem:`<div class="chunk"><span class="clabel">p4p1</span>
-        <div class="courtyard-wrap">
-          <canvas id="courtyardCanvas" width="520" height="520" tabindex="0"></canvas>
-          <button class="reveal-btn" id="courtyardReset">↺ RESET</button>
-        </div>
-      </div>`,
+    problem:``,
   },
   {
     num:'5', name:'خيال الاطفال مفتاح الثروة', loc:'The Basement', incomplete:false, build:'puzzle5',
