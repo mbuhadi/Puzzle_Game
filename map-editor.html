@@ -2243,12 +2243,17 @@ window.addEventListener('keydown', e => {
   if (e.key === ' ') { spaceHeld = true; updateCursor(); e.preventDefault(); return; }
 
   if (e.ctrlKey || e.metaKey) {
-    if (e.key === 'z') { e.shiftKey ? redo() : undo(); e.preventDefault(); return; }
-    if (e.key === 'y') { redo(); e.preventDefault(); return; }
-    if (e.key === 's') { quickSave(); e.preventDefault(); return; }
-    if (e.key === 'c') { copySelection(); e.preventDefault(); return; }
-    if (e.key === 'v') { pasteClipboard(true); e.preventDefault(); return; }
-    if (e.key === 'd') {
+    // Normalize so shortcuts survive CapsLock ('Z') and non-Latin keyboard
+    // layouts (e.g. Arabic reports e.key = 'ئ'; fall back to the physical key)
+    let k = e.key.toLowerCase();
+    if (!/^[a-z]$/.test(k) && e.code && e.code.startsWith('Key'))
+      k = e.code.slice(3).toLowerCase();
+    if (k === 'z') { e.shiftKey ? redo() : undo(); e.preventDefault(); return; }
+    if (k === 'y') { redo(); e.preventDefault(); return; }
+    if (k === 's') { quickSave(); e.preventDefault(); return; }
+    if (k === 'c') { copySelection(); e.preventDefault(); return; }
+    if (k === 'v') { pasteClipboard(true); e.preventDefault(); return; }
+    if (k === 'd') {
       if (selectedObjs.size) { copySelection(); pasteClipboard(false); }
       e.preventDefault(); return;
     }

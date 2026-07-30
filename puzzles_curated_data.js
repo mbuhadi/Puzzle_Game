@@ -70,7 +70,7 @@ const PUZZLES = [
       </div>`,
   },
   {
-    num:'3', name:'الذكية', loc:'Study Door · Lock 2', build:'clothes',
+    num:'3', name:'الذكية', loc:'Study Door · Lock 2',
     given:`
       <div class="chunk"><span class="clabel">p3g1</span>
         <div style="
@@ -102,9 +102,15 @@ const PUZZLES = [
         </div>
       </div>
       <div class="chunk"><span class="clabel">p3g2</span>
-        <div class="clothes-wrap"><canvas id="clothesCanvas" width="720" height="300"></canvas></div>
+        <div class="wardrobe-wrap"><img src="wardrobe%201.png" alt="Wardrobe 1"></div>
       </div>
       <div class="chunk"><span class="clabel">p3g3</span>
+        <div class="wardrobe-wrap"><img src="wardrobe%202.png" alt="Wardrobe 2"></div>
+      </div>
+      <div class="chunk"><span class="clabel">p3g4</span>
+        <div class="wardrobe-wrap"><img src="wardrobe%203.png" alt="Wardrobe 3"></div>
+      </div>
+      <div class="chunk"><span class="clabel">p3g5</span>
         ${TV_HTML}
       </div>`,
     problem:``,
@@ -228,6 +234,13 @@ const PUZZLES = [
     problem:`<div class="chunk"><span class="clabel">p7p1</span>
         <div id="p7grid" style="margin:20px 0;"></div>
         <button class="reveal-btn" id="p7reset" style="margin-top:8px;">↺ RESET</button>
+      </div>`,
+  },
+  {
+    num:'8', name:'؟؟؟', loc:'', build:'puzzle8',
+    given:``,
+    problem:`<div class="chunk"><span class="clabel">p8p1</span>
+        <div id="p8grid" style="margin:20px 0;"></div>
       </div>`,
   },
 ];
