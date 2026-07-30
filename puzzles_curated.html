@@ -432,12 +432,8 @@ function buildClockSet(){
     hand(minuteOf()*6,     R*0.78, 5, '#5a4632');
     g.beginPath(); g.arc(cx,cy,7,0,Math.PI*2); g.fillStyle='#c8a84b'; g.fill();
     g.beginPath(); g.arc(cx,cy,3,0,Math.PI*2); g.fillStyle='#3a2c1c'; g.fill();
-    // hold progress ring
-    if(!solved && holdSince && now){
-      const f=Math.min(1,(now-holdSince)/HOLD_MS);
-      g.strokeStyle='#ffe066'; g.lineWidth=5; g.lineCap='round';
-      g.beginPath(); g.arc(cx,cy,R+12,-Math.PI/2,-Math.PI/2+f*Math.PI*2); g.stroke();
-    }
+    // No progress feedback while the right time is held — the 3-second wait
+    // stays invisible so the dial gives nothing away before it solves.
     if(solved){
       g.save(); g.shadowColor='#ffe066'; g.shadowBlur=22;
       g.strokeStyle='#ffe066'; g.lineWidth=5;
