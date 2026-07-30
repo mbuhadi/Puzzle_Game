@@ -1047,23 +1047,24 @@ const CHUNK_TAGS=[['revision','Needs revision'],['done','Done']];
 function loadTags(){ try{ return JSON.parse(localStorage.getItem(TAG_STORE_KEY))||{}; }catch(e){ return {}; } }
 function saveTags(t){ try{ localStorage.setItem(TAG_STORE_KEY,JSON.stringify(t)); }catch(e){} }
 
-function makeTag(scopeKey,tagId,label){
-  const el=document.createElement('span');
-  el.className='tag'+(loadTags()[scopeKey]?.[tagId]?' on':'');
-  el.dataset.tag=tagId; el.textContent=label;
-  el.onclick=e=>{
-    e.stopPropagation();
-    const t=loadTags(); t[scopeKey]=t[scopeKey]||{};
-    t[scopeKey][tagId]=!t[scopeKey][tagId]; saveTags(t);
-    el.classList.toggle('on',t[scopeKey][tagId]);
-  };
-  return el;
-}
-
 function makeTagRow(scopeKey,defs,extraClass){
   const wrap=document.createElement('span');
   wrap.className='tags'+(extraClass?' '+extraClass:'');
-  defs.forEach(([id,label])=>wrap.appendChild(makeTag(scopeKey,id,label)));
+  defs.forEach(([tagId,label])=>{
+    const el=document.createElement('span');
+    el.className='tag'+(loadTags()[scopeKey]?.[tagId]?' on':'');
+    el.dataset.tag=tagId; el.textContent=label;
+    el.onclick=e=>{
+      e.stopPropagation();
+      const t=loadTags();
+      const on=!t[scopeKey]?.[tagId];
+      // Mutually exclusive within the row: turning one on clears the other
+      t[scopeKey]=on?{[tagId]:true}:{};
+      saveTags(t);
+      [...wrap.children].forEach(c=>c.classList.toggle('on',on&&c===el));
+    };
+    wrap.appendChild(el);
+  });
   return wrap;
 }
 
