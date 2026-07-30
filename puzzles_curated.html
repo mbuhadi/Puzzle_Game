@@ -1043,8 +1043,8 @@ function select(i){
   detail.innerHTML=`
     <div class="ptitle">${p.name}</div>
     <div class="pkicker">${p.loc.toUpperCase()}</div>
-    <div class="section"><h2>THE GIVEN</h2>${p.given}</div>
-    <div class="section"><h2>THE PROBLEM</h2>${p.problem}</div>`;
+    ${(p.given||'').trim()?`<div class="section"><h2>THE GIVEN</h2>${p.given}</div>`:''}
+    ${(p.problem||'').trim()?`<div class="section"><h2>THE PROBLEM</h2>${p.problem}</div>`:''}`;
   // Interactive canvases (incl. any hidden in the solution) are drawn once here.
   if(p.build&&BUILDERS[p.build]){ const ret=BUILDERS[p.build](); if(typeof ret==='function')teardown=ret; }
   detail.scrollTop=0;

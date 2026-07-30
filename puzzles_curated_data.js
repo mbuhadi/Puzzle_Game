@@ -52,9 +52,8 @@ const PUZZLES = [
           كل ما ازحلق الشباك، الملصق يتحرك على جدار بيتنا!<br>
           يمكن لو وقف بالمكان الصح، يبين لك شي ينقرا.
         </div>
-      </div>`,
-    problem:`<div class="chunk"><span class="clabel">p2g1</span>
-        <p class="play-hint"><b>Drag</b> the sliding pane (or use the buttons / arrow keys) and watch where the yellow colon lands on the wall.</p>
+      </div>
+      <div class="chunk"><span class="clabel">p2g1</span>
         <div class="slide-wrap">
           <canvas id="slideWin" width="720" height="424" tabindex="0"></canvas>
           <div class="slide-controls">
@@ -64,6 +63,7 @@ const PUZZLES = [
           </div>
         </div>
       </div>`,
+    problem:``,
   },
   {
     num:'3', name:'الذكية', loc:'Study Door · Lock 2', build:'clothes',
