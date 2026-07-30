@@ -63,7 +63,11 @@ const PUZZLES = [
           </div>
         </div>
       </div>`,
-    problem:``,
+    problem:`<div class="chunk"><span class="clabel">p2p1</span>
+        <div class="clockset-wrap">
+          <canvas id="clockSet" width="420" height="420" tabindex="0"></canvas>
+        </div>
+      </div>`,
   },
   {
     num:'3', name:'الذكية', loc:'Study Door · Lock 2', build:'clothes',
