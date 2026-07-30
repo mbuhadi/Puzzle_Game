@@ -381,10 +381,12 @@ function buildClockSet(){
   const cx=W/2, cy=H/2, R=Math.min(W,H)/2-22;
 
   const TARGET_H=6, TARGET_M=29, HOLD_MS=3000;
-  let minute=0, hourFloat=12, solved=false, holdSince=0, raf=0;
-  let dragging=null;                                    // 'h' | 'm' | null
+  // Only the minute hand is draggable; the hour hand is geared to it like a
+  // real clock. total = minutes past 12:00, wrapping on the 12-hour dial.
+  let total=0, solved=false, holdSince=0, raf=0, dragging=false;
+  const minuteOf=()=>total%60, hourFloatOf=()=>total/60;
 
-  const atTarget=()=>minute===TARGET_M && Math.floor(hourFloat%12)===TARGET_H;
+  const atTarget=()=>minuteOf()===TARGET_M && Math.floor(hourFloatOf())===TARGET_H;
   const rad=deg=>(deg-90)*Math.PI/180;                  // 0° = 12 o'clock, clockwise
 
   function hand(deg,len,w,color){
@@ -426,8 +428,8 @@ function buildClockSet(){
       g.fillText(String(n), cx+Math.cos(a)*rr, cy+Math.sin(a)*rr+2);
     }
     // hands
-    hand(hourFloat*30, R*0.52, 9, '#3a2c1c');
-    hand(minute*6,     R*0.78, 5, '#5a4632');
+    hand(hourFloatOf()*30, R*0.52, 9, '#3a2c1c');
+    hand(minuteOf()*6,     R*0.78, 5, '#5a4632');
     g.beginPath(); g.arc(cx,cy,7,0,Math.PI*2); g.fillStyle='#c8a84b'; g.fill();
     g.beginPath(); g.arc(cx,cy,3,0,Math.PI*2); g.fillStyle='#3a2c1c'; g.fill();
     // hold progress ring
@@ -462,33 +464,30 @@ function buildClockSet(){
   const pointerDeg=e=>{
     const rect=cv.getBoundingClientRect();
     const px=(e.clientX-rect.left)*(W/rect.width), py=(e.clientY-rect.top)*(W/rect.width);
-    return {deg:(Math.atan2(py-cy,px-cx)*180/Math.PI+90+360)%360,
-            r:Math.hypot(px-cx,py-cy)};
+    return (Math.atan2(py-cy,px-cx)*180/Math.PI+90+360)%360;
   };
-  const angDiff=(a,b)=>{ const d=Math.abs(a-b)%360; return d>180?360-d:d; };
-
+  // Move the minute hand to where the pointer says, taking the short way
+  // round; crossing 12 carries the hour hand along, like winding a clock.
+  function move(deg){
+    const m=Math.round(deg/6)%60;
+    let d=m-minuteOf();
+    if(d>30)d-=60; else if(d<-30)d+=60;
+    total=(total+d+720)%720;
+  }
   cv.addEventListener('pointerdown',e=>{
     if(solved)return;
-    const p=pointerDeg(e);
-    const dH=angDiff(p.deg,hourFloat*30), dM=angDiff(p.deg,minute*6);
-    // pick the closer hand; when ambiguous, outer grabs the minute hand
-    dragging = Math.abs(dH-dM)<14 ? (p.r>R*0.55?'m':'h') : (dM<dH?'m':'h');
-    cv.setPointerCapture(e.pointerId); cv.style.cursor='grabbing';
-    move(p);
+    dragging=true; cv.setPointerCapture(e.pointerId); cv.style.cursor='grabbing';
+    move(pointerDeg(e));
   });
-  function move(p){
-    if(dragging==='m') minute=Math.round(p.deg/6)%60;
-    else hourFloat=((p.deg/30)+12)%12;
-  }
   cv.addEventListener('pointermove',e=>{ if(dragging&&!solved) move(pointerDeg(e)); });
-  const drop=()=>{ dragging=null; cv.style.cursor='grab'; };
+  const drop=()=>{ dragging=false; cv.style.cursor='grab'; };
   cv.addEventListener('pointerup',drop);
   cv.addEventListener('pointercancel',drop);
 
   // test hook for verification
   window.__clockTest=(h,m)=>{
-    if(h!=null){ minute=m; hourFloat=(h%12)+m/60; }
-    return {minute,hourFloat,solved,holding:!!holdSince};
+    if(h!=null) total=((h%12)*60+m)%720;
+    return {minute:minuteOf(),hourFloat:hourFloatOf(),solved,holding:!!holdSince};
   };
 
   raf=requestAnimationFrame(tick);
