@@ -163,6 +163,9 @@ const PUZZLES = [
         <div class="circles-wrap">
           <canvas id="circlesCanvas" width="600" height="440"></canvas>
         </div>
+      </div>
+      <div class="chunk"><span class="clabel">p5g2</span>
+        <div class="wardrobe-wrap"><img src="puzzle5img.png" alt="Puzzle 5"></div>
       </div>`,
     problem:`<div class="chunk"><span class="clabel">p5p1</span>
         <p class="arabic" style="font-size:22px; line-height:2;">خيال الاطفال هو مفتاح الثروة</p>
