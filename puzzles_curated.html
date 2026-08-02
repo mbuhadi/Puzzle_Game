@@ -594,21 +594,21 @@ function drawCircleDiagram(g,w,h){
   g.strokeStyle='#c0a87a'; g.lineWidth=2; g.strokeRect(1,1,w-2,h-2);
   g.strokeStyle='rgba(160,130,80,0.4)'; g.lineWidth=1; g.strokeRect(11,11,w-22,h-22);
 
-  const colors=['#2FB3A6','#FFFFFF','#D87545','#7DB850','#1a1a1a','#E8386A'];
-  const radius=50, centerY=h/2, spacing=70, startX=83;
+  const colors=['#2FB3A6','#FFFFFF','#7DB850','#1a1a1a','#E8386A'];
+  const radius=50, centerY=h/2, spacing=70, startX=(w-(colors.length-1)*spacing)/2;
 
   const positions=[];
-  for(let i=0;i<6;i++)positions.push(startX+i*spacing);
+  for(let i=0;i<colors.length;i++)positions.push(startX+i*spacing);
 
   // Outlined so the white circle still reads against the cream background.
-  for(let i=0;i<6;i++){
+  for(let i=0;i<colors.length;i++){
     g.fillStyle=colors[i]; g.beginPath(); g.arc(positions[i],centerY,radius,0,Math.PI*2); g.fill();
     g.strokeStyle='#5a5244'; g.lineWidth=1.5; g.stroke();
   }
 
   const intersections=[];
   const intersectRadii=[];
-  for(let i=0;i<5;i++){
+  for(let i=0;i<colors.length-1;i++){
     const x1=positions[i];
     const x2=positions[i+1];
     const midX=(x1+x2)/2;
@@ -651,9 +651,9 @@ function drawCircleDiagram(g,w,h){
     intersectRadii.push(h);
   }
 
-  const romanNumerals=['I','II','III','IV','V'];
+  const romanNumerals=['I','II','III','IV'];
   const labelY=centerY+75;
-  for(let i=0;i<5;i++){
+  for(let i=0;i<romanNumerals.length;i++){
     const midX=intersections[i];
     const intersectRadius=intersectRadii[i];
     const lineStartY=centerY+intersectRadius;
@@ -720,12 +720,11 @@ function buildClothes(){ const cv=document.getElementById('clothesCanvas'); if(c
 /* ───────────────── Combination Lock (Puzzle 5) ───────────────── */
 const LOCK_SHAPES=[
   {name:'Triangle', fill:'#97D9D2'},
-  {name:'Pentagon', fill:'#ECBAA2'},
-  {name:'Four-Pointed Star', fill:'#BA8858'},
+  {name:'Pentagon', fill:'#BEDCA8'},
   {name:'Circle', fill:'#5D7C48'},
   {name:'Eight-Pointed Star', fill:'#942850'}
 ];
-const LOCK_CORRECT=[0,1,2,3,4];
+const LOCK_CORRECT=[0,1,2,3];
 
 function buildCylinderLock(){
   const lock=document.getElementById('shapeLock'); if(!lock)return;
@@ -736,14 +735,14 @@ function buildCylinderLock(){
 
   const SHAPE_SVGS=[
     '<polygon points="100,30 40,160 160,160" fill="#97D9D2" stroke="none" opacity="0.9"/>',
-    '<polygon points="100,25 175,75 150,160 50,160 25,75" fill="#ECBAA2" stroke="none" opacity="0.9"/>',
-    '<polygon points="100,20 120,85 185,100 120,115 100,180 80,115 15,100 80,85" fill="#BA8858" stroke="none" opacity="0.9"/>',
+    '<polygon points="100,25 175,75 150,160 50,160 25,75" fill="#BEDCA8" stroke="none" opacity="0.9"/>',
     '<circle cx="100" cy="100" r="75" fill="#5D7C48" stroke="none" opacity="0.9"/>',
     '<polygon points="100,15 130,70 185,100 130,130 100,185 70,130 15,100 70,70" fill="#942850" stroke="none" opacity="0.9"/>'
   ];
+  const DIAL_N=SHAPE_SVGS.length, DIAL_STEP=360/DIAL_N;
 
   // Scramble the shape order in the lock
-  const shapeOrder=[0,1,2,3,4];
+  const shapeOrder=[0,1,2,3];
   for(let i=shapeOrder.length-1;i>0;i--){
     const j=Math.floor(Math.random()*(i+1));
     [shapeOrder[i],shapeOrder[j]]=[shapeOrder[j],shapeOrder[i]];
@@ -788,8 +787,8 @@ function buildCylinderLock(){
     const cx=dialSize/2, cy=dialSize/2, r=dialRadius;
     const sSize=80*dialSize/400;
 
-    for(let i=0;i<5;i++){
-      const angle=(i*72+rotation)*Math.PI/180-Math.PI/2;
+    for(let i=0;i<DIAL_N;i++){
+      const angle=(i*DIAL_STEP+rotation)*Math.PI/180-Math.PI/2;
       const x=cx+r*Math.cos(angle), y=cy+r*Math.sin(angle);
       const shapeDiv=document.createElement('div');
       shapeDiv.style.cssText=`position:absolute; left:${x}px; top:${y}px; transform:translate(-50%,-50%); width:${sSize}px; height:${sSize}px;`;
@@ -807,7 +806,7 @@ function buildCylinderLock(){
     center.style.cssText=`position:absolute; left:${cx}px; top:${cy}px; transform:translate(-50%,-50%); width:${cSize}px; height:${cSize}px; background:#5a5244; border-radius:50%;`;
     dialContainer.appendChild(center);
 
-    currentPos=shapeOrder[((-Math.round(rotation/72))%5+5)%5];
+    currentPos=shapeOrder[((-Math.round(rotation/DIAL_STEP))%DIAL_N+DIAL_N)%DIAL_N];
   }
 
   redrawDial();
@@ -837,7 +836,7 @@ function buildCylinderLock(){
     if(!isDragging)return;
     isDragging=false;
     dialContainer.style.cursor='grab';
-    rotation=Math.round(rotation/72)*72;
+    rotation=Math.round(rotation/DIAL_STEP)*DIAL_STEP;
     redrawDial();
   });
   dialContainer.addEventListener('pointercancel',()=>{
@@ -853,13 +852,13 @@ function buildCylinderLock(){
   ccwBtn.style.cssText='font-size:22px;padding:8px 22px;min-width:64px;';
   ccwBtn.title='Rotate counter-clockwise';
   ccwBtn.textContent='↺';
-  ccwBtn.onclick=()=>{ rotation-=72; redrawDial(); };
+  ccwBtn.onclick=()=>{ rotation-=DIAL_STEP; redrawDial(); };
   const cwBtn=document.createElement('button');
   cwBtn.className='reveal-btn';
   cwBtn.style.cssText='font-size:22px;padding:8px 22px;min-width:64px;';
   cwBtn.title='Rotate clockwise';
   cwBtn.textContent='↻';
-  cwBtn.onclick=()=>{ rotation+=72; redrawDial(); };
+  cwBtn.onclick=()=>{ rotation+=DIAL_STEP; redrawDial(); };
   rotateRow.appendChild(ccwBtn);
   rotateRow.appendChild(cwBtn);
   lockDiv.appendChild(rotateRow);
@@ -879,7 +878,7 @@ function buildCylinderLock(){
     combination.push(currentPos);
     combinationDisplay.textContent=`Combination: ${combination.map(i=>LOCK_SHAPES[i].name).join(' → ')}`;
     updateDisplay();
-    if(combination.length===5){
+    if(combination.length===LOCK_CORRECT.length){
       selectBtn.disabled=true;
       unlockBtn.disabled=false;
     }

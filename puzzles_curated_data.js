@@ -140,15 +140,9 @@ const PUZZLES = [
           </div>
           <div class="shape-item">
             <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-              <polygon points="100,25 175,75 150,160 50,160 25,75" fill="#ECBAA2" stroke="none" opacity="0.9"/>
+              <polygon points="100,25 175,75 150,160 50,160 25,75" fill="#BEDCA8" stroke="none" opacity="0.9"/>
             </svg>
             <div class="shape-label">Pentagon</div>
-          </div>
-          <div class="shape-item">
-            <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-              <polygon points="100,20 120,85 185,100 120,115 100,180 80,115 15,100 80,85" fill="#BA8858" stroke="none" opacity="0.9"/>
-            </svg>
-            <div class="shape-label">Four-Pointed Star</div>
           </div>
           <div class="shape-item">
             <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
