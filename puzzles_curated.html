@@ -613,13 +613,17 @@ function drawCircleDiagram(g,w,h){
   g.strokeStyle='#c0a87a'; g.lineWidth=2; g.strokeRect(1,1,w-2,h-2);
   g.strokeStyle='rgba(160,130,80,0.4)'; g.lineWidth=1; g.strokeRect(11,11,w-22,h-22);
 
-  const colors=['#2FB3A6','#9B5BB8','#D87545','#7DB850','#1a1a1a','#E8386A'];
+  const colors=['#2FB3A6','#FFFFFF','#D87545','#7DB850','#1a1a1a','#E8386A'];
   const radius=50, centerY=h/2, spacing=70, startX=83;
 
   const positions=[];
   for(let i=0;i<6;i++)positions.push(startX+i*spacing);
 
-  for(let i=0;i<6;i++){g.fillStyle=colors[i]; g.beginPath(); g.arc(positions[i],centerY,radius,0,Math.PI*2); g.fill();}
+  // Outlined so the white circle still reads against the cream background.
+  for(let i=0;i<6;i++){
+    g.fillStyle=colors[i]; g.beginPath(); g.arc(positions[i],centerY,radius,0,Math.PI*2); g.fill();
+    g.strokeStyle='#5a5244'; g.lineWidth=1.5; g.stroke();
+  }
 
   const intersections=[];
   const intersectRadii=[];
@@ -734,8 +738,8 @@ function buildClothes(){ const cv=document.getElementById('clothesCanvas'); if(c
 
 /* ───────────────── Combination Lock (Puzzle 5) ───────────────── */
 const LOCK_SHAPES=[
-  {name:'Triangle', fill:'#6784B8'},
-  {name:'Pentagon', fill:'#C8758C'},
+  {name:'Triangle', fill:'#97D9D2'},
+  {name:'Pentagon', fill:'#ECBAA2'},
   {name:'Four-Pointed Star', fill:'#BA8858'},
   {name:'Circle', fill:'#5D7C48'},
   {name:'Eight-Pointed Star', fill:'#942850'}
@@ -750,8 +754,8 @@ function buildCylinderLock(){
   lockDiv.style.cssText='display:flex; flex-direction:column; gap:20px; max-width:550px; margin:20px auto;';
 
   const SHAPE_SVGS=[
-    '<polygon points="100,30 40,160 160,160" fill="#6784B8" stroke="none" opacity="0.9"/>',
-    '<polygon points="100,25 175,75 150,160 50,160 25,75" fill="#C8758C" stroke="none" opacity="0.9"/>',
+    '<polygon points="100,30 40,160 160,160" fill="#97D9D2" stroke="none" opacity="0.9"/>',
+    '<polygon points="100,25 175,75 150,160 50,160 25,75" fill="#ECBAA2" stroke="none" opacity="0.9"/>',
     '<polygon points="100,20 120,85 185,100 120,115 100,180 80,115 15,100 80,85" fill="#BA8858" stroke="none" opacity="0.9"/>',
     '<circle cx="100" cy="100" r="75" fill="#5D7C48" stroke="none" opacity="0.9"/>',
     '<polygon points="100,15 130,70 185,100 130,130 100,185 70,130 15,100 70,70" fill="#942850" stroke="none" opacity="0.9"/>'
