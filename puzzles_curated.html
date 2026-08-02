@@ -762,7 +762,9 @@ function buildCylinderLock(){
 
   // Display screen for chosen shapes
   const displayPanel=document.createElement('div');
-  const dispW=Math.min(306,dialSize);
+  // Sized to fit exactly LOCK_CORRECT.length slots (50px each, 8px gaps, 24px padding).
+  const dispSlots=LOCK_CORRECT.length;
+  const dispW=Math.min(dispSlots*50+(dispSlots-1)*8+24,dialSize);
   displayPanel.style.cssText=`display:flex; gap:8px; width:${dispW}px; padding:12px; background:#1a1814; border:4px solid #5a5244; border-radius:12px; justify-content:flex-start; margin:0 auto; min-height:60px;`;
 
   function updateDisplay(){
