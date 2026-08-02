@@ -134,13 +134,13 @@ const PUZZLES = [
         <div class="shapes-grid">
           <div class="shape-item">
             <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-              <polygon points="100,30 40,160 160,160" fill="#6784B8" stroke="none" opacity="0.9"/>
+              <polygon points="100,30 40,160 160,160" fill="#97D9D2" stroke="none" opacity="0.9"/>
             </svg>
             <div class="shape-label">Triangle</div>
           </div>
           <div class="shape-item">
             <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-              <polygon points="100,25 175,75 150,160 50,160 25,75" fill="#C8758C" stroke="none" opacity="0.9"/>
+              <polygon points="100,25 175,75 150,160 50,160 25,75" fill="#ECBAA2" stroke="none" opacity="0.9"/>
             </svg>
             <div class="shape-label">Pentagon</div>
           </div>
