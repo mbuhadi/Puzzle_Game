@@ -594,7 +594,7 @@ function drawCircleDiagram(g,w,h){
   g.strokeStyle='#c0a87a'; g.lineWidth=2; g.strokeRect(1,1,w-2,h-2);
   g.strokeStyle='rgba(160,130,80,0.4)'; g.lineWidth=1; g.strokeRect(11,11,w-22,h-22);
 
-  const colors=['#2FB3A6','#FFFFFF','#7DB850','#1a1a1a','#E8386A'];
+  const colors=['#2FB3A6','#FFFFFF','#D87545','#1a1a1a','#E8386A'];
   const radius=50, centerY=h/2, spacing=70, startX=(w-(colors.length-1)*spacing)/2;
 
   const positions=[];
@@ -720,8 +720,8 @@ function buildClothes(){ const cv=document.getElementById('clothesCanvas'); if(c
 /* ───────────────── Combination Lock (Puzzle 5) ───────────────── */
 const LOCK_SHAPES=[
   {name:'Triangle', fill:'#97D9D2'},
-  {name:'Pentagon', fill:'#BEDCA8'},
-  {name:'Circle', fill:'#5D7C48'},
+  {name:'Pentagon', fill:'#ECBAA2'},
+  {name:'Circle', fill:'#794830'},
   {name:'Eight-Pointed Star', fill:'#942850'}
 ];
 const LOCK_CORRECT=[0,1,2,3];
@@ -735,8 +735,8 @@ function buildCylinderLock(){
 
   const SHAPE_SVGS=[
     '<polygon points="100,30 40,160 160,160" fill="#97D9D2" stroke="none" opacity="0.9"/>',
-    '<polygon points="100,25 175,75 150,160 50,160 25,75" fill="#BEDCA8" stroke="none" opacity="0.9"/>',
-    '<circle cx="100" cy="100" r="75" fill="#5D7C48" stroke="none" opacity="0.9"/>',
+    '<polygon points="100,25 175,75 150,160 50,160 25,75" fill="#ECBAA2" stroke="none" opacity="0.9"/>',
+    '<circle cx="100" cy="100" r="75" fill="#794830" stroke="none" opacity="0.9"/>',
     '<polygon points="100,15 130,70 185,100 130,130 100,185 70,130 15,100 70,70" fill="#942850" stroke="none" opacity="0.9"/>'
   ];
   const DIAL_N=SHAPE_SVGS.length, DIAL_STEP=360/DIAL_N;
