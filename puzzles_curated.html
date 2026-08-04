@@ -605,6 +605,48 @@ function buildCourtyard(){
   return ()=>{ cancelAnimationFrame(rafId); window.removeEventListener('keydown',kd); window.removeEventListener('keyup',ku); delete window.__courtyardTest; };
 }
 
+/* ── Grey decoy shapes scattered around the Venn diagram ──
+   The 4 real shapes (same silhouettes as the shape-lock dial) plus 3
+   red-herring shapes, all flattened to grey so they read as background
+   texture rather than a second puzzle. Tweak SCATTER_ITEMS below —
+   {key, x, y, rot, size} — to move individual shapes around. */
+function scatterPath(g,points){ g.beginPath(); points.forEach(([x,y],i)=>i===0?g.moveTo(x,y):g.lineTo(x,y)); g.closePath(); }
+const SCATTER_SHAPES={
+  // the 4 shapes used by the shape-lock (p5g3 / SHAPE_SVGS), same points
+  triangle: g=>scatterPath(g,[[100,30],[40,160],[160,160]]),
+  pentagon: g=>scatterPath(g,[[100,25],[175,75],[150,160],[50,160],[25,75]]),
+  circle:   g=>{ g.beginPath(); g.arc(100,100,75,0,Math.PI*2); },
+  star8:    g=>scatterPath(g,[[100,15],[130,70],[185,100],[130,130],[100,185],[70,130],[15,100],[70,70]]),
+  // 3 decoys — distinct silhouettes so they can't be mistaken for the above
+  square:   g=>scatterPath(g,[[45,45],[155,45],[155,155],[45,155]]),
+  hexagon:  g=>scatterPath(g,[[100,20],[170,60],[170,140],[100,180],[30,140],[30,60]]),
+  star5:    g=>scatterPath(g,[[100,10],[118,72],[182,72],[130,110],[150,172],[100,135],[50,172],[70,110],[18,72],[82,72]]),
+};
+const SCATTER_ITEMS=[
+  {key:'triangle', x:58,  y:56,  rot:14,  size:34},
+  {key:'hexagon',  x:196, y:42,  rot:-12, size:32},
+  {key:'star8',    x:332, y:66,  rot:8,   size:36},
+  {key:'square',   x:486, y:50,  rot:22,  size:30},
+  {key:'pentagon', x:66,  y:392, rot:-9,  size:34},
+  {key:'star5',    x:262, y:402, rot:16,  size:34},
+  {key:'circle',   x:502, y:388, rot:0,   size:32},
+];
+function drawScatteredShapes(g){
+  SCATTER_ITEMS.forEach(it=>{
+    const draw=SCATTER_SHAPES[it.key]; if(!draw)return;
+    const s=it.size/200;
+    g.save();
+    g.translate(it.x,it.y);
+    g.rotate(it.rot*Math.PI/180);
+    g.scale(s,s);
+    g.translate(-100,-100);
+    draw(g);
+    g.fillStyle='rgba(120,120,120,0.55)'; g.fill();
+    g.strokeStyle='rgba(90,82,68,0.6)'; g.lineWidth=1.6/s; g.stroke();
+    g.restore();
+  });
+}
+
 /* ── Horizontal overlapping circles diagram ── */
 function drawCircleDiagram(g,w,h){
   g.clearRect(0,0,w,h);
@@ -612,6 +654,7 @@ function drawCircleDiagram(g,w,h){
   g.fillStyle=bg; g.fillRect(0,0,w,h);
   g.strokeStyle='#c0a87a'; g.lineWidth=2; g.strokeRect(1,1,w-2,h-2);
   g.strokeStyle='rgba(160,130,80,0.4)'; g.lineWidth=1; g.strokeRect(11,11,w-22,h-22);
+  drawScatteredShapes(g);
 
   const colors=['#2FB3A6','#FFFFFF','#D87545','#1a1a1a','#E8386A'];
   const radius=50, centerY=h/2, spacing=70, startX=(w-(colors.length-1)*spacing)/2;
