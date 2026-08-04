@@ -623,7 +623,7 @@ const SCATTER_SHAPES={
   star5:    g=>scatterPath(g,[[100,10],[118,72],[182,72],[130,110],[150,172],[100,135],[50,172],[70,110],[18,72],[82,72]]),
 };
 const SCATTER_ITEMS=[
-  {key:'triangle', x:95,  y:125, rot:14,  size:153},
+  {key:'triangle', x:60,  y:65,  rot:14,  size:153},
   {key:'hexagon',  x:190, y:48,  rot:-12, size:144},
   {key:'star8',    x:365, y:120, rot:8,   size:162},
   {key:'square',   x:495, y:75,  rot:22,  size:135},
@@ -641,8 +641,7 @@ function drawScatteredShapes(g){
     g.scale(s,s);
     g.translate(-100,-100);
     draw(g);
-    g.fillStyle='rgba(120,120,120,0.55)'; g.fill();
-    g.strokeStyle='rgba(90,82,68,0.6)'; g.lineWidth=1.6/s; g.stroke();
+    g.fillStyle='#999999'; g.fill();
     g.restore();
   });
 }
