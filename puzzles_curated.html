@@ -610,7 +610,22 @@ function buildCourtyard(){
    red-herring shapes, all flattened to grey so they read as background
    texture rather than a second puzzle. Tweak SCATTER_ITEMS below —
    {key, x, y, rot, size} — to move individual shapes around. */
-function scatterPath(g,points){ g.beginPath(); points.forEach(([x,y],i)=>i===0?g.moveTo(x,y):g.lineTo(x,y)); g.closePath(); }
+// Polygon path with each corner rounded off by radius r (in the shape's own
+// 0-200 coordinate space), via a short quadratic curve cut into the corner.
+function scatterPath(g,points,r=8){
+  const n=points.length;
+  const dir=(a,b)=>{ const dx=b[0]-a[0], dy=b[1]-a[1], len=Math.hypot(dx,dy); return [dx/len,dy/len]; };
+  g.beginPath();
+  for(let i=0;i<n;i++){
+    const curr=points[i], prev=points[(i-1+n)%n], next=points[(i+1)%n];
+    const toPrev=dir(curr,prev), toNext=dir(curr,next);
+    const p1=[curr[0]+toPrev[0]*r, curr[1]+toPrev[1]*r];
+    const p2=[curr[0]+toNext[0]*r, curr[1]+toNext[1]*r];
+    if(i===0)g.moveTo(p1[0],p1[1]); else g.lineTo(p1[0],p1[1]);
+    g.quadraticCurveTo(curr[0],curr[1],p2[0],p2[1]);
+  }
+  g.closePath();
+}
 const SCATTER_SHAPES={
   // the 4 shapes used by the shape-lock (p5g3 / SHAPE_SVGS), same points
   triangle: g=>scatterPath(g,[[100,30],[40,160],[160,160]]),
