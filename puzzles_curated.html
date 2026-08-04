@@ -684,11 +684,14 @@ function drawCircleDiagram(g,w,h){
 }
 function buildCircles(){
   const cv=document.getElementById('circlesCanvas'); if(!cv)return;
-  const g=cv.getContext('2d'), W=cv.width, H=cv.height;
-  const pg=g.createLinearGradient(0,0,0,H); pg.addColorStop(0,'#f5f0e2'); pg.addColorStop(1,'#e8dfc8');
-  g.fillStyle=pg; g.fillRect(0,0,W,H);
-  g.strokeStyle='#c0a87a'; g.lineWidth=2; g.strokeRect(1,1,W-2,H-2);
-  g.strokeStyle='rgba(160,130,80,0.4)'; g.lineWidth=1; g.strokeRect(11,11,W-22,H-22);
+  // Logical size stays 600x440; the backing store is scaled by the device
+  // pixel ratio so the diagram stays sharp on high-DPI screens.
+  const W=cv.width, H=cv.height, DPR=Math.min(window.devicePixelRatio||1,3);
+  cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR);
+  cv.style.width=W+'px'; cv.style.height=H+'px';
+  const g=cv.getContext('2d');
+  g.setTransform(DPR,0,0,DPR,0,0);
+  g.imageSmoothingQuality='high';
   drawCircleDiagram(g,W,H);
 }
 
