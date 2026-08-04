@@ -8,13 +8,6 @@
 const TV_HTML=`
   <div class="tv"><div class="tv-screen">
     <div class="tv-title">─── MORSE CODE REFERENCE ───</div>
-    <div class="tv-legend">
-      <div>DOT  ( . )  =  short blink</div>
-      <div>DASH ( - )  =  long blink  (3× dot)</div>
-      <div>short gap between symbols in a digit</div>
-      <div>long gap between digits</div>
-    </div>
-    <hr>
     <table class="tv-table"><tr>
       <td class="d">DIGIT</td><td class="d">MORSE</td><td style="width:40px"></td><td class="d">DIGIT</td><td class="d">MORSE</td></tr>
       <tr><td>0:</td><td>-----</td><td></td><td>5:</td><td>.....</td></tr>
