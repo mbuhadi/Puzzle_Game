@@ -610,32 +610,58 @@ function buildCourtyard(){
    red-herring shapes, all flattened to grey so they read as background
    texture rather than a second puzzle. Tweak SCATTER_ITEMS below —
    {key, x, y, rot, size} — to move individual shapes around. */
-// Polygon path with each corner rounded off by radius r (in the shape's own
-// 0-200 coordinate space), via a short quadratic curve cut into the corner.
-function scatterPath(g,points,r=8){
+// Shared point sets (0-200 local space) so the p5g1 decoys and the p5p1
+// shape-lock render the exact same silhouettes, rounded the same way.
+const SHAPE_PTS={
+  triangle: [[100,30],[40,160],[160,160]],
+  pentagon: [[100,25],[175,75],[150,160],[50,160],[25,75]],
+  star8:    [[100,15],[130,70],[185,100],[130,130],[100,185],[70,130],[15,100],[70,70]],
+  square:   [[45,45],[155,45],[155,155],[45,155]],
+  hexagon:  [[100,20],[170,60],[170,140],[100,180],[30,140],[30,60]],
+  star5:    [[100,10],[118,72],[182,72],[130,110],[150,172],[100,135],[50,172],[70,110],[18,72],[82,72]],
+};
+const SHAPE_CORNER_R=6;
+function roundedCorners(points,r){
   const n=points.length;
   const dir=(a,b)=>{ const dx=b[0]-a[0], dy=b[1]-a[1], len=Math.hypot(dx,dy); return [dx/len,dy/len]; };
-  g.beginPath();
+  const segs=[];
   for(let i=0;i<n;i++){
     const curr=points[i], prev=points[(i-1+n)%n], next=points[(i+1)%n];
     const toPrev=dir(curr,prev), toNext=dir(curr,next);
-    const p1=[curr[0]+toPrev[0]*r, curr[1]+toPrev[1]*r];
-    const p2=[curr[0]+toNext[0]*r, curr[1]+toNext[1]*r];
-    if(i===0)g.moveTo(p1[0],p1[1]); else g.lineTo(p1[0],p1[1]);
-    g.quadraticCurveTo(curr[0],curr[1],p2[0],p2[1]);
+    segs.push({
+      p1:[curr[0]+toPrev[0]*r, curr[1]+toPrev[1]*r],
+      c:curr,
+      p2:[curr[0]+toNext[0]*r, curr[1]+toNext[1]*r],
+    });
   }
+  return segs;
+}
+// Polygon path with each corner rounded off by radius r, via a short
+// quadratic curve cut into the corner, drawn on a canvas context.
+function scatterPath(g,points,r=SHAPE_CORNER_R){
+  g.beginPath();
+  roundedCorners(points,r).forEach((seg,i)=>{
+    if(i===0)g.moveTo(seg.p1[0],seg.p1[1]); else g.lineTo(seg.p1[0],seg.p1[1]);
+    g.quadraticCurveTo(seg.c[0],seg.c[1],seg.p2[0],seg.p2[1]);
+  });
   g.closePath();
 }
+// Same rounding, emitted as an SVG path "d" string.
+function roundedPolygonSVGPath(points,r=SHAPE_CORNER_R){
+  return roundedCorners(points,r).map((seg,i)=>
+    (i===0?`M${seg.p1[0]},${seg.p1[1]} `:`L${seg.p1[0]},${seg.p1[1]} `)+`Q${seg.c[0]},${seg.c[1]} ${seg.p2[0]},${seg.p2[1]} `
+  ).join('')+'Z';
+}
 const SCATTER_SHAPES={
-  // the 4 shapes used by the shape-lock (p5g3 / SHAPE_SVGS), same points
-  triangle: g=>scatterPath(g,[[100,30],[40,160],[160,160]]),
-  pentagon: g=>scatterPath(g,[[100,25],[175,75],[150,160],[50,160],[25,75]]),
+  // the 4 shapes used by the shape-lock (p5p1 / SHAPE_SVGS), same points
+  triangle: g=>scatterPath(g,SHAPE_PTS.triangle),
+  pentagon: g=>scatterPath(g,SHAPE_PTS.pentagon),
   circle:   g=>{ g.beginPath(); g.arc(100,100,75,0,Math.PI*2); },
-  star8:    g=>scatterPath(g,[[100,15],[130,70],[185,100],[130,130],[100,185],[70,130],[15,100],[70,70]]),
+  star8:    g=>scatterPath(g,SHAPE_PTS.star8),
   // 3 decoys — distinct silhouettes so they can't be mistaken for the above
-  square:   g=>scatterPath(g,[[45,45],[155,45],[155,155],[45,155]]),
-  hexagon:  g=>scatterPath(g,[[100,20],[170,60],[170,140],[100,180],[30,140],[30,60]]),
-  star5:    g=>scatterPath(g,[[100,10],[118,72],[182,72],[130,110],[150,172],[100,135],[50,172],[70,110],[18,72],[82,72]]),
+  square:   g=>scatterPath(g,SHAPE_PTS.square),
+  hexagon:  g=>scatterPath(g,SHAPE_PTS.hexagon),
+  star5:    g=>scatterPath(g,SHAPE_PTS.star5),
 };
 const SCATTER_ITEMS=[
   {key:'triangle', x:60,  y:65,  rot:14,  size:153},
@@ -812,10 +838,10 @@ function buildCylinderLock(){
   lockDiv.style.cssText='display:flex; flex-direction:column; gap:20px; max-width:550px; margin:20px auto;';
 
   const SHAPE_SVGS=[
-    '<polygon points="100,30 40,160 160,160" fill="#97D9D2" stroke="none" opacity="0.9"/>',
-    '<polygon points="100,25 175,75 150,160 50,160 25,75" fill="#ECBAA2" stroke="none" opacity="0.9"/>',
+    `<path d="${roundedPolygonSVGPath(SHAPE_PTS.triangle)}" fill="#97D9D2" stroke="none" opacity="0.9"/>`,
+    `<path d="${roundedPolygonSVGPath(SHAPE_PTS.pentagon)}" fill="#ECBAA2" stroke="none" opacity="0.9"/>`,
     '<circle cx="100" cy="100" r="75" fill="#794830" stroke="none" opacity="0.9"/>',
-    '<polygon points="100,15 130,70 185,100 130,130 100,185 70,130 15,100 70,70" fill="#942850" stroke="none" opacity="0.9"/>'
+    `<path d="${roundedPolygonSVGPath(SHAPE_PTS.star8)}" fill="#942850" stroke="none" opacity="0.9"/>`
   ];
   const DIAL_N=SHAPE_SVGS.length, DIAL_STEP=360/DIAL_N;
 
