@@ -298,6 +298,11 @@ function buildSlidingWindow(){
   const CORRECT=Math.round(GAP_X*gw)-COLON_X, START=Math.round(MAXOFF*0.92);
   let off=START;
 
+  // Fixed pane — doesn't move, sits flush against the left frame. Smaller
+  // than the sliding sash so the two panes read as separate pieces of glass
+  // when the sash rests on the right (its start position).
+  const staticW=Math.round(gw*0.34);
+
   const bg=new Image();
   bg.onload=()=>draw();
   bg.src='villa_bg.png';
@@ -316,10 +321,26 @@ function buildSlidingWindow(){
     [-1,1].forEach(k=>{ const y=cy+k*s*0.95-s/2; g.fillRect(cx-s/2,y,s,s); });
   }
 
+  function drawRails(){
+    g.fillStyle='rgba(0,0,0,0.45)'; g.fillRect(gx,gy,gw,5); g.fillRect(gx,gy+gh-5,gw,5);
+  }
+
+  // Left-hand pane, always in place — same glass tint/sheen as the sash but
+  // no handle, since it never moves.
+  function drawStaticPane(){
+    const sx=gx;
+    g.save();
+    g.beginPath(); g.rect(sx,gy,staticW,gh); g.clip();
+    g.fillStyle='rgba(175,215,255,0.10)'; g.fillRect(sx,gy,staticW,gh);
+    g.strokeStyle='rgba(255,255,255,0.12)'; g.lineWidth=14;
+    [-40,10].forEach(o=>{ g.beginPath(); g.moveTo(sx+o+40,gy+gh); g.lineTo(sx+o+160,gy); g.stroke(); });
+    g.restore();
+    g.strokeStyle='#6a4a26'; g.lineWidth=10; g.strokeRect(sx+5,gy+5,staticW-10,gh-10);
+    g.strokeStyle='rgba(0,0,0,0.4)'; g.lineWidth=2; g.strokeRect(sx+10,gy+10,staticW-20,gh-20);
+  }
+
   function drawSash(){
     const sx=gx+off;
-    // rails
-    g.fillStyle='rgba(0,0,0,0.45)'; g.fillRect(gx,gy,gw,5); g.fillRect(gx,gy+gh-5,gw,5);
     g.save();
     g.beginPath(); g.rect(sx,gy,sashW,gh); g.clip();
     // glass tint + sheen
@@ -339,6 +360,8 @@ function buildSlidingWindow(){
     g.fillStyle='#5a3e1e'; g.fillRect(0,0,W,H);
     g.fillStyle='#4a3218'; g.fillRect(8,8,W-16,H-16);
     drawScene();
+    drawRails();
+    drawStaticPane();
     drawSash();
   }
 
