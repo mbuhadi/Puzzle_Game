@@ -295,13 +295,16 @@ function buildSlidingWindow(){
   // parks the colon between the 6 and the 2; nothing locks or fires there.
   const sashW=Math.round(gw*0.62), MAXOFF=gw-sashW;
   const COLON_X=Math.round(sashW*0.35);
-  const CORRECT=Math.round(GAP_X*gw)-COLON_X, START=Math.round(MAXOFF*0.92);
+  const CORRECT=Math.round(GAP_X*gw)-COLON_X, START=MAXOFF;
   let off=START;
 
-  // Fixed pane — doesn't move, sits flush against the left frame. Sized to
-  // exactly fill the gap left of the sash when the sash is pushed all the
-  // way right (off===MAXOFF), so the two panes meet with no seam at rest.
-  const staticW=MAXOFF;
+  // Fixed pane — doesn't move, sits flush against the left frame. A bit
+  // wider than the gap the sash leaves at rest, so its right edge tucks
+  // behind the sash's left frame instead of just meeting it at a seam.
+  // 10px lines up the fixed pane's right frame stroke exactly under the
+  // sash's left frame stroke (both are 10px wide) when off===MAXOFF.
+  const PANE_OVERLAP=10;
+  const staticW=MAXOFF+PANE_OVERLAP;
 
   const bg=new Image();
   bg.onload=()=>draw();
