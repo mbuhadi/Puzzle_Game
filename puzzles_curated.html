@@ -167,6 +167,16 @@
   .lock-shape-btn.selected{border-color:var(--gold-bright); background:#1a1a14; box-shadow:0 0 10px rgba(255,224,102,0.3);}
   .lock-status{color:var(--gold); font-weight:bold; text-align:center; margin-top:20px; font-size:18px;}
 
+  /* ── Combination Lock (Puzzle 3) ── */
+  .combo-lock-wrap{margin:20px 0; max-width:420px; display:flex; flex-direction:column; align-items:center; gap:18px;}
+  .combo-hanger{width:72px; height:auto; color:var(--dim); display:block;}
+  .combo-dials{display:flex; gap:16px;}
+  .combo-dial{display:flex; flex-direction:column; align-items:center; gap:6px; background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:10px 18px;}
+  .combo-arrow{width:36px; height:28px; background:none; border:none; color:var(--gold); font-size:16px; cursor:pointer; transition:color .15s;}
+  .combo-arrow:hover{color:var(--gold-bright);}
+  .combo-digit{font-family:monospace; font-size:34px; font-weight:bold; color:var(--ink); width:36px; text-align:center; user-select:none;}
+  .combo-status{color:var(--gold); font-weight:bold; text-align:center; font-size:18px; min-height:24px;}
+
   /* ── Chunk labels ── */
   .clabel{display:inline-block;font-family:monospace;font-size:20px;font-weight:bold;background:#ff8c00;color:#000;padding:1px 7px;border-radius:3px;letter-spacing:0.5px;margin-bottom:5px;user-select:none;}
   .chunk{margin:10px 0;}
@@ -1373,9 +1383,39 @@ function buildPuzzleEight(){
   wrap.appendChild(layout);
 }
 
+/* ── Puzzle Three — p3p1's 3-digit combination lock (answer: 317) ── */
+const P3_CORRECT=[3,1,7];
+function buildComboLock(){
+  const dials=document.getElementById('p3lock'); if(!dials)return;
+  dials.innerHTML='';
+  const status=document.getElementById('p3lockStatus');
+  const digits=[0,0,0];
+  let solved=false;
+
+  const check=()=>{
+    if(solved)return;
+    if(digits.every((d,i)=>d===P3_CORRECT[i])){
+      solved=true;
+      if(status)status.textContent='✓ القفل انفتح!';
+      notifyPuzzleSolved();
+    } else if(status) status.textContent='';
+  };
+
+  digits.forEach((_,i)=>{
+    const dial=document.createElement('div'); dial.className='combo-dial';
+    const up=document.createElement('button'); up.className='combo-arrow'; up.textContent='▲'; up.setAttribute('aria-label','Increase digit');
+    const val=document.createElement('div'); val.className='combo-digit'; val.textContent='0';
+    const down=document.createElement('button'); down.className='combo-arrow'; down.textContent='▼'; down.setAttribute('aria-label','Decrease digit');
+    up.onclick=()=>{ digits[i]=(digits[i]+1)%10; val.textContent=digits[i]; check(); };
+    down.onclick=()=>{ digits[i]=(digits[i]+9)%10; val.textContent=digits[i]; check(); };
+    dial.append(up,val,down);
+    dials.appendChild(dial);
+  });
+}
+
 /* ───────────────── Rendering ───────────────── */
 function buildPuzzle5(){ buildCircles(); buildCylinderLock(); }
-const BUILDERS={tree:buildFamilyTree, windows:buildPuzzleTwo, courtyard:buildCourtyard, circles:buildCircles, clothes:buildClothes, puzzle5:buildPuzzle5, puzzle6:buildPuzzleSix, puzzle7:buildPuzzleSeven, puzzle8:buildPuzzleEight};
+const BUILDERS={tree:buildFamilyTree, windows:buildPuzzleTwo, courtyard:buildCourtyard, circles:buildCircles, clothes:buildClothes, puzzle5:buildPuzzle5, puzzle6:buildPuzzleSix, puzzle7:buildPuzzleSeven, puzzle8:buildPuzzleEight, puzzle3:buildComboLock};
 const plist=document.getElementById('plist'), detail=document.getElementById('detail');
 let teardown=null;   // cleanup for the previously-built interactive puzzle
 const CHUNK_PARAM = new URLSearchParams(location.search).get('chunk');

@@ -63,7 +63,7 @@ const PUZZLES = [
       </div>`,
   },
   {
-    num:'3', name:'الذكية', loc:'Study Door · Lock 2',
+    num:'3', name:'الذكية', loc:'Study Door · Lock 2', build:'puzzle3',
     given:`
       <div class="chunk"><span class="clabel">p3g1</span>
         <div style="
@@ -106,7 +106,17 @@ const PUZZLES = [
       <div class="chunk"><span class="clabel">p3g5</span>
         ${TV_HTML}
       </div>`,
-    problem:``,
+    problem:`<div class="chunk"><span class="clabel">p3p1</span>
+        <div class="combo-lock-wrap">
+          <svg class="combo-hanger" viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="10" r="6" fill="none" stroke="currentColor" stroke-width="5"/>
+            <path d="M50 16 L50 22" stroke="currentColor" stroke-width="5" stroke-linecap="round" fill="none"/>
+            <path d="M50 22 L14 46 Q6 51 12 55 L88 55 Q94 51 86 46 Z" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+          </svg>
+          <div class="combo-dials" id="p3lock"></div>
+          <div class="combo-status" id="p3lockStatus"></div>
+        </div>
+      </div>`,
   },
   {
     num:'4', name:'لعب جهال', loc:'The Courtyard',
