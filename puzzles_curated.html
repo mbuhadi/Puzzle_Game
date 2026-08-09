@@ -298,10 +298,10 @@ function buildSlidingWindow(){
   const CORRECT=Math.round(GAP_X*gw)-COLON_X, START=Math.round(MAXOFF*0.92);
   let off=START;
 
-  // Fixed pane — doesn't move, sits flush against the left frame. Smaller
-  // than the sliding sash so the two panes read as separate pieces of glass
-  // when the sash rests on the right (its start position).
-  const staticW=Math.round(gw*0.34);
+  // Fixed pane — doesn't move, sits flush against the left frame. Sized to
+  // exactly fill the gap left of the sash when the sash is pushed all the
+  // way right (off===MAXOFF), so the two panes meet with no seam at rest.
+  const staticW=MAXOFF;
 
   const bg=new Image();
   bg.onload=()=>draw();
