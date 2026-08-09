@@ -1322,7 +1322,7 @@ function makeTagRow(scopeKey,defs,extraClass){
 /* ───────────────── Puzzle Eight: two 3×1 columns of cycling tiles ───────────────── */
 const P8_SVG=(inner,size=56)=>`<svg viewBox="0 0 100 100" style="width:${size}px;height:${size}px;" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
 // header art: grass above each column, a brick between them
-const P8_IMG_STYLE='width:60px;height:auto;display:block;border-radius:8px;border:1px solid rgba(255,255,255,0.15);';
+const P8_IMG_STYLE='width:60px;height:auto;display:block;border-radius:8px;';
 const P8_GRASS=`<img src="blade%20of%20grass.png" alt="Grass" style="${P8_IMG_STYLE}">`;
 const P8_BRICK=`<img src="brick.png" alt="Brick" style="${P8_IMG_STYLE}">`;
 const P8_STATES=[
@@ -1356,9 +1356,11 @@ function buildPuzzleEight(){
   wrap.innerHTML='';
   const layout=document.createElement('div');
   layout.style.cssText='display:inline-flex; flex-direction:column; gap:10px;';
-  // header row: grass over each column, brick between them — same gap as the columns below
+  // header row: grass over each column, brick between them. Grid columns
+  // match the 84px cells / 44px gap below so each picture sits centered
+  // directly above its column.
   const header=document.createElement('div');
-  header.style.cssText='display:flex; align-items:flex-end; justify-content:center; gap:44px;';
+  header.style.cssText='display:grid; grid-template-columns:84px 44px 84px; align-items:end; justify-items:center;';
   [P8_GRASS,P8_BRICK,P8_GRASS].forEach(art=>{
     const slot=document.createElement('div');
     slot.innerHTML=art;
