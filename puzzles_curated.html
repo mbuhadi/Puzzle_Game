@@ -1330,9 +1330,9 @@ function makeTagRow(scopeKey,defs,extraClass){
 }
 
 /* ───────────────── Puzzle Eight: two 3×1 columns of cycling tiles ───────────────── */
-const P8_TILE_IMG=(src,alt)=>`<img src="${src}" alt="${alt}" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:6px;filter:grayscale(1);">`;
+const P8_TILE_IMG=(src,alt)=>`<img src="${src}" alt="${alt}" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:5px;filter:grayscale(1);">`;
 // header art: grass above each column, a brick between them
-const P8_IMG_STYLE='width:180px;height:auto;display:block;border-radius:8px;';
+const P8_IMG_STYLE='width:135px;height:auto;display:block;border-radius:8px;';
 const P8_GRASS=`<img src="blade%20of%20grass.png" alt="Grass" style="${P8_IMG_STYLE}">`;
 const P8_BRICK=`<img src="brick.png" alt="Brick" style="${P8_IMG_STYLE}">`;
 const P8_STATES=[
@@ -1349,10 +1349,10 @@ function buildPuzzleEight(){
   const layout=document.createElement('div');
   layout.style.cssText='display:inline-flex; flex-direction:column; gap:10px;';
   // header row: grass over each column, brick between them. Grid columns
-  // match the 252px cells / 132px gap below so each picture sits centered
+  // match the 189px cells / 170px gap below so each picture sits centered
   // directly above its column.
   const header=document.createElement('div');
-  header.style.cssText='display:grid; grid-template-columns:252px 132px 252px; align-items:end; justify-items:center;';
+  header.style.cssText='display:grid; grid-template-columns:189px 170px 189px; align-items:end; justify-items:center;';
   [P8_GRASS,P8_BRICK,P8_GRASS].forEach(art=>{
     const slot=document.createElement('div');
     slot.innerHTML=art;
@@ -1360,14 +1360,14 @@ function buildPuzzleEight(){
   });
   layout.appendChild(header);
   const grid=document.createElement('div');
-  grid.style.cssText='display:flex; gap:132px;';
+  grid.style.cssText='display:flex; gap:170px;';
   for(let col=0;col<2;col++){
     const column=document.createElement('div');
-    column.style.cssText='display:flex; flex-direction:column; gap:36px;';
+    column.style.cssText='display:flex; flex-direction:column; gap:27px;';
     for(let r=0;r<3;r++){
       const cell=document.createElement('div');
       cell.dataset.state='0';
-      cell.style.cssText='width:252px; height:252px; background:var(--panel2); border:2px solid var(--line); border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none; transition:border-color .15s; overflow:hidden;';
+      cell.style.cssText='width:189px; height:189px; background:var(--panel2); border:2px solid var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none; transition:border-color .15s; overflow:hidden;';
       cell.onmouseenter=()=>{ cell.style.borderColor='var(--gold)'; };
       cell.onmouseleave=()=>{ cell.style.borderColor='var(--line)'; };
       cell.onclick=()=>{
