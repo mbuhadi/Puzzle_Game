@@ -1336,7 +1336,7 @@ const P8_IMG_STYLE='width:135px;height:auto;display:block;border-radius:8px;';
 const P8_GRASS=`<img src="blade%20of%20grass.png" alt="Grass" style="${P8_IMG_STYLE}">`;
 const P8_BRICK=`<img src="brick.png" alt="Brick" style="${P8_IMG_STYLE}">`;
 const P8_STATES=[
-  '',
+  P8_TILE_IMG('grass.png','Grass'),
   P8_TILE_IMG('tire.png','Tire'),
   P8_TILE_IMG('drop%20of%20water.png','Water drop'),
   P8_TILE_IMG('single%20tree.png','Tree'),
@@ -1367,14 +1367,14 @@ function buildPuzzleEight(){
     for(let r=0;r<3;r++){
       const cell=document.createElement('div');
       cell.dataset.state='0';
-      cell.style.cssText='width:189px; height:189px; background:#f2f2f2; border:2px solid var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none; transition:border-color .15s; overflow:hidden;';
+      cell.innerHTML=P8_STATES[0];
+      cell.style.cssText='width:189px; height:189px; border:2px solid var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none; transition:border-color .15s; overflow:hidden;';
       cell.onmouseenter=()=>{ cell.style.borderColor='var(--gold)'; };
       cell.onmouseleave=()=>{ cell.style.borderColor='var(--line)'; };
       cell.onclick=()=>{
         const s=(+cell.dataset.state+1)%P8_STATES.length;
         cell.dataset.state=s;
         cell.innerHTML=P8_STATES[s];
-        cell.style.background=s===0?'#f2f2f2':'transparent';
       };
       column.appendChild(cell);
     }
