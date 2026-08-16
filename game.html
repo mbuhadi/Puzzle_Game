@@ -212,6 +212,41 @@ canvas.addEventListener('mousemove', e => {
   mouseY = (e.clientY - r.top)  * (VIEWPORT_H / r.height);
 });
 
+// ─── Dev Skip toggle ────────────────────────────────────────────────────────────
+// Every puzzle gets a "DEV SKIP" button that instantly solves it. The whole
+// feature can be switched off (e.g. before showing the game to someone) with
+// the ` key, without deleting any of the per-puzzle skip code below. The
+// on/off state is remembered across reloads.
+let devSkipOn = localStorage.getItem('devSkipOn') !== '0';
+function setDevSkipOn(v) {
+  devSkipOn = v;
+  localStorage.setItem('devSkipOn', v ? '1' : '0');
+}
+window.addEventListener('keydown', e => {
+  if (e.key === '`') setDevSkipOn(!devSkipOn);
+});
+
+// Draws a small "DEV SKIP" button at (x,y) in screen space; callers keep the
+// same (x,y,w,h) around to hit-test their mousedown handler against.
+function drawDevSkipBtn(x, y, w = 110, h = 28) {
+  function rr(px, py, pw, ph, r) {
+    ctx.beginPath();
+    ctx.moveTo(px+r,py); ctx.lineTo(px+pw-r,py); ctx.arcTo(px+pw,py,px+pw,py+r,r);
+    ctx.lineTo(px+pw,py+ph-r); ctx.arcTo(px+pw,py+ph,px+pw-r,py+ph,r);
+    ctx.lineTo(px+r,py+ph); ctx.arcTo(px,py+ph,px,py+ph-r,r);
+    ctx.lineTo(px,py+r); ctx.arcTo(px,py,px+r,py,r);
+    ctx.closePath();
+  }
+  rr(x, y, w, h, 6); ctx.fillStyle = '#1e1410'; ctx.fill();
+  rr(x, y, w, h, 6); ctx.strokeStyle = '#7a3a2a'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.fillStyle = '#c06040'; ctx.font = 'bold 13px Cinzel, serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('DEV SKIP', x + w/2, y + 19);
+}
+function hitDevSkipBtn(x, y, w, h, cx, cy) {
+  return devSkipOn && cx >= x && cx <= x+w && cy >= y && cy <= y+h;
+}
+
 // ─── Scene management ─────────────────────────────────────────────────────────
 let currentScene = 'room1';
 let fadeAlpha    = 0;
@@ -538,12 +573,17 @@ canvas.addEventListener('mousedown', e => {
     }
   }
 
+  if (currentScene === 'house' && !lockOpen && !trapdoorOpen) {
+    const b = COURTYARD_SKIP_BTN;
+    if (hitDevSkipBtn(b.x, b.y, b.w, b.h, cx, cy)) { trapdoorOpen = true; return; }
+  }
+
   if (currentScene === 'house' && lockOpen) {
     const sc=4, dw=14*sc, dh=22*sc, gap=20;
     const lx=80, lw=740, ly=80, lh=460, arH=28;
     // Dev Skip
     const skipBtnX=lx+16, skipBtnY=ly+lh-42, skipBtnW=110, skipBtnH=28;
-    if (cx>=skipBtnX && cx<=skipBtnX+skipBtnW && cy>=skipBtnY && cy<=skipBtnY+skipBtnH) {
+    if (hitDevSkipBtn(skipBtnX, skipBtnY, skipBtnW, skipBtnH, cx, cy)) {
       studyUnlocked = true; lockOpen = false; triggerTransition('room_top'); return;
     }
     const dy0 = ly + 200;
@@ -566,6 +606,8 @@ canvas.addEventListener('mousedown', e => {
   }
 
   if (currentScene === 'room7' && !r7Solved) {
+    const b = R7_SKIP_BTN;
+    if (hitDevSkipBtn(b.x, b.y, b.w, b.h, cx, cy)) { r7Solved = true; return; }
     for (let i = 0; i < R7_CELLS.length; i++) {
       const cell = R7_CELLS[i];
       if (cx >= cell.x && cx <= cell.x+CELL7 && cy >= cell.y && cy <= cell.y+CELL7) {
@@ -584,6 +626,11 @@ canvas.addEventListener('mousedown', e => {
       }
     }
     return;
+  }
+
+  if (currentScene === 'room6' && !r6Solved) {
+    const b = R6_SKIP_BTN;
+    if (hitDevSkipBtn(b.x, b.y, b.w, b.h, cx, cy)) { r6Solved = true; return; }
   }
 
   if (currentScene === 'room6' && !r6Solved && !r6Wrong) {
@@ -609,7 +656,7 @@ canvas.addEventListener('mousedown', e => {
 
   // Dev Skip button
   const skipBtnX = PX+16, skipBtnY = PY+PH-42, skipBtnW = 110, skipBtnH = 28;
-  if (cx >= skipBtnX && cx <= skipBtnX+skipBtnW && cy >= skipBtnY && cy <= skipBtnY+skipBtnH) {
+  if (hitDevSkipBtn(skipBtnX, skipBtnY, skipBtnW, skipBtnH, cx, cy)) {
     interfaceOpen = false;
     openDropdown  = null;
     triggerTransition('house');
@@ -947,13 +994,7 @@ function drawRoom1() {
 
   // Dev Skip button
   const skipBtnX = PX+16, skipBtnY = PY+PH-42, skipBtnW = 110, skipBtnH = 28;
-  rr(skipBtnX, skipBtnY, skipBtnW, skipBtnH, 6);
-  ctx.fillStyle = '#1e1410'; ctx.fill();
-  rr(skipBtnX, skipBtnY, skipBtnW, skipBtnH, 6);
-  ctx.strokeStyle = '#7a3a2a'; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.fillStyle = '#c06040'; ctx.font = 'bold 13px Cinzel, serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('DEV SKIP', skipBtnX + skipBtnW/2, skipBtnY + 19);
+  if (devSkipOn) drawDevSkipBtn(skipBtnX, skipBtnY, skipBtnW, skipBtnH);
 
   // Exit hint
   ctx.fillStyle = '#4a4438'; ctx.font = '16px Cinzel, serif';
@@ -1085,6 +1126,7 @@ const CLOCK_SEQ = [
 const CLOCK_HIT_R = 45;          // close enough to make a number glow / register
 let clockProgress = 0;           // next index into CLOCK_SEQ the player must reach
 let trapdoorOpen  = false;
+const COURTYARD_SKIP_BTN = { x: 16, y: 16, w: 130, h: 28 }; // screen space, fixed corner
 
 function houseCollide(nx, ny) {
   nx = Math.max(HWAL+PLAYER_R, Math.min(HW-HWAL-PLAYER_R, nx));
@@ -1616,6 +1658,11 @@ function drawHouse() {
     if (bestIcon) drawThoughtBubble(sx,sy,bestIcon); else thoughtBubbleBounds=null;
   }
 
+  if (devSkipOn && !lockOpen && !trapdoorOpen) {
+    const b = COURTYARD_SKIP_BTN;
+    drawDevSkipBtn(b.x, b.y, b.w, b.h);
+  }
+
   if (lockOpen) drawLock();
 }
 
@@ -1871,13 +1918,7 @@ function drawLock() {
 
   // Dev Skip button
   const skipBtnX = lx+16, skipBtnY = ly+lh-42, skipBtnW = 110, skipBtnH = 28;
-  rrK(skipBtnX, skipBtnY, skipBtnW, skipBtnH, 6);
-  ctx.fillStyle = '#1e1410'; ctx.fill();
-  rrK(skipBtnX, skipBtnY, skipBtnW, skipBtnH, 6);
-  ctx.strokeStyle = '#7a3a2a'; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.fillStyle = '#c06040'; ctx.font = 'bold 13px Cinzel, serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('DEV SKIP', skipBtnX + skipBtnW/2, skipBtnY + 19);
+  if (devSkipOn) drawDevSkipBtn(skipBtnX, skipBtnY, skipBtnW, skipBtnH);
 
   ctx.fillStyle='#4a4438'; ctx.font='15px Cinzel, serif'; ctx.textAlign='center';
   ctx.fillText('Walk away to close', lx+lw/2, ly+lh-16);
@@ -2621,6 +2662,7 @@ let   r6Input       = [];
 let   r6Solved      = false;
 let   r6Wrong       = false;
 let   r6WrongTimer  = 0;
+const R6_SKIP_BTN = { x: R1-146, y: 14, w: 130, h: 28 }; // top-right corner, clear of the circles
 
 const R6_POEM = [
   'The Sixth Seal',
@@ -2673,6 +2715,7 @@ let r7Selected = [];
 let r7Solved   = false;
 let r7Wrong    = false;
 let r7WrongTimer = 0;
+const R7_SKIP_BTN = { x: R1-146, y: 14, w: 130, h: 28 }; // top-right corner, clear of the grid
 
 const R6_ROOM7_DOOR = { cx: R1-R1W, cy: VIEWPORT_H/2 };
 function r6Room7DoorDist() {
@@ -2767,6 +2810,8 @@ function drawRoom7() {
     ctx.fillStyle=`rgba(192,40,40,${((r7WrongTimer/60)*0.22).toFixed(3)})`;
     ctx.fillRect(0,0,R1,VIEWPORT_H);
   }
+
+  if (devSkipOn && !r7Solved) drawDevSkipBtn(R7_SKIP_BTN.x, R7_SKIP_BTN.y, R7_SKIP_BTN.w, R7_SKIP_BTN.h);
 
   if (r7Solved) {
     ctx.save();
@@ -2881,6 +2926,8 @@ function drawRoom6() {
     ctx.fillRect(0,0,R1,VIEWPORT_H);
   }
 
+  if (devSkipOn && !r6Solved) drawDevSkipBtn(R6_SKIP_BTN.x, R6_SKIP_BTN.y, R6_SKIP_BTN.w, R6_SKIP_BTN.h);
+
   // Solved banner
   if (r6Solved) {
     ctx.save();
@@ -2991,6 +3038,11 @@ function draw() {
   else if (currentScene==='room7')    drawRoom7();
   else                                drawSubRoom();
   drawJoystick();
+  // Tiny always-on status line so the toggle state is never a mystery
+  ctx.fillStyle = devSkipOn ? 'rgba(200,168,75,0.55)' : 'rgba(255,255,255,0.25)';
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('DEV SKIP: ' + (devSkipOn ? 'ON' : 'OFF') + '  (` to toggle)', 8, VIEWPORT_H-8);
   if (fadeAlpha>0){ctx.fillStyle=`rgba(0,0,0,${fadeAlpha})`;ctx.fillRect(0,0,VIEWPORT,VIEWPORT_H);}
 }
 function loop(){update();draw();requestAnimationFrame(loop);}
