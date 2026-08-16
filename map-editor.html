@@ -345,6 +345,8 @@ select:focus { outline: none; border-color: var(--gold-dim); }
           <button id="tool-rect"                 onclick="setTool('rect')"  title="Rectangle (R)">Rect</button>
           <button id="tool-spawn"                onclick="setTool('spawn')" title="Set Spawn Point (S)">Set Spawn</button>
         </div>
+        <div class="sec-title" style="margin-top:8px">TILE COLOR</div>
+        <select id="tileSelect" onchange="setSelTile(this.value); this.blur()" title="Tile painted by Paint (B), Fill (G) and Rect (R)"></select>
       </div>
 
       <div class="divider"></div>
@@ -540,9 +542,12 @@ select:focus { outline: none; border-color: var(--gold-dim); }
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────────
 const GRID_W = 144, GRID_H = 120;
-const T = { VOID: 0, FLOOR: 1, WALL: 2, WATER: 3, COURTYARD: 4 };
-const TILE_COLORS = ['#1a1410', '#c8a86a', '#8a6a40', '#2a6898', '#d4ba88'];
-const TILE_NAMES  = ['Void', 'Floor', 'Wall', 'Water', 'Courtyard'];
+const T = { VOID: 0, FLOOR: 1, WALL: 2, WATER: 3, COURTYARD: 4, GRASS: 5, TERRACOTTA: 6, STONE: 7, RUG: 8 };
+const TILE_COLORS = ['#1a1410', '#c8a86a', '#8a6a40', '#2a6898', '#d4ba88', '#4f7942', '#b5502e', '#7d8489', '#8b2e3f'];
+const TILE_NAMES  = ['Void', 'Floor', 'Wall', 'Water', 'Courtyard', 'Grass', 'Terracotta', 'Stone', 'Rug'];
+// Tile types the player can stand on — used by autoWall/dead-end checks here
+// and mirrored by walkable() in maps.html (the actual game runtime)
+const WALKABLE_TILES = new Set([T.FLOOR, T.COURTYARD, T.GRASS, T.TERRACOTTA, T.STONE, T.RUG]);
 
 // ── Themes ────────────────────────────────────────────────────────────────────
 // Studio chrome only — tile and sprite colours stay true to the game. Each
@@ -1245,7 +1250,7 @@ function floodFill(col, row, newTile) {
 
 // ── Auto-wall ─────────────────────────────────────────────────────────────────
 function autoWall() {
-  const walkable = new Set([T.FLOOR, T.COURTYARD, T.WATER]);
+  const walkable = new Set([...WALKABLE_TILES, T.WATER]);
   let changed = false;
   for (let r = 0; r < GRID_H; r++) {
     for (let c = 0; c < GRID_W; c++) {
@@ -1281,6 +1286,35 @@ function newMap() {
 }
 
 // ── Tool / tile selection ─────────────────────────────────────────────────────
+// Picks a readable label colour (near-black or near-white) against a tile swatch
+function contrastFor(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luma > 0.5 ? '#1a1410' : '#f0e8d8';
+}
+
+function initTileSelect() {
+  const sel = document.getElementById('tileSelect');
+  sel.innerHTML = TILE_NAMES.map((name, i) =>
+    `<option value="${i}" style="background:${TILE_COLORS[i]};color:${contrastFor(TILE_COLORS[i])}">` +
+    `${i === T.VOID ? 'Void (Erase)' : name}</option>`
+  ).join('');
+  sel.value = selTile;
+  updateTileSwatch();
+}
+
+function setSelTile(v) {
+  selTile = +v;
+  updateTileSwatch();
+}
+
+function updateTileSwatch() {
+  const sel = document.getElementById('tileSelect');
+  sel.style.background = TILE_COLORS[selTile];
+  sel.style.color = contrastFor(TILE_COLORS[selTile]);
+}
+
 function setTool(t) {
   tool = t; rectStart = null;
   if (t !== 'select') { clearSelection(); render(); }
@@ -1844,7 +1878,7 @@ function playMap() {
     for (const o of rm.objects) {
       if (!o.door) continue;
       const target = findRoomById(o.door);
-      if (target && !target.grid.some(row => row.some(t => t === T.FLOOR || t === T.COURTYARD)) &&
+      if (target && !target.grid.some(row => row.some(t => WALKABLE_TILES.has(t))) &&
           !target.objects.some(x => !x.solid && !x.under))
         deadEnds.push(`${rm.name} → ${target.name}`);
     }
@@ -2804,6 +2838,7 @@ renderTabs();
 buildThemeSelect();
 applyTheme(localStorage.getItem('studioTheme') || 'desert');
 updateInterList();
+initTileSelect();
 
 new ResizeObserver(resizeCanvas).observe(wrap);
 resizeCanvas();

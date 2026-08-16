@@ -173,7 +173,8 @@ const VIEWPORT_H    = 520;
 const GRID_W        = 144;
 const GRID_H        = 120;
 
-const T = { VOID:0, FLOOR:1, WALL:2, WATER:3, COURTYARD:4 };
+const T = { VOID:0, FLOOR:1, WALL:2, WATER:3, COURTYARD:4, GRASS:5, TERRACOTTA:6, STONE:7, RUG:8 };
+const WALKABLE_TILES = new Set([T.FLOOR, T.COURTYARD, T.GRASS, T.TERRACOTTA, T.STONE, T.RUG]);
 
 // ── Riad house layout parameters (organic rooms, ~4k sq ft) ──────────────────
 const COURT_X = 27, COURT_Y = 19;   // courtyard top-left anchor
@@ -418,7 +419,7 @@ function walkable(x, y) {
   const col = Math.floor(x), row = Math.floor(y);
   if (row < 0 || row >= GRID_H || col < 0 || col >= GRID_W) return false;
   const t = mapGrid[row][col];
-  if (t === T.FLOOR || t === T.COURTYARD) return true;
+  if (WALKABLE_TILES.has(t)) return true;
   for (const r of FLOOR_RECTS)
     if (x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1) return true;
   return false;
@@ -644,6 +645,22 @@ function drawTile(t, px, py) {
 
     case T.COURTYARD:
       ctx.fillStyle = '#d4ba88'; ctx.fillRect(px, py, S, S);
+      break;
+
+    case T.GRASS:
+      ctx.fillStyle = '#4f7942'; ctx.fillRect(px, py, S, S);
+      break;
+
+    case T.TERRACOTTA:
+      ctx.fillStyle = '#b5502e'; ctx.fillRect(px, py, S, S);
+      break;
+
+    case T.STONE:
+      ctx.fillStyle = '#7d8489'; ctx.fillRect(px, py, S, S);
+      break;
+
+    case T.RUG:
+      ctx.fillStyle = '#8b2e3f'; ctx.fillRect(px, py, S, S);
       break;
 
     case T.WALL: {
