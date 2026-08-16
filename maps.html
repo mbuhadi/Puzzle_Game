@@ -1029,8 +1029,16 @@ canvas.addEventListener('touchcancel', e => {
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-canvas.width  = VIEWPORT_W;
-canvas.height = VIEWPORT_H;
+// Logical size stays VIEWPORT_W x VIEWPORT_H; the backing store is scaled by
+// the device pixel ratio so the tile grid samples 1:1 into physical pixels
+// instead of shimmering as the camera scrolls (image-rendering:pixelated
+// makes any non-integer scale factor very visible during panning).
+const DPR = Math.min(window.devicePixelRatio || 1, 3);
+canvas.width  = Math.round(VIEWPORT_W * DPR);
+canvas.height = Math.round(VIEWPORT_H * DPR);
+canvas.style.width  = VIEWPORT_W + 'px';
+canvas.style.height = VIEWPORT_H + 'px';
+ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 
 function applyMap(result, seed) {
   mapGrid  = result.grid;
