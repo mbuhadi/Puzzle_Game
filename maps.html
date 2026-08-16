@@ -1029,16 +1029,29 @@ canvas.addEventListener('touchcancel', e => {
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-// Logical size stays VIEWPORT_W x VIEWPORT_H; the backing store is scaled by
-// the device pixel ratio so the tile grid samples 1:1 into physical pixels
-// instead of shimmering as the camera scrolls (image-rendering:pixelated
-// makes any non-integer scale factor very visible during panning).
+// Logical size stays VIEWPORT_W x VIEWPORT_H; the backing store is sized to
+// match the canvas's *actual on-screen* CSS pixels (not just VIEWPORT_W/H ×
+// devicePixelRatio) so the tile grid always samples 1:1 into physical pixels.
+// Sizing off the nominal VIEWPORT_W/H alone still shimmers whenever the
+// rendered box ends up narrower than that — #mapCanvas has max-width:100%,
+// so any viewport/window narrower than ~804px shrinks it — because the
+// browser then has to resample the backing store by a second, non-integer
+// factor on top of DPR (image-rendering:pixelated makes that very visible
+// while panning, especially on fine repeating patterns like the fence).
+// getBoundingClientRect() reflects that shrink (plus page zoom/subpixel
+// layout rounding), so measuring it directly covers all of those cases.
 const DPR = Math.min(window.devicePixelRatio || 1, 3);
-canvas.width  = Math.round(VIEWPORT_W * DPR);
-canvas.height = Math.round(VIEWPORT_H * DPR);
 canvas.style.width  = VIEWPORT_W + 'px';
 canvas.style.height = VIEWPORT_H + 'px';
-ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+function resizeCanvasBackingStore() {
+  const cssW = canvas.getBoundingClientRect().width || VIEWPORT_W;
+  const scale = (cssW / VIEWPORT_W) * DPR;
+  canvas.width  = Math.round(VIEWPORT_W * scale);
+  canvas.height = Math.round(VIEWPORT_H * scale);
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+}
+resizeCanvasBackingStore();
+window.addEventListener('resize', resizeCanvasBackingStore);
 
 function applyMap(result, seed) {
   mapGrid  = result.grid;
