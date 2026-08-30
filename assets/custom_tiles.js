@@ -3,9 +3,14 @@
    runtime) — a painted map's grid is just integers, so tile index N must mean the
    exact same texture on both sides. Indices 0-8 stay the original flat-colour
    tiles (T.VOID..T.RUG, defined locally in each page, unchanged). This file adds
-   30 more tiles starting at index 9, in three paint categories of 10 each: floor,
-   wall, water. Every texture is generated procedurally (no image assets) so the
-   editor and the game always agree on exactly what a tile looks like. */
+   39 more starting at index 9: 19 floor, 10 wall, 10 water. Every texture is
+   generated procedurally (no image assets) so the editor and the game always
+   agree on exactly what a tile looks like.
+   Index stability matters here — saved maps store raw tile-index integers, so
+   an entry's position in its array must never change once shipped. The old
+   checkerboard floor tile was retired by overwriting its slot in place (same
+   index, new pattern) rather than deleting it, which would have shifted every
+   tile after it. New tiles always get appended, never inserted mid-array. */
 const CUSTOM_TILE_BASE_INDEX = 9;
 
 (function () {
@@ -128,11 +133,19 @@ const FLOOR_DEFS = [
   { key: 'FLOOR_WOOD', name: 'Oak Floor Planks', base: '#a9773f', draw(ctx) {
       woodGrain(ctx, ['#b3823f', '#9c6b34', '#ad7a3d', '#956731'], 4, 31, false);
     } },
-  { key: 'FLOOR_CHECKER', name: 'Checkerboard Tile', base: '#efe9da', draw(ctx) {
-      for (let y = 0; y < 16; y++)
-        for (let x = 0; x < 16; x++) {
-          const cx = x >> 2, cy = y >> 2;
-          px(ctx, x, y, (cx + cy) % 2 === 0 ? '#efe9da' : '#2b2622');
+  { key: 'FLOOR_STAR8', name: 'Andalusian Star', base: '#f6e3e8', draw(ctx) {
+      rect(ctx, 0, 0, 16, 16, '#f6e3e8');
+      for (let ty = 0; ty < 2; ty++)
+        for (let tx = 0; tx < 2; tx++) {
+          const ox = tx * 8, oy = ty * 8;
+          for (let y = 0; y < 8; y++)
+            for (let x = 0; x < 8; x++) {
+              const cx = x - 3.5, cy = y - 3.5;
+              const diamond = Math.abs(cx) + Math.abs(cy) <= 3.5;
+              const square = Math.max(Math.abs(cx), Math.abs(cy)) <= 2.5;
+              if (diamond || square) px(ctx, ox + x, oy + y, '#d29aac');
+            }
+          rect(ctx, ox + 3, oy + 3, 2, 2, '#9c6478');
         }
     } },
   { key: 'FLOOR_ZELLIGE', name: 'Zellige Mosaic', base: '#1f7a72', draw(ctx) {
@@ -182,6 +195,127 @@ const FLOOR_DEFS = [
         for (let x = 0; x < 16; x++) {
           const cx = (x % 8) - 4, cy = (y % 8) - 4;
           px(ctx, x, y, Math.abs(cx) + Math.abs(cy) <= 4 ? '#2f7d6e' : '#d9c48a');
+        }
+    } },
+];
+
+// ── 9 more floor tiles — mandala rosettes and Arabic/Andalusian geometric
+// motifs in soft pastel colourways. A separate array, assembled AFTER wall
+// and water below (see CUSTOM_TILE_LIST), so it doesn't push every wall and
+// water index up by 9 — those are load-bearing for already-saved maps. ────
+const FLOOR_DEFS_MORE = [
+  { key: 'FLOOR_ROSETTE', name: 'Sage Mandala Rosette', base: '#e9efe2', draw(ctx) {
+      rect(ctx, 0, 0, 16, 16, '#e9efe2');
+      for (let ty = 0; ty < 2; ty++)
+        for (let tx = 0; tx < 2; tx++) {
+          const ox = tx * 8, oy = ty * 8;
+          for (let y = 0; y < 8; y++)
+            for (let x = 0; x < 8; x++) {
+              const dx = x - 3.5, dy = y - 3.5, d = Math.sqrt(dx*dx + dy*dy);
+              const petal = Math.cos(Math.atan2(dy, dx) * 4) * 1.6 + 2.4;
+              if (d < petal && d > 0.6) px(ctx, ox + x, oy + y, '#9bb186');
+            }
+          rect(ctx, ox + 3, oy + 3, 2, 2, '#c9a86e');
+        }
+    } },
+  { key: 'FLOOR_QUATREFOIL', name: 'Lavender Quatrefoil', base: '#f0e8f6', draw(ctx) {
+      rect(ctx, 0, 0, 16, 16, '#f0e8f6');
+      const lobes = [[3.5,1.5],[3.5,5.5],[1.5,3.5],[5.5,3.5]];
+      for (let ty = 0; ty < 2; ty++)
+        for (let tx = 0; tx < 2; tx++) {
+          const ox = tx * 8, oy = ty * 8;
+          for (let y = 0; y < 8; y++)
+            for (let x = 0; x < 8; x++) {
+              let inside = false;
+              for (const [lx, ly] of lobes) {
+                const dx = x - lx, dy = y - ly;
+                if (dx*dx + dy*dy <= 3.4) { inside = true; break; }
+              }
+              if (inside) px(ctx, ox + x, oy + y, '#b89bd4');
+            }
+          rect(ctx, ox + 3, oy + 3, 2, 2, '#8868a8');
+        }
+    } },
+  { key: 'FLOOR_GIRIH', name: 'Powder Blue Girih', base: '#e2eef4', draw(ctx) {
+      rect(ctx, 0, 0, 16, 16, '#e2eef4');
+      for (let y = 0; y < 16; y++)
+        for (let x = 0; x < 16; x++) {
+          const cx = (x % 8) - 3.5, cy = (y % 8) - 3.5;
+          const cheb = Math.max(Math.abs(cx), Math.abs(cy));
+          const manh = Math.abs(cx) + Math.abs(cy);
+          if (cheb <= 3 && manh <= 4.6) px(ctx, x, y, '#9dc3d8');
+        }
+      for (const [x, y] of [[0,0],[8,0],[0,8],[8,8]]) px(ctx, x, y, '#5f8fa8');
+    } },
+  { key: 'FLOOR_TRELLIS', name: 'Dusty Rose Trellis', base: '#f5e8e6', draw(ctx) {
+      rect(ctx, 0, 0, 16, 16, '#f5e8e6');
+      for (let y = 0; y < 16; y++)
+        for (let x = 0; x < 16; x++) {
+          const d1 = (x + y) % 8, d2 = (x - y + 16) % 8;
+          if (d1 <= 1 || d2 <= 1) px(ctx, x, y, '#c99590');
+        }
+      for (const [nx, ny] of [[3,3],[11,3],[3,11],[11,11],[7,7]]) {
+        rect(ctx, nx - 1, ny - 1, 3, 3, '#8a5850');
+        px(ctx, nx, ny, '#e0b8a8');
+      }
+    } },
+  { key: 'FLOOR_SUNBURST', name: 'Honey Sunburst', base: '#fbf0dc', draw(ctx) {
+      rect(ctx, 0, 0, 16, 16, '#fbf0dc');
+      for (let ty = 0; ty < 2; ty++)
+        for (let tx = 0; tx < 2; tx++) {
+          const ox = tx * 8, oy = ty * 8;
+          for (let y = 0; y < 8; y++)
+            for (let x = 0; x < 8; x++) {
+              const dx = x - 3.5, dy = y - 3.5, d = Math.sqrt(dx*dx + dy*dy);
+              const ang = ((Math.atan2(dy, dx) % (Math.PI/4)) + Math.PI/4) % (Math.PI/4);
+              const ray = ang < 0.35 || ang > (Math.PI/4 - 0.35);
+              if (d < 3.6 && d > 0.8 && ray) px(ctx, ox + x, oy + y, '#d9ab55');
+            }
+          rect(ctx, ox + 3, oy + 3, 2, 2, '#a87830');
+        }
+    } },
+  { key: 'FLOOR_VINE', name: 'Mint Arabesque Vine', base: '#e6f2ec', draw(ctx) {
+      rect(ctx, 0, 0, 16, 16, '#e6f2ec');
+      for (let x = 0; x < 16; x++) {
+        const y1 = Math.round(4 + 3 * Math.sin(x / 16 * Math.PI * 2));
+        px(ctx, x, y1, '#7cb89c'); px(ctx, x, Math.min(15, y1 + 1), '#7cb89c');
+        const y2 = Math.round(12 + 3 * Math.sin((x + 8) / 16 * Math.PI * 2));
+        px(ctx, x, y2, '#7cb89c'); px(ctx, x, Math.min(15, y2 + 1), '#7cb89c');
+      }
+      px(ctx, 2, 4, '#4f8068'); px(ctx, 10, 12, '#4f8068'); px(ctx, 6, 7, '#4f8068');
+    } },
+  { key: 'FLOOR_MEDALLION', name: 'Sunset Medallion', base: '#fbe6df', draw(ctx) {
+      for (let y = 0; y < 16; y++)
+        for (let x = 0; x < 16; x++) {
+          const cx = (x % 8) - 3.5, cy = (y % 8) - 3.5;
+          const d = Math.abs(cx) + Math.abs(cy);
+          let c = '#fbe6df';
+          if (d < 1.2) c = '#e0855f';
+          else if (d < 2.2) c = '#f6c9a8';
+          else if (d < 3.2) c = '#f0a880';
+          px(ctx, x, y, c);
+        }
+    } },
+  { key: 'FLOOR_INTERLACE', name: 'Periwinkle Interlace', base: '#eaebf7', draw(ctx) {
+      rect(ctx, 0, 0, 16, 16, '#eaebf7');
+      for (let y = 0; y < 16; y++)
+        for (let x = 0; x < 16; x++) {
+          const d1 = (x + y) % 8, d2 = (x - y + 16) % 8;
+          const on1 = d1 >= 1 && d1 <= 2, on2 = d2 >= 1 && d2 <= 2;
+          if (on1 && on2) px(ctx, x, y, '#7a82c8');
+          else if (on1) px(ctx, x, y, '#9aa0d8');
+          else if (on2) px(ctx, x, y, '#b4addf');
+        }
+    } },
+  { key: 'FLOOR_ROSEWATER', name: 'Cream Rosewater Mosaic', base: '#f7ece2', draw(ctx) {
+      rect(ctx, 0, 0, 16, 16, '#f7ece2');
+      for (let ty = 0; ty < 4; ty++)
+        for (let tx = 0; tx < 4; tx++) {
+          const ox = tx * 4, oy = ty * 4;
+          for (let y = 0; y < 4; y++)
+            for (let x = 0; x < 4; x++)
+              if (Math.abs(x - 1.5) + Math.abs(y - 1.5) <= 1.5)
+                px(ctx, ox + x, oy + y, (tx + ty) % 2 === 0 ? '#e3a6a0' : '#d4af7c');
         }
     } },
 ];
@@ -303,6 +437,14 @@ const CUSTOM_TILE_LIST = [];
     def.index = CUSTOM_TILE_BASE_INDEX + CUSTOM_TILE_LIST.length;
     CUSTOM_TILE_LIST.push(def);
   });
+});
+// Appended last, after every wall/water index is already assigned — see the
+// comment above FLOOR_DEFS_MORE for why these can't just live in FLOOR_DEFS
+FLOOR_DEFS_MORE.forEach(def => {
+  def.category = 'floor';
+  def.index = CUSTOM_TILE_BASE_INDEX + CUSTOM_TILE_LIST.length;
+  CUSTOM_TILE_LIST.push(def);
+  FLOOR_DEFS.push(def);   // keep FLOOR_DEFS as the complete floor list too
 });
 
 const canvasCache = new Map();
