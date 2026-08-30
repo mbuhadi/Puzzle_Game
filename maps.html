@@ -766,25 +766,6 @@ function drawObject(o, px, py) {
           px, py, o.sw * S, o.sh * S);
       }
     }
-    // Attachment frame + E prompt appear only in interact range.
-    // Green = puzzle, cyan = door, amber = door still locked by its puzzle.
-    if ((o.inter || o.door || (o.anim && o.anim.once)) &&
-        nearbyInteractable && nearbyInteractable.obj === o &&
-        !examineOverlay.classList.contains('open')) {
-      const locked = o.inter && o.door && !puzzleSolved(o.inter);
-      const [glow, rgb] = locked  ? ['#e8b040', '232,176,64']
-                        : o.door  ? ['#50b4dc', '80,180,220']
-                        :           ['#44ff88', '80,220,120'];
-      const pulse = 0.45 + 0.35 * Math.sin(performance.now() / 400);
-      ctx.save();
-      ctx.shadowColor = glow;
-      ctx.shadowBlur  = 10 * pulse;
-      ctx.strokeStyle = `rgba(${rgb},${pulse.toFixed(3)})`;
-      ctx.lineWidth   = 2;
-      ctx.strokeRect(px + 1, py + 1, o.sw * S - 2, o.sh * S - 2);
-      ctx.restore();
-      drawInteractBadge(px + o.sw * S, py + o.sh * S);
-    }
     return;
   }
   switch (o.type) {
@@ -929,19 +910,44 @@ function drawThoughtBubble() {
   ctx.fillText(glyph, bx + BW/2, by + BH/2 + 0.5);
 }
 
-// "[E]" prompt in the same green as the interactable frame, centered on a
-// bottom-right corner (world px)
-function drawInteractBadge(cornerX, cornerY) {
+// "[E]" prompt in the same colour as the interactable frame, centered on a
+// bottom-right corner (world px). No fill behind it — a dark text outline
+// keeps it readable over any sprite instead of a solid backing pill.
+function drawInteractBadge(cornerX, cornerY, rgb) {
   ctx.save();
   ctx.font = 'bold 11px monospace';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  const w = ctx.measureText('[E]').width + 8;
-  // dark backing pill so the green text stays readable over sprites
-  ctx.fillStyle = 'rgba(8,16,10,0.8)';
-  roundRect(cornerX - w / 2, cornerY - 8, w, 16, 4); ctx.fill();
-  ctx.fillStyle = 'rgb(80,220,120)';   // matches the frame stroke colour
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(8,16,10,0.8)';
+  ctx.lineWidth = 3;
+  ctx.strokeText('[E]', cornerX, cornerY + 0.5);
+  ctx.fillStyle = `rgb(${rgb})`;
   ctx.fillText('[E]', cornerX, cornerY + 0.5);
   ctx.restore();
+}
+
+// The glow ring + "[E]" prompt around the interactable currently in range —
+// drawn last, after tiles/objects/player/thought-bubble, so it's always on
+// top and never hidden behind another object or tile.
+// Green = puzzle, cyan = door, amber = door still locked by its puzzle.
+function drawInteractHighlight() {
+  if (!nearbyInteractable) return;
+  const o = nearbyInteractable.obj;
+  if (!o.sw) return;
+  const S = TILE_PX, px = o.col * S, py = o.row * S;
+  const locked = o.inter && o.door && !puzzleSolved(o.inter);
+  const [glow, rgb] = locked  ? ['#e8b040', '232,176,64']
+                    : o.door  ? ['#50b4dc', '80,180,220']
+                    :           ['#44ff88', '80,220,120'];
+  const pulse = 0.45 + 0.35 * Math.sin(performance.now() / 400);
+  ctx.save();
+  ctx.shadowColor = glow;
+  ctx.shadowBlur  = 5 * pulse;
+  ctx.strokeStyle = `rgba(${rgb},${pulse.toFixed(3)})`;
+  ctx.lineWidth   = 2;
+  ctx.strokeRect(px + 1, py + 1, o.sw * S - 2, o.sh * S - 2);
+  ctx.restore();
+  drawInteractBadge(px + o.sw * S, py + o.sh * S, rgb);
 }
 
 // ── Virtual joystick ──────────────────────────────────────────────────────────
@@ -1016,6 +1022,7 @@ function render() {
   for (const o of OBJECTS)
     if (o.under) drawObject(o, o.col*TILE_PX, o.row*TILE_PX);
   drawThoughtBubble();   // world space — drawn above player, inside translate
+  drawInteractHighlight();  // always last — on top of every tile/object/player
   ctx.restore();
 
   drawJoystick();        // screen space — fixed overlay on canvas
