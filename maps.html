@@ -1017,6 +1017,15 @@ function render() {
   // Walk-under objects (arches, canopies) — the player passes beneath them
   for (const o of OBJECTS)
     if (o.under) drawObject(o, o.col*TILE_PX, o.row*TILE_PX);
+  // Walk-under tile overrides — redraw that same cell's tile a second time,
+  // now over the player, so a roof/canopy tile reads as something the
+  // player passes beneath rather than just another walkable floor tile
+  for (const key in tileColl) {
+    if (tileColl[key] !== 'under') continue;
+    const [c, r] = key.split(',').map(Number);
+    if (c < c0 || c >= c1 || r < r0 || r >= r1) continue;
+    drawTile(mapGrid[r][c], c*TILE_PX, r*TILE_PX);
+  }
   drawThoughtBubble();   // world space — drawn above player, inside translate
   drawInteractHighlight();  // always last — on top of every tile/object/player
   ctx.restore();
