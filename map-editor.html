@@ -126,6 +126,8 @@ button:disabled:hover { border-color: var(--border); color: var(--text); }
 button.danger:hover { border-color: #7a3030; color: #cc7070; }
 button.play { border-color: #3a6a30; color: #7acc60; font-size: 12px; }
 button.play:hover { border-color: #5a9a48; color: #aaee88; }
+button.play-dev { border-color: #7a5a20; color: #e0b050; font-size: 12px; }
+button.play-dev:hover { border-color: #a8862c; color: #f0cc74; }
 
 .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 
@@ -352,6 +354,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
     <button class="danger" onclick="clearMap()">Clear</button>
     <div class="tb-sep"></div>
     <button class="play" onclick="playMap()">▶ Play Map</button>
+    <button class="play-dev" onclick="playMap(true)" title="Play with a Skip button injected into every puzzle, so puzzle-locked doors can be tested without solving them">⏩ Play (Dev Skip)</button>
   </div>
 
   <!-- Room tabs -->
@@ -1964,7 +1967,7 @@ function importJSON(e) {
   e.target.value = '';
 }
 
-function playMap() {
+function playMap(devSkip) {
   const si = startRoomIndex();
   const startRoom = rooms[si];
   if (!startRoom.spawn) {
@@ -1999,7 +2002,7 @@ function playMap() {
     return;
   // Transient handoff to maps.html only — real saves live in the GitHub repo
   localStorage.setItem('editorMap', JSON.stringify(toData()));
-  window.open('maps.html?custom=1', '_blank');
+  window.open('maps.html?custom=1' + (devSkip ? '&dev=1' : ''), '_blank');
 }
 
 // Footprints stamped during the current object-brush drag — lets the brush
