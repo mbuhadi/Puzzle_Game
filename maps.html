@@ -261,6 +261,7 @@ function rebuildObjSolid() {
   OBJ_RECTS.length = 0;
   FLOOR_RECTS.length = 0;
   for (const o of OBJECTS) {
+    if (isRemovedDoor(o)) continue;
     const w = o.sw || 1, h = o.sh || 1;
     const rect = { x0: o.col, y0: o.row, x1: o.col + w, y1: o.row + h };
     if (o.solid) OBJ_RECTS.push(rect);
@@ -474,6 +475,10 @@ window.addEventListener('message', e => {
   const firstSolve = !SOLVED_CHUNKS.has(e.data.chunk);
   SOLVED_CHUNKS.add(e.data.chunk);
   persistSolved();
+  // Re-evaluate collision immediately — a removeOnSolve door in the current
+  // room should open the passage the instant its puzzle is solved, not wait
+  // for the next room load.
+  if (firstSolve) rebuildObjSolid();
   // A locked door fires the moment its puzzle is solved: after a short beat
   // (so the solved feedback is visible) the puzzle closes and the door
   // carries the player through to its room.
@@ -492,6 +497,14 @@ window.addEventListener('message', e => {
 });
 function puzzleSolved(interId) {
   return SOLVED_CHUNKS.has(String(interId).replace(/s$/, ''));
+}
+
+// An in-room locked door: `inter` gates it like any puzzle object, but with
+// no `door` (room teleport) attached and `removeOnSolve` opted in from Map
+// Studio, it disappears entirely once solved — revealing the floor tile
+// already underneath as a passage, instead of transiting to another room.
+function isRemovedDoor(o) {
+  return !!(o.removeOnSolve && o.inter && !o.door && puzzleSolved(o.inter));
 }
 
 const INTERACT_RADIUS = 1.2;  // tiles — proximity for thought bubble
@@ -532,6 +545,7 @@ function getNearbyInteractable() {
   // animations (a decorative door swings even with nothing attached)
   for (const o of OBJECTS) {
     if (!o.inter && !o.door && !(o.anim && o.anim.once)) continue;
+    if (isRemovedDoor(o)) continue;
     const w = o.sw || 1, h = o.sh || 1;
     const cx = o.col + w / 2, cy = o.row + h / 2;
     const dx = player.x - cx, dy = player.y - cy;
@@ -723,6 +737,7 @@ function drawTile(t, px, py) {
 }
 
 function drawObject(o, px, py) {
+  if (isRemovedDoor(o)) return;
   const S = TILE_PX;
   if (o.sw) {
     if (o.anim) {
@@ -1151,6 +1166,7 @@ function sanitizeObjects(raw) {
     const inter = typeof o.inter === 'string' ? o.inter.replace(/s$/, '') : null;
     if (inter && ALL.some(x => x.id === inter)) obj.inter = inter;
     if (typeof o.door === 'string') obj.door = o.door;
+    if (o.removeOnSolve) obj.removeOnSolve = true;
     out.push(obj);
   }
   return out;

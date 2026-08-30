@@ -432,12 +432,18 @@ select:focus { outline: none; border-color: var(--gold-dim); }
         <div class="sec-title">INTERACTABLE</div>
         <div class="hint-text" style="margin-bottom:5px">
           Optional — attaches to the<br>selected object(s), or to the<br>next object you place.<br>
-          Pick both to make a locked<br>door: it won't open until<br>its puzzle is solved
+          Pick both to make a locked<br>door: it won't open until<br>its puzzle is solved.<br>
+          Puzzle + Remove on solve<br>(no door) instead makes the<br>object vanish when solved —
+          a locked door within the<br>same room, not a teleport
         </div>
         <div class="sec-title">PUZZLE</div>
         <select id="interSelect" onchange="selectPuzzle(this.value || null); this.blur()"></select>
         <div class="sec-title" style="margin-top:7px">DOOR</div>
         <select id="doorSelect" onchange="selectDoor(this.value || null); this.blur()"></select>
+        <label style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:11px; color:var(--text); cursor:pointer;">
+          <input type="checkbox" id="removeOnSolveChk" onchange="toggleRemoveOnSolve(this.checked)">
+          Remove on solve (in-room passage)
+        </label>
       </div>
 
       <div class="divider"></div>
@@ -705,6 +711,9 @@ let selPuzzle = null;       // puzzle id to attach to the next placed object
 let selDoor = null;         // 'door:roomId' to attach to the next placed object
                             // (both set = locked door: puzzle must be solved
                             // in-game before the door works)
+let selRemoveOnSolve = false; // removeOnSolve flag for the next placed object
+                            // (puzzle attached, no door: opens an in-room
+                            // passage by disappearing once solved)
 let showGrid = true;
 let showPView = false;      // player-view overlay: outline of the game camera
 // Game camera size in tiles — VIEWPORT_W/H ÷ TILE_PX from maps.html (800×520 @ 32px)
@@ -1592,6 +1601,7 @@ function fromData(data) {
               seenInter.add(inter);
             }
             if (typeof o.door === 'string') obj.door = o.door;
+            if (o.removeOnSolve) obj.removeOnSolve = true;
             return obj;
           })
       : [];
@@ -2032,10 +2042,12 @@ function placeObjectAt(col, row) {
     // door attachment this makes a locked door.
     syncRoomFromGlobals();
     for (const rm of rooms)
-      for (const o of rm.objects) if (o.inter === selPuzzle) delete o.inter;
+      for (const o of rm.objects) if (o.inter === selPuzzle) { delete o.inter; delete o.removeOnSolve; }
     obj.inter = selPuzzle;
   }
+  if (selRemoveOnSolve) obj.removeOnSolve = true;
   selPuzzle = selDoor = null;   // one-shot: reset to None after attaching
+  selRemoveOnSolve = false;
   // Sprites may layer (rug under a table) — just add on top
   objects.push(obj);
   strokePlaced.push({ col, row, sw, sh });
@@ -2111,6 +2123,7 @@ function copySelection() {
     const c = { ...o, col: o.col - origin.col, row: o.row - origin.row };
     if (c.anim) c.anim = { ...c.anim };
     delete c.inter;   // puzzle ids are map-unique — copies never carry one
+    delete c.removeOnSolve;
     return c;
   }) };
 }
@@ -2882,11 +2895,13 @@ function selectPuzzle(id) {
       updateInterList(); return;
     }
     syncRoomFromGlobals();
-    for (const o of selectedObjs) delete o.inter;   // "none" detaches
+    // "none" detaches — and removeOnSolve is meaningless without inter, so
+    // clear it too rather than leave it silently armed for a future attach
+    for (const o of selectedObjs) { delete o.inter; delete o.removeOnSolve; }
     if (id) {
       // Each puzzle id lives on exactly one object map-wide — steal it if reused
       for (const rm of rooms)
-        for (const o of rm.objects) if (o.inter === id) delete o.inter;
+        for (const o of rm.objects) if (o.inter === id) { delete o.inter; delete o.removeOnSolve; }
       [...selectedObjs][0].inter = id;
     }
     selPuzzle = null;
@@ -2911,6 +2926,17 @@ function selectDoor(id) {
   selDoor = id;
   updateInterList();
   if (id) setTool('object');
+}
+function toggleRemoveOnSolve(checked) {
+  if (selectedObjs.size) {
+    syncRoomFromGlobals();
+    for (const o of selectedObjs) {
+      if (checked) o.removeOnSolve = true; else delete o.removeOnSolve;
+    }
+    updateInterList(); pushHistory(); render();
+    return;
+  }
+  selRemoveOnSolve = checked;
 }
 
 // Rebuilds both attachment dropdowns so placed ids are marked, and shows the
@@ -2944,6 +2970,7 @@ function updateInterList() {
 
   pSel.value = selPuzzle || '';
   dSel.value = selDoor || '';
+  document.getElementById('removeOnSolveChk').checked = selectedObjs.size ? false : selRemoveOnSolve;
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
