@@ -450,6 +450,11 @@ const keys   = {};
 const examineOverlay = document.getElementById('examineOverlay');
 const examineFrame   = document.getElementById('examineFrame');
 
+// "Play (Dev Skip)" from the editor opens maps.html?...&dev=1 — every puzzle
+// then gets a Skip button injected (see puzzles_curated.html) so puzzle-locked
+// doors and later rooms can be tested without solving anything.
+const DEV_SKIP = new URLSearchParams(location.search).get('dev') === '1';
+
 // Puzzles solved this playthrough — chunk ids posted by puzzles_curated.html
 // from inside the examine iframe. An object carrying both `inter` and `door`
 // is a locked door: it only examines its puzzle until that puzzle is solved,
@@ -503,7 +508,7 @@ function openExamine(p) {
   const dist = Math.sqrt(dx*dx + dy*dy);
   exitDir = dist > 0.05 ? { x: dx/dist, y: dy/dist } : { x: 0, y: -1 };
   const baseId = p.id.replace(/s$/, '');
-  examineFrame.src = 'puzzles_curated.html?chunk=' + baseId;
+  examineFrame.src = 'puzzles_curated.html?chunk=' + baseId + (DEV_SKIP ? '&dev=1' : '');
   examineOverlay.classList.add('open');
 }
 
@@ -1110,6 +1115,13 @@ function enterCustomUI() {
   _back.onmouseover  = () => _back.style.color = '#c8a84b';
   _back.onmouseout   = () => _back.style.color = '#7a6030';
   document.querySelector('.top-bar').appendChild(_back);
+  if (DEV_SKIP) {
+    const _flag = document.createElement('span');
+    _flag.textContent = 'DEV SKIP';
+    _flag.style.cssText = 'font-family:monospace;font-size:10px;color:#e0b050;' +
+      'border:1px solid #7a5a20;border-radius:3px;padding:2px 6px;letter-spacing:1px;';
+    document.querySelector('.top-bar').appendChild(_flag);
+  }
 }
 
 // Objects from the editor (solid ones block movement); objects can carry an

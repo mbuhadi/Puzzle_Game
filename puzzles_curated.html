@@ -1484,6 +1484,30 @@ if (!CHUNK_PARAM) {
     if (builderKey && BUILDERS[builderKey]) {
       try { BUILDERS[builderKey](); } catch(e) {}
     }
+
+    // Dev Skip: maps.html?dev=1 (from the editor's "Play (Dev Skip)" button)
+    // forwards &dev=1 into every puzzle iframe it opens. Inject a button that
+    // marks the puzzle solved via the same postMessage real solves use, so
+    // puzzle-locked doors and later rooms can be tested without solving anything.
+    if (new URLSearchParams(location.search).get('dev') === '1') {
+      const skipBtn = document.createElement('button');
+      skipBtn.textContent = '⏩ Dev Skip';
+      skipBtn.title = 'Mark this puzzle solved without solving it';
+      skipBtn.style.cssText = 'position:fixed; top:16px; right:16px; z-index:999; ' +
+        'background:#1e1610; color:#e0b050; border:1.5px solid #7a5a20; border-radius:8px; ' +
+        'padding:10px 18px; font-family:monospace; font-size:12px; font-weight:bold; ' +
+        'letter-spacing:1px; cursor:pointer;';
+      skipBtn.onmouseover = () => { skipBtn.style.borderColor = '#a8862c'; skipBtn.style.color = '#f0cc74'; };
+      skipBtn.onmouseout  = () => { skipBtn.style.borderColor = '#7a5a20'; skipBtn.style.color = '#e0b050'; };
+      skipBtn.onclick = () => {
+        notifyPuzzleSolved();
+        skipBtn.textContent = '✓ Skipped';
+        skipBtn.disabled = true;
+        skipBtn.style.opacity = '0.6';
+        skipBtn.style.cursor = 'default';
+      };
+      document.body.appendChild(skipBtn);
+    }
   })();
 }
 
