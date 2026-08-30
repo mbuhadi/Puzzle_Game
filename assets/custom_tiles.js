@@ -61,14 +61,6 @@ function diagLine(ctx, x0, y0, len, dx, dy, color, w) {
   }
 }
 
-function vGradient(ctx, topHex, bottomHex) {
-  const [r0, g0, b0] = hexToRgb(topHex), [r1, g1, b1] = hexToRgb(bottomHex);
-  for (let y = 0; y < 16; y++) {
-    const t = y / 15;
-    rect(ctx, 0, y, 16, 1, rgbToHex(r0 + (r1 - r0) * t, g0 + (g1 - g0) * t, b0 + (b1 - b0) * t));
-  }
-}
-
 // Running-bond brick/block courses: `bh`-tall rows of `bw`-wide bricks,
 // alternate rows offset by half a brick, with a mortar grid and an optional
 // 1px highlight along each course's top edge.
@@ -200,10 +192,11 @@ const WALL_DEFS = [
       bricks(ctx, { bw: 8, bh: 8, mortar: '#3f4348', highlight: '#8a9096' });
     } },
   { key: 'WALL_PLASTER', name: 'Smooth Plaster Wall', base: '#d8c9a3', draw(ctx) {
-      vGradient(ctx, '#e0d2ac', '#c2b18a');
-      speckle(ctx, 62, 0.18, '#c7b795', 0.3);
-      rect(ctx, 0, 14, 16, 1, '#a4906a');
-      rect(ctx, 0, 15, 16, 1, '#8a7550');
+      // Flat, gently mottled — no directional gradient or trim line, so a
+      // whole wall of these tiles reads as one continuous plastered surface
+      // instead of repeating bands at every tile edge.
+      noiseShade(ctx, '#d8c9a3', 62, 6);
+      speckle(ctx, 63, 0.1, '#c7b795', 0.35);
     } },
   { key: 'WALL_WOODPANEL', name: 'Wood Panel Wall', base: '#7a5232', draw(ctx) {
       woodGrain(ctx, ['#84592f', '#6e4726', '#7d5730'], 4, 51, true);
@@ -212,12 +205,14 @@ const WALL_DEFS = [
       noiseShade(ctx, '#9c3f2e', 52, 8);
       bricks(ctx, { bw: 8, bh: 4, mortar: '#5a2018', highlight: '#b8583f' });
     } },
-  { key: 'WALL_MARBLE', name: 'Marble Wall Panel', base: '#dcd8cc', draw(ctx) {
+  { key: 'WALL_MARBLE', name: 'Polished Marble Wall', base: '#dcd8cc', draw(ctx) {
+      // No panel border — veins only, so the slab reads as one continuous
+      // wall instead of a grid of separate framed tiles.
       noiseShade(ctx, '#dcd8cc', 61, 7);
       diagLine(ctx, 2, 1, 6, 1, 1, '#aca584');
       diagLine(ctx, 9, 2, 5, 1, 1, '#b3ac8c');
-      ctx.strokeStyle = '#93896a'; ctx.lineWidth = 1;
-      ctx.strokeRect(1.5, 1.5, 13, 13);
+      diagLine(ctx, 0, 9, 5, 1, 1, '#b3ac8c');
+      diagLine(ctx, 10, 11, 6, 1, 1, '#aca584');
     } },
   { key: 'WALL_SANDSTONE', name: 'Sandstone Block Wall', base: '#c9a15e', draw(ctx) {
       noiseShade(ctx, '#c9a15e', 71, 14);
@@ -227,10 +222,11 @@ const WALL_DEFS = [
       noiseShade(ctx, '#3a3d42', 81, 10);
       bricks(ctx, { bw: 8, bh: 8, mortar: '#212327', highlight: '#4c5056' });
     } },
-  { key: 'WALL_PAINTEDBLUE', name: 'Painted Riad Blue', base: '#2a4d78', draw(ctx) {
-      vGradient(ctx, '#31578a', '#22406a');
-      rect(ctx, 0, 10, 16, 2, '#e8dcc0');
-      rect(ctx, 0, 14, 16, 2, '#1a2e4a');
+  { key: 'WALL_PAINTEDBLUE', name: 'Painted Riad Blue', base: '#2f5484', draw(ctx) {
+      // Flat colour with only mottling (no trim/baseboard band) — a band at
+      // a fixed row repeats every tile and reads as horizontal stripes
+      // instead of a single painted wall.
+      noiseShade(ctx, '#2f5484', 64, 8);
     } },
   { key: 'WALL_ZELLIGE', name: 'Zellige Mosaic Wall', base: '#1f7a72', draw(ctx) {
       rect(ctx, 0, 0, 16, 16, '#e8dcc0');
