@@ -466,17 +466,6 @@ select:focus { outline: none; border-color: var(--gold-dim); }
         </div>
       </div>
 
-      <div class="divider"></div>
-
-      <!-- History -->
-      <div>
-        <div class="sec-title">HISTORY</div>
-        <div class="tool-grid">
-          <button id="btnUndo" onclick="undo()" disabled title="Ctrl+Z">Undo</button>
-          <button id="btnRedo" onclick="redo()" disabled title="Ctrl+Y">Redo</button>
-        </div>
-      </div>
-
     </div><!-- /sidebar -->
 
     <!-- Canvas -->
@@ -838,7 +827,7 @@ function switchRoom(i) {
   syncRoomFromGlobals();
   bindRoom(i);
   if (histIdx < 0) pushHistory();   // baseline for a room never edited
-  renderTabs(); updateInterList(); updateHistBtns(); updateStatus(); render();
+  renderTabs(); updateInterList(); updateStatus(); render();
 }
 
 function addRoom() {
@@ -860,7 +849,7 @@ function deleteRoom(i) {
       if (o.door === deadId) delete o.door;
   bindRoom(Math.min(curRoom > i ? curRoom - 1 : curRoom, rooms.length - 1));
   if (histIdx < 0) pushHistory();
-  renderTabs(); updateInterList(); updateHistBtns(); updateStatus(); render();
+  renderTabs(); updateInterList(); updateStatus(); render();
 }
 
 function renderTabs() {
@@ -1291,7 +1280,6 @@ function pushHistory() {
   history.push(snapshot());
   if (history.length > MAX_HIST) history.shift();
   histIdx = history.length - 1;
-  updateHistBtns();
   syncRoomFromGlobals();
 }
 
@@ -1310,7 +1298,7 @@ function undo() {
   if (histIdx <= 0) return;
   histIdx--;
   restoreSnapshot(history[histIdx]);
-  render(); updateStatus(); updateHistBtns();
+  render(); updateStatus();
 }
 
 function redo() {
@@ -1318,12 +1306,7 @@ function redo() {
   if (histIdx >= history.length - 1) return;
   histIdx++;
   restoreSnapshot(history[histIdx]);
-  render(); updateStatus(); updateHistBtns();
-}
-
-function updateHistBtns() {
-  document.getElementById('btnUndo').disabled = histIdx <= 0;
-  document.getElementById('btnRedo').disabled = histIdx >= history.length - 1;
+  render(); updateStatus();
 }
 
 // ── Painting ──────────────────────────────────────────────────────────────────
@@ -1371,7 +1354,7 @@ function newMap() {
   bindRoom(0);
   updateInterList();
   fitGrid();
-  pushHistory(); markMapSaved(); renderTabs(); render(); updateStatus(); updateHistBtns();
+  pushHistory(); markMapSaved(); renderTabs(); render(); updateStatus();
 }
 
 // ── Tool / tile selection ─────────────────────────────────────────────────────
