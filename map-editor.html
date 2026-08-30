@@ -2072,6 +2072,9 @@ function clearSelection() {
 function updateSelStatus() {
   document.getElementById('stSel').textContent =
     selectedObjs.size ? selectedObjs.size + ' selected' : '';
+  // Selection just changed — resync the attachment panel to whatever's
+  // now selected (single object's own state, or the one-shot picks)
+  updateInterList();
 }
 
 // Objects whose footprint intersects the marquee rect (grid coords, any corner order)
