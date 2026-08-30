@@ -2939,12 +2939,14 @@ function toggleRemoveOnSolve(checked) {
   selRemoveOnSolve = checked;
 }
 
-// Rebuilds both attachment dropdowns so placed ids are marked, and shows the
-// current selections (both reset to none after each placement). Puzzle ids
-// are map-unique; Doors has one entry per room — attaching "door to X" makes
-// the object teleport the player to room X. Picking from BOTH dropdowns makes
-// the next object a locked door: in the game it opens its puzzle until the
-// puzzle is solved, then works as a normal door.
+// Rebuilds both attachment dropdowns so placed ids are marked. With exactly
+// one object selected, the dropdowns/checkbox mirror that object's own
+// attachment; otherwise (no selection, or several) they show the pending
+// one-shot picks for the next placed object, resetting to none after each
+// placement. Puzzle ids are map-unique; Doors has one entry per room —
+// attaching "door to X" makes the object teleport the player to room X.
+// Picking both makes a locked door: it opens its puzzle until solved, then
+// works as a normal door.
 function updateInterList() {
   syncRoomFromGlobals();
 
@@ -2968,9 +2970,17 @@ function updateInterList() {
     dSel.appendChild(opt);
   });
 
-  pSel.value = selPuzzle || '';
-  dSel.value = selDoor || '';
-  document.getElementById('removeOnSolveChk').checked = selectedObjs.size ? false : selRemoveOnSolve;
+  const roChk = document.getElementById('removeOnSolveChk');
+  if (selectedObjs.size === 1) {
+    const o = [...selectedObjs][0];
+    pSel.value = o.inter || '';
+    dSel.value = o.door ? 'door:' + o.door : '';
+    roChk.checked = !!o.removeOnSolve;
+  } else {
+    pSel.value = selPuzzle || '';
+    dSel.value = selDoor || '';
+    roChk.checked = selectedObjs.size ? false : selRemoveOnSolve;
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
