@@ -284,6 +284,9 @@ let currentSeed = parseInt(localStorage.getItem('map1seed')) || DEFAULT_SEED;
 
 // ── Map generation (Arabian riad with central courtyard) ──────────────────────
 let mapGrid = null;
+// Sparse "col,row" -> 'solid'|'over'|'under' — per-cell collision override
+// painted in Map Studio, independent of the tile type at that cell
+let tileColl = {};
 
 function fillRect(grid, x, y, w, h, type) {
   for (let ry = y; ry < y + h; ry++)
@@ -424,6 +427,12 @@ function generateRiad(seed) {
 function walkable(x, y) {
   const col = Math.floor(x), row = Math.floor(y);
   if (row < 0 || row >= GRID_H || col < 0 || col >= GRID_W) return false;
+  // A Map Studio collision override on this cell wins outright, regardless
+  // of the tile painted there (a secret passage through a wall, or an
+  // invisible wall on open floor)
+  const ov = tileColl[col + ',' + row];
+  if (ov === 'solid') return false;
+  if (ov === 'over' || ov === 'under') return true;
   const t = mapGrid[row][col];
   if (WALKABLE_TILES.has(t)) return true;
   for (const r of FLOOR_RECTS)
@@ -1137,6 +1146,21 @@ function enterCustomUI() {
   }
 }
 
+// Per-cell collision overrides painted with Map Studio's Collision tool
+function sanitizeTileColl(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const key in raw) {
+    const m = /^(\d+),(\d+)$/.exec(key);
+    if (!m) continue;
+    const col = +m[1], row = +m[2];
+    if (col < 0 || col >= GRID_W || row < 0 || row >= GRID_H) continue;
+    const mode = raw[key];
+    if (mode === 'solid' || mode === 'over' || mode === 'under') out[key] = mode;
+  }
+  return out;
+}
+
 // Objects from the editor (solid ones block movement); objects can carry an
 // attached interactable id in `inter`
 function sanitizeObjects(raw) {
@@ -1177,6 +1201,7 @@ function enterRoom(idx, px, py) {
   const rm = ROOMS[idx];
   curRoomIdx = idx;
   mapGrid = rm.grid;
+  tileColl = rm.tileColl || {};
   OBJECTS.length = 0;
   for (const o of rm.objects) OBJECTS.push(o);
   rebuildObjSolid();
@@ -1216,6 +1241,7 @@ function loadCustomData(_data, resume) {
       grid: g,
       spawn: rm.spawn ? { col: +rm.spawn.col, row: +rm.spawn.row } : null,
       objects: sanitizeObjects(rm.objects),
+      tileColl: sanitizeTileColl(rm.tileColl),
       // Per-room special instructions from Map Studio — no runtime behavior
       // yet, carried so future features can read them
       special: typeof rm.special === 'string' ? rm.special : '',
@@ -1244,6 +1270,7 @@ function loadCustomData(_data, resume) {
 
 function loadProcedural(seed, resume) {
   ROOMS = null; curRoomIdx = 0;
+  tileColl = {};   // procedural riads have no Map Studio collision overrides
   if (!resume) resetSolved();   // fresh playthrough — puzzle-locked doors re-lock
   OBJECTS.length = 0; rebuildObjSolid();
   const result = generateRiad(seed);

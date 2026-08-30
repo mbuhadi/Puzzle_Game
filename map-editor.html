@@ -384,6 +384,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
           <button id="tool-fill"                 onclick="setTool('fill')"  title="Fill (G)">Fill</button>
           <button id="tool-rect"                 onclick="setTool('rect')"  title="Rectangle (R)">Rect</button>
           <button id="tool-spawn"                onclick="setTool('spawn')" title="Set Spawn Point (S)">Set Spawn</button>
+          <button id="tool-coll"  style="grid-column:1/-1" onclick="setTool('coll')" title="Tile Collision (C) — paint a per-cell collision override on top of the tiles, independent of tile type">Collision</button>
         </div>
         <div class="sec-title" style="margin-top:8px">TILE TYPE</div>
         <button type="button" id="tilePickerBtn" class="tile-picker-btn" onclick="openTilePicker()"
@@ -392,6 +393,16 @@ select:focus { outline: none; border-color: var(--gold-dim); }
           <span id="tilePickerLabel">Floor</span>
           <span class="tile-picker-caret">▾</span>
         </button>
+        <div class="sec-title" style="margin-top:8px">TILE COLLISION</div>
+        <div class="hint-text" style="margin-bottom:5px">
+          Painted by the Collision<br>tool (C) — overrides a<br>cell's own collision, on<br>top of whatever the tile<br>
+          normally is (e.g. a secret<br>passage through a wall).<br>Right-click erases.
+        </div>
+        <div class="tool-grid" style="grid-template-columns:1fr">
+          <button id="coll-solid" class="active" onclick="setCollBrush('solid')" title="Blocks the player, regardless of the tile underneath">Solid</button>
+          <button id="coll-over"                 onclick="setCollBrush('over')"  title="Walkable, regardless of the tile underneath">Walk-Over</button>
+          <button id="coll-under"                onclick="setCollBrush('under')" title="Walkable, regardless of the tile underneath">Walk-Under</button>
+        </div>
       </div>
 
       <div class="divider"></div>
@@ -701,12 +712,19 @@ let spawn = null;           // {col, row}
 let mapName = 'Custom Map';
 let objects = [];           // {col, row, sx, sy, sw, sh, solid, inter?, door?}
                             // door: id of the room this object teleports to
+let tileColl = {};          // sparse "col,row" -> 'solid'|'over'|'under' — a
+                            // per-cell collision override, independent of the
+                            // tile painted there (e.g. a secret passage through
+                            // a wall, or an invisible wall on open floor)
+const COLL_LABEL = { solid: 'Solid', over: 'Walk-Over', under: 'Walk-Under' };
+const COLL_TINT  = { solid: 'rgba(220,80,80,0.35)', over: 'rgba(90,200,120,0.35)', under: 'rgba(90,160,220,0.35)' };
 let zoom = 12;
 let panX = 0, panY = 0;
 let tool = 'select';
 let selTile = T.FLOOR;
 let selSprite = null;       // {sx, sy, sw, sh} in sheet tiles — the object brush
 let objPass = 'solid';      // 'solid' | 'over' | 'under' — collision mode for new objects
+let collBrush = 'solid';    // 'solid' | 'over' | 'under' — brush mode for the Collision tool
 let selPuzzle = null;       // puzzle id to attach to the next placed object
 let selDoor = null;         // 'door:roomId' to attach to the next placed object
                             // (both set = locked door: puzzle must be solved
@@ -795,7 +813,7 @@ function objAt(col, row) {
 // ── Rooms (editor tabs) ───────────────────────────────────────────────────────
 function makeRoom(name) {
   return { id: 'r' + (roomIdSeq++), name,
-           grid: makeGrid(), spawn: null, objects: [], special: '',
+           grid: makeGrid(), spawn: null, objects: [], special: '', tileColl: {},
            _hist: [], _histIdx: -1 };
 }
 
@@ -804,7 +822,7 @@ function makeRoom(name) {
 function syncRoomFromGlobals() {
   const r = rooms[curRoom];
   if (!r) return;
-  r.grid = grid; r.spawn = spawn; r.objects = objects;
+  r.grid = grid; r.spawn = spawn; r.objects = objects; r.tileColl = tileColl;
   r._hist = history; r._histIdx = histIdx;
 }
 
@@ -812,7 +830,7 @@ function syncRoomFromGlobals() {
 function bindRoom(i) {
   curRoom = i;
   const r = rooms[i];
-  grid = r.grid; spawn = r.spawn; objects = r.objects;
+  grid = r.grid; spawn = r.spawn; objects = r.objects; tileColl = r.tileColl || {};
   history = r._hist; histIdx = r._histIdx;
   clearSelection();
 }
@@ -1023,6 +1041,15 @@ function render() {
       ctx.lineTo(Math.min(W, gx + gw), y);
     }
     ctx.stroke();
+  }
+
+  // Tile collision overrides — sparse, so iterate the map directly instead
+  // of scanning the whole visible grid
+  for (const key in tileColl) {
+    const [c, r] = key.split(',').map(Number);
+    if (c < c0 || c > c1 || r < r0 || r > r1) continue;
+    ctx.fillStyle = COLL_TINT[tileColl[key]];
+    ctx.fillRect(c * zoom + panX, r * zoom + panY, zoom, zoom);
   }
 
   // Objects layer (above tiles)
@@ -1255,6 +1282,7 @@ function snapshot() {
     grid: cloneGrid(),
     spawn: spawn ? { ...spawn } : null,
     objects: objects.map(o => ({ ...o })),
+    tileColl: { ...tileColl },
   };
 }
 
@@ -1271,6 +1299,7 @@ function restoreSnapshot(s) {
   grid  = s.grid.map(r => r.slice());
   spawn = s.spawn ? { ...s.spawn } : null;
   objects = (s.objects || []).map(o => ({ ...o }));
+  tileColl = { ...(s.tileColl || {}) };
   clearSelection();   // the selected references were just replaced by clones
   syncRoomFromGlobals();
   updateInterList();
@@ -1303,6 +1332,21 @@ function applyTile(col, row, tileOverride) {
   const t = tileOverride !== undefined ? tileOverride : selTile;
   if (grid[row][col] === t) return false;
   grid[row][col] = t;
+  return true;
+}
+
+// mode is 'solid' | 'over' | 'under' to set an override, or null to erase it
+// (reverting the cell to its tile type's default collision)
+function applyTileColl(col, row, mode) {
+  if (!inBounds(col, row)) return false;
+  const key = col + ',' + row;
+  if (mode === null) {
+    if (!(key in tileColl)) return false;
+    delete tileColl[key];
+    return true;
+  }
+  if (tileColl[key] === mode) return false;
+  tileColl[key] = mode;
   return true;
 }
 
@@ -1348,7 +1392,7 @@ function autoWall() {
 function clearMap() {
   if (!confirm(`Clear the room "${rooms[curRoom].name}"? (Other rooms are kept.)`)) return;
   grid = makeGrid(); spawn = null;
-  objects = []; clearSelection(); updateInterList();
+  objects = []; tileColl = {}; clearSelection(); updateInterList();
   pushHistory(); render(); updateStatus();
 }
 
@@ -1449,7 +1493,8 @@ function setTool(t) {
 
 function updateCursor() {
   const map = { select: dragMove ? 'move' : 'default',
-                paint:'crosshair', fill:'copy', rect:'crosshair', spawn:'pointer', object:'copy' };
+                paint:'crosshair', fill:'copy', rect:'crosshair', spawn:'pointer', object:'copy',
+                coll:'crosshair' };
   canvas.style.cursor = spaceHeld ? (isPanning ? 'grabbing' : 'grab') : (map[tool] || 'crosshair');
 }
 
@@ -1531,6 +1576,7 @@ function toData() {
       grid: r.grid.map(row => row.slice()),
       spawn: r.spawn ? { ...r.spawn } : null,
       special: r.special || '',
+      tileColl: { ...(r.tileColl || {}) },
       objects: r.objects.map(o => {
         const c = { ...o };
         // Drop door attachments that dangle (room deleted, then undo re-added it)
@@ -1572,6 +1618,16 @@ function fromData(data) {
     while (room.grid.length < GRID_H) room.grid.push(new Array(GRID_W).fill(T.VOID));
     room.spawn = rm.spawn ? { col: +rm.spawn.col, row: +rm.spawn.row } : null;
     room.special = typeof rm.special === 'string' ? rm.special : '';
+    room.tileColl = {};
+    if (rm.tileColl && typeof rm.tileColl === 'object') {
+      for (const [key, mode] of Object.entries(rm.tileColl)) {
+        const m = /^(\d+),(\d+)$/.exec(key);
+        if (!m) continue;
+        const c = +m[1], r = +m[2];
+        if (!inBounds(c, r) || !['solid', 'over', 'under'].includes(mode)) continue;
+        room.tileColl[key] = mode;
+      }
+    }
     // Legacy shape objects (palm/pot/…) are no longer supported and get dropped
     room.objects = Array.isArray(rm.objects)
       ? rm.objects
@@ -2227,6 +2283,16 @@ canvas.addEventListener('mousedown', e => {
     pushHistory(); render(); return;
   }
 
+  if (tool === 'coll') {
+    if (!inBounds(col, row)) return;
+    painting   = true;
+    paintErase = erasing;
+    strokeMade = false;
+    lastCell   = { col, row };
+    if (applyTileColl(col, row, erasing ? null : collBrush)) strokeMade = true;
+    render(); return;
+  }
+
   if (tool === 'rect') {
     if (!inBounds(col, row)) return;
     rectStart  = { col, row };
@@ -2274,6 +2340,8 @@ canvas.addEventListener('mousemove', e => {
       cellTxt += ` · place @ ${fmtn(snapCoord(hoverCellF.col))}, ${fmtn(snapCoord(hoverCellF.row))}`;
     document.getElementById('stCell').textContent = cellTxt;
     let info = TILE_NAMES[grid[row][col]];
+    const ov = tileColl[col + ',' + row];
+    if (ov) info += ` · collision override: ${COLL_LABEL[ov]}`;
     const oi = objAt(hoverCellF.col, hoverCellF.row);
     if (oi !== -1) {
       const o = objects[oi];
@@ -2314,6 +2382,14 @@ canvas.addEventListener('mousemove', e => {
                    : (selSprite && placeObjectAt(pc, pr)))
       strokeMade = true;
     lastCell = { col: pc, row: pr };
+    render();
+    return;
+  }
+  if (tool === 'coll') {
+    if (lastCell && lastCell.col === col && lastCell.row === row) return;
+    if (!inBounds(col, row)) return;
+    if (applyTileColl(col, row, paintErase ? null : collBrush)) strokeMade = true;
+    lastCell = { col, row };
     render();
     return;
   }
@@ -2465,7 +2541,7 @@ window.addEventListener('keydown', e => {
   if (e.key === '[' && selectedObjs.size) { layerSelection(false); return; }
   if (e.key === ']' && selectedObjs.size) { layerSelection(true);  return; }
 
-  const toolMap = { v:'select', b:'paint', g:'fill', r:'rect', s:'spawn' };
+  const toolMap = { v:'select', b:'paint', g:'fill', r:'rect', s:'spawn', c:'coll' };
   if (toolMap[e.key.toLowerCase()]) { setTool(toolMap[e.key.toLowerCase()]); return; }
 
   if (e.key.toLowerCase() === 't') { openTileset(); return; }
@@ -2879,6 +2955,12 @@ function setObjPass(v) {
     }
     if (changed) { pushHistory(); render(); }
   }
+}
+
+function setCollBrush(v) {
+  collBrush = v;
+  for (const m of ['solid', 'over', 'under'])
+    document.getElementById('coll-' + m).classList.toggle('active', v === m);
 }
 
 function setPlaceSnap(s) {
