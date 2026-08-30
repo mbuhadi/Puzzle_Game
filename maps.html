@@ -283,6 +283,7 @@ let currentSeed = parseInt(localStorage.getItem('map1seed')) || DEFAULT_SEED;
 
 // ── Map generation (Arabian riad with central courtyard) ──────────────────────
 let mapGrid = null;
+let mapSubgrid = {};   // sub-cell tile overrides for the active room (custom maps only)
 
 function fillRect(grid, x, y, w, h, type) {
   for (let ry = y; ry < y + h; ry++)
@@ -423,7 +424,10 @@ function generateRiad(seed) {
 function walkable(x, y) {
   const col = Math.floor(x), row = Math.floor(y);
   if (row < 0 || row >= GRID_H || col < 0 || col >= GRID_W) return false;
-  const t = mapGrid[row][col];
+  const sub = mapSubgrid[row + ',' + col];
+  const t = sub
+    ? sub[Math.min(3, Math.floor((y - row) * 4)) * 4 + Math.min(3, Math.floor((x - col) * 4))]
+    : mapGrid[row][col];
   if (WALKABLE_TILES.has(t)) return true;
   for (const r of FLOOR_RECTS)
     if (x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1) return true;
@@ -717,6 +721,30 @@ function drawTile(t, px, py) {
   }
 }
 
+// A cell split by Placement-Snap tile painting — 16 tile indices, 4x4, each
+// drawn at a quarter of a normal tile. Only custom textures (indices 9+) and
+// VOID (skipped, background shows through) ever appear here.
+function drawSubTile(sub, px, py) {
+  const qs = TILE_PX / 4;
+  ctx.imageSmoothingEnabled = false;
+  const wt = performance.now() / 1000;
+  for (let qr = 0; qr < 4; qr++)
+    for (let qc = 0; qc < 4; qc++) {
+      const st = sub[qr * 4 + qc];
+      if (st === T.VOID) continue;
+      const tile = CUSTOM_TILE_LIST[st - CUSTOM_TILE_BASE_INDEX];
+      const tex = tile && getCustomTileCanvas(st);
+      if (!tex) continue;
+      const qx = px + qc * qs, qy = py + qr * qs;
+      ctx.drawImage(tex, 0, 0, 16, 16, qx, qy, qs, qs);
+      if (tile.category === 'water') {
+        const shimmer = 0.10 + 0.07 * Math.sin(qx * 0.25 + wt * 1.8) * Math.cos(qy * 0.25 + wt * 1.3);
+        ctx.fillStyle = `rgba(200,235,255,${shimmer.toFixed(3)})`;
+        ctx.fillRect(qx+1, qy+1, qs-2, qs-2);
+      }
+    }
+}
+
 function drawObject(o, px, py) {
   const S = TILE_PX;
   if (o.sw) {
@@ -972,8 +1000,11 @@ function render() {
   const r1 = Math.min(GRID_H, r0 + Math.ceil(VIEWPORT_H / TILE_PX) + 2);
 
   for (let r = r0; r < r1; r++)
-    for (let c = c0; c < c1; c++)
-      drawTile(mapGrid[r][c], c*TILE_PX, r*TILE_PX);
+    for (let c = c0; c < c1; c++) {
+      const sub = mapSubgrid[r + ',' + c];
+      if (sub) drawSubTile(sub, c*TILE_PX, r*TILE_PX);
+      else drawTile(mapGrid[r][c], c*TILE_PX, r*TILE_PX);
+    }
 
   // Objects layer (above tiles, below interactables and player);
   // walk-under objects are held back and drawn over the player instead
@@ -1082,6 +1113,7 @@ ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 
 function applyMap(result, seed) {
   mapGrid  = result.grid;
+  mapSubgrid = {};
   player.x = result.start.x;
   player.y = result.start.y;
   document.getElementById('sqftLabel').textContent =
@@ -1144,6 +1176,7 @@ function enterRoom(idx, px, py) {
   const rm = ROOMS[idx];
   curRoomIdx = idx;
   mapGrid = rm.grid;
+  mapSubgrid = rm.subgrid || {};
   OBJECTS.length = 0;
   for (const o of rm.objects) OBJECTS.push(o);
   rebuildObjSolid();
@@ -1177,10 +1210,24 @@ function loadCustomData(_data, resume) {
       return r;
     });
     while (g.length < GRID_H) g.push(new Array(GRID_W).fill(T.VOID));
+    // Sub-cell tile overrides from the Map Studio's Placement Snap painting —
+    // sparse "row,col" -> [16 tile indices], a 4x4 split of that one cell
+    const sg = {};
+    if (rm.subgrid && typeof rm.subgrid === 'object') {
+      for (const key in rm.subgrid) {
+        const m = /^(\d+),(\d+)$/.exec(key);
+        const cell = rm.subgrid[key];
+        if (!m || !Array.isArray(cell) || cell.length !== 16) continue;
+        const r = +m[1], c = +m[2];
+        if (r < 0 || r >= GRID_H || c < 0 || c >= GRID_W) continue;
+        sg[key] = cell.map(Number);
+      }
+    }
     parsed.push({
       id: typeof rm.id === 'string' ? rm.id : 'r' + (parsed.length + 1),
       name: (typeof rm.name === 'string' && rm.name.trim()) ? rm.name.trim() : 'Room ' + (parsed.length + 1),
       grid: g,
+      subgrid: sg,
       spawn: rm.spawn ? { col: +rm.spawn.col, row: +rm.spawn.row } : null,
       objects: sanitizeObjects(rm.objects),
       // Per-room special instructions from Map Studio — no runtime behavior
