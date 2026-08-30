@@ -350,11 +350,14 @@ select:focus { outline: none; border-color: var(--gold-dim); }
     <button onclick="exportJSON()">Export</button>
     <label class="btn-like">Import<input type="file" id="fileInput" accept=".json" onchange="importJSON(event)"></label>
     <div class="tb-sep"></div>
-    <button onclick="autoWall()" title="Fill VOID tiles adjacent to floor/water with WALL">Auto-Wall</button>
     <button class="danger" onclick="clearMap()">Clear</button>
     <div class="tb-sep"></div>
     <button class="play" onclick="playMap()">▶ Play Map</button>
     <button class="play-dev" onclick="playMap(true)" title="Play with a Skip button injected into every puzzle, so puzzle-locked doors can be tested without solving them">⏩ Play (Dev Skip)</button>
+    <div style="margin-left:auto; display:flex; align-items:center; gap:6px;">
+      <span class="tb-title" style="margin-right:0; font-size:9px;">THEME</span>
+      <select id="themeSelect" onchange="applyTheme(this.value); this.blur()"></select>
+    </div>
   </div>
 
   <!-- Room tabs -->
@@ -455,13 +458,10 @@ select:focus { outline: none; border-color: var(--gold-dim); }
       <!-- View -->
       <div>
         <div class="sec-title">VIEW</div>
-        <button id="btnGrid" class="active" onclick="toggleGrid()" style="width:100%;margin-bottom:5px">Grid: On</button>
         <button id="btnPView" onclick="togglePView()" style="width:100%;margin-bottom:5px"
                 title="Show the area the game camera displays around the player — follows the cursor, or sits on the spawn point">Player View: Off</button>
         <div class="zoom-row">
-          <button onclick="adjustZoom(0.667)" title="Zoom out">−</button>
           <span id="zoomLabel">12px</span>
-          <button onclick="adjustZoom(1.5)" title="Zoom in">+</button>
           <button onclick="fitGrid()" title="Fit grid to window" style="font-size:10px;padding:3px 5px">Fit</button>
         </div>
       </div>
@@ -475,14 +475,6 @@ select:focus { outline: none; border-color: var(--gold-dim); }
           <button id="btnUndo" onclick="undo()" disabled title="Ctrl+Z">Undo</button>
           <button id="btnRedo" onclick="redo()" disabled title="Ctrl+Y">Redo</button>
         </div>
-      </div>
-
-      <div class="divider"></div>
-
-      <!-- Theme -->
-      <div>
-        <div class="sec-title">THEME</div>
-        <select id="themeSelect" onchange="applyTheme(this.value); this.blur()"></select>
       </div>
 
     </div><!-- /sidebar -->
@@ -616,11 +608,10 @@ CUSTOM_TILE_LIST.forEach(def => {
   TILE_COLORS[def.index] = def.base;
   TILE_NAMES[def.index]  = def.name;
 });
-// Tile types the player can stand on — used by autoWall/dead-end checks here
+// Tile types the player can stand on — used by dead-end checks here
 // and mirrored by walkable() in maps.html (the actual game runtime)
 const WALKABLE_TILES = new Set([T.FLOOR, T.COURTYARD, T.GRASS, T.TERRACOTTA, T.STONE, T.RUG,
   ...CUSTOM_TILE_LIST.filter(d => d.category === 'floor').map(d => d.index)]);
-const CUSTOM_WATER_INDICES = CUSTOM_TILE_LIST.filter(d => d.category === 'water').map(d => d.index);
 
 // ── Themes ────────────────────────────────────────────────────────────────────
 // Studio chrome only — tile and sprite colours stay true to the game. Each
@@ -725,7 +716,6 @@ let selDoor = null;         // 'door:roomId' to attach to the next placed object
 let selRemoveOnSolve = false; // removeOnSolve flag for the next placed object
                             // (puzzle attached, no door: opens an in-room
                             // passage by disappearing once solved)
-let showGrid = true;
 let showPView = false;      // player-view overlay: outline of the game camera
 // Game camera size in tiles — VIEWPORT_W/H ÷ TILE_PX from maps.html (800×520 @ 32px)
 const PVIEW_W = 800 / 32, PVIEW_H = 520 / 32;
@@ -1023,7 +1013,7 @@ function render() {
   }
 
   // Grid lines
-  if (showGrid && zoom >= 6) {
+  if (zoom >= 6) {
     ctx.beginPath();
     ctx.strokeStyle = CANVAS_THEME.gridLine;
     ctx.lineWidth = 0.5;
@@ -1365,24 +1355,6 @@ function floodFill(col, row, newTile) {
   }
 }
 
-// ── Auto-wall ─────────────────────────────────────────────────────────────────
-function autoWall() {
-  const walkable = new Set([...WALKABLE_TILES, T.WATER, ...CUSTOM_WATER_INDICES]);
-  let changed = false;
-  for (let r = 0; r < GRID_H; r++) {
-    for (let c = 0; c < GRID_W; c++) {
-      if (grid[r][c] !== T.VOID) continue;
-      for (const [dc, dr] of [[1,0],[-1,0],[0,1],[0,-1]]) {
-        const nc = c + dc, nr = r + dr;
-        if (inBounds(nc, nr) && walkable.has(grid[nr][nc])) {
-          grid[r][c] = T.WALL; changed = true; break;
-        }
-      }
-    }
-  }
-  if (changed) { pushHistory(); render(); }
-}
-
 // ── Map ops ───────────────────────────────────────────────────────────────────
 function clearMap() {
   if (!confirm(`Clear the room "${rooms[curRoom].name}"? (Other rooms are kept.)`)) return;
@@ -1503,14 +1475,6 @@ function updateCursor() {
 }
 
 // ── View ──────────────────────────────────────────────────────────────────────
-function toggleGrid() {
-  showGrid = !showGrid;
-  const btn = document.getElementById('btnGrid');
-  btn.textContent = 'Grid: ' + (showGrid ? 'On' : 'Off');
-  btn.classList.toggle('active', showGrid);
-  render();
-}
-
 function togglePView() {
   showPView = !showPView;
   const btn = document.getElementById('btnPView');
@@ -1528,10 +1492,6 @@ function zoomAt(cx, cy, factor) {
   zoom = newZoom;
   updateZoomLabel();
   render();
-}
-
-function adjustZoom(factor) {
-  zoomAt(canvas.width / 2, canvas.height / 2, factor);
 }
 
 function fitGrid() {
