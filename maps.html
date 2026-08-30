@@ -1019,11 +1019,16 @@ function render() {
     if (o.under) drawObject(o, o.col*TILE_PX, o.row*TILE_PX);
   // Walk-under tile overrides — redraw that same cell's tile a second time,
   // now over the player, so a roof/canopy tile reads as something the
-  // player passes beneath rather than just another walkable floor tile
+  // player passes beneath rather than just another walkable floor tile.
+  // Skip cells a regular object also occupies — the tile should occlude the
+  // player, not objects that are already drawn in front of it as normal.
   for (const key in tileColl) {
     if (tileColl[key] !== 'under') continue;
     const [c, r] = key.split(',').map(Number);
     if (c < c0 || c >= c1 || r < r0 || r >= r1) continue;
+    const coveredByObject = OBJECTS.some(o => !o.under &&
+      o.col <= c && c < o.col + (o.sw || 1) && o.row <= r && r < o.row + (o.sh || 1));
+    if (coveredByObject) continue;
     drawTile(mapGrid[r][c], c*TILE_PX, r*TILE_PX);
   }
   drawThoughtBubble();   // world space — drawn above player, inside translate
