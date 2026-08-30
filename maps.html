@@ -161,6 +161,7 @@
   </div>
 </div>
 
+<script src="assets/custom_tiles.js"></script>
 <script src="puzzles_curated_data.js"></script>
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -174,7 +175,11 @@ const GRID_W        = 144;
 const GRID_H        = 120;
 
 const T = { VOID:0, FLOOR:1, WALL:2, WATER:3, COURTYARD:4, GRASS:5, TERRACOTTA:6, STONE:7, RUG:8 };
-const WALKABLE_TILES = new Set([T.FLOOR, T.COURTYARD, T.GRASS, T.TERRACOTTA, T.STONE, T.RUG]);
+// The 30 textured floor/wall/water tiles painted from the Map Studio's tile
+// picker (assets/custom_tiles.js) extend the classic set above at indices 9-38.
+CUSTOM_TILE_LIST.forEach(def => { T[def.key] = def.index; });
+const WALKABLE_TILES = new Set([T.FLOOR, T.COURTYARD, T.GRASS, T.TERRACOTTA, T.STONE, T.RUG,
+  ...CUSTOM_TILE_LIST.filter(d => d.category === 'floor').map(d => d.index)]);
 
 // ── Riad house layout parameters (organic rooms, ~4k sq ft) ──────────────────
 const COURT_X = 27, COURT_Y = 19;   // courtyard top-left anchor
@@ -689,6 +694,24 @@ function drawTile(t, px, py) {
       // Tiny specular glint
       ctx.fillStyle = 'rgba(200,240,255,0.25)';
       ctx.fillRect(px+6, py+5, 4, 2);
+      break;
+    }
+
+    default: {
+      // Custom Map Studio tile (indices 9+, assets/custom_tiles.js) — a
+      // 16×16 pixel-art texture scaled up to the map's 32px tiles.
+      const tile = CUSTOM_TILE_LIST[t - CUSTOM_TILE_BASE_INDEX];
+      const tex = tile && getCustomTileCanvas(t);
+      if (!tex) break;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(tex, 0, 0, 16, 16, px, py, S, S);
+      if (tile.category === 'water') {
+        // Same soft shimmer as the classic pond water, layered on top
+        const wt = performance.now() / 1000;
+        const shimmer = 0.10 + 0.07 * Math.sin(px * 0.25 + wt * 1.8) * Math.cos(py * 0.25 + wt * 1.3);
+        ctx.fillStyle = `rgba(200,235,255,${shimmer.toFixed(3)})`;
+        ctx.fillRect(px+2, py+2, S-4, S-4);
+      }
       break;
     }
   }
