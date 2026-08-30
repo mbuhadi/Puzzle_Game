@@ -66,12 +66,17 @@ function diagLine(ctx, x0, y0, len, dx, dy, color, w) {
 // 1px highlight along each course's top edge.
 function bricks(ctx, opt) {
   const bw = opt.bw, bh = opt.bh, mortar = opt.mortar, highlight = opt.highlight;
+  // Every course-top and brick-side line must be drawn even at x=0/y=0 — a
+  // tile's top/left edge is exactly where the *next* identical tile's
+  // bottom/right edge butts up against it. Skipping the edge (as opposed to
+  // only the internal joints) leaves that one seam with no mortar at all,
+  // which shows up as a visible break wherever the tile repeats.
   for (let row = 0, y = 0; y < 16; row++, y += bh) {
     const off = (row % 2) ? (bw >> 1) : 0;
-    if (highlight) rect(ctx, 0, y, 16, 1, highlight);
+    rect(ctx, 0, y, 16, 1, highlight || mortar);
     for (let x = off - bw; x < 16; x += bw) {
       const vx = x + bw;
-      if (vx > 0 && vx < 16) rect(ctx, vx, y, 1, Math.min(bh, 16 - y), mortar);
+      if (vx >= 0 && vx < 16) rect(ctx, vx, y, 1, Math.min(bh, 16 - y), mortar);
     }
   }
   for (let y = bh; y < 16; y += bh) rect(ctx, 0, y, 16, 1, mortar);
