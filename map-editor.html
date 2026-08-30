@@ -495,6 +495,15 @@ select:focus { outline: none; border-color: var(--gold-dim); }
           </div>
           <div id="animStage">
             <canvas id="animCanvas" width="0" height="0"></canvas>
+            <div id="animModeRow" style="display:flex; align-items:center; gap:6px;">
+              <button id="animMode-anim" class="active" onclick="setAnimMode('anim')" style="font-size:10px;padding:3px 9px">Animation</button>
+              <button id="animMode-static" onclick="setAnimMode('static')" style="font-size:10px;padding:3px 9px">Static</button>
+              <span id="animFrameStep" style="display:none; align-items:center; gap:4px;">
+                <button onclick="stepStaticFrame(-1)" title="Previous frame" style="font-size:10px;padding:3px 7px">◀</button>
+                <span id="animFrameLabel" class="hint-text" style="min-width:32px;text-align:center">1 / 1</span>
+                <button onclick="stepStaticFrame(1)" title="Next frame" style="font-size:10px;padding:3px 7px">▶</button>
+              </span>
+            </div>
             <div id="animInfo" class="hint-text">pick an animation from the list</div>
             <div class="hint-text">drag on the preview to crop tiles · full frame preselected</div>
           </div>
@@ -2708,12 +2717,18 @@ function clearSpriteBrush() {
 function tsUse() {
   if (tsSheet === 'animated') {
     if (!animSel || !animPick) return;
-    const d = animSel;
+    const d = animSel, isStatic = animMode === 'static';
     selSprite = {
       sw: animPick.w / SHEET_TILE, sh: animPick.h / SHEET_TILE,
       name: d.n,
-      anim: { src: d.src, x: animPick.x, y: animPick.y, w: animPick.w, h: animPick.h,
-              stride: d.w, frames: d.frames, ms: d.ms, once: !!d.once },
+      // Static reuses the same anim shape with frames:1, offset to the chosen
+      // frame — animFrameIdx() (maps.html) always lands on index 0 % 1, so it
+      // never advances. No runtime changes needed for it to render as frozen.
+      anim: isStatic
+        ? { src: d.src, x: animPick.x + staticFrame * d.w, y: animPick.y,
+            w: animPick.w, h: animPick.h, stride: d.w, frames: 1, ms: d.ms, once: false }
+        : { src: d.src, x: animPick.x, y: animPick.y, w: animPick.w, h: animPick.h,
+            stride: d.w, frames: d.frames, ms: d.ms, once: !!d.once },
     };
     // Sensible collision defaults: water is swimmable-over, doors block until used
     if (d.cat === 'Water & Terrain') setObjPass('over');
@@ -2737,6 +2752,8 @@ const animCanvasEl = document.getElementById('animCanvas');
 const animCtx = animCanvasEl.getContext('2d');
 let animSel = null;         // selected ANIM_LIST entry
 let animPick = null;        // {x, y, w, h} px crop within one frame
+let animMode = 'anim';      // 'anim' (loops in-game) | 'static' (one frozen frame)
+let staticFrame = 0;        // which frame index 'static' mode freezes on
 let animScale = 4;
 let animDragStart = null;   // {tx, ty} crop-drag anchor in frame tiles
 let animListQuery = null;
@@ -2810,12 +2827,14 @@ document.getElementById('animSearch').addEventListener('input', buildAnimList);
 function selectAnim(def, itemEl) {
   animSel = def;
   animPick = { x: 0, y: 0, w: def.w, h: def.h };   // full frame preselected
+  staticFrame = 0;
   animScale = Math.max(2, Math.min(8, Math.floor(288 / Math.max(def.w, def.h))));
   animCanvasEl.width  = def.w * animScale;
   animCanvasEl.height = def.h * animScale;
   document.querySelectorAll('.anim-item').forEach(el =>
     el.classList.toggle('active', el === itemEl));
   animUpdateSel();
+  refreshAnimModeUI();
   drawAnimStage();
 }
 
@@ -2828,13 +2847,42 @@ function animUpdateSel() {
     (animSel.once ? 'plays once on E (door-style)' : 'loops forever');
 }
 
+// Animation places the full loop (or the once-off swing); Static freezes on
+// one chosen frame — same anim data, just frames:1 so it never advances
+function setAnimMode(m) {
+  animMode = m;
+  refreshAnimModeUI();
+  drawAnimStage();
+}
+
+function refreshAnimModeUI() {
+  document.getElementById('animMode-anim').classList.toggle('active', animMode === 'anim');
+  document.getElementById('animMode-static').classList.toggle('active', animMode === 'static');
+  document.getElementById('animFrameStep').style.display = animMode === 'static' ? 'inline-flex' : 'none';
+  updateStaticFrameLabel();
+}
+
+function updateStaticFrameLabel() {
+  if (!animSel) return;
+  document.getElementById('animFrameLabel').textContent = (staticFrame + 1) + ' / ' + animSel.frames;
+}
+
+function stepStaticFrame(dir) {
+  if (!animSel) return;
+  staticFrame = (staticFrame + dir + animSel.frames) % animSel.frames;
+  updateStaticFrameLabel();
+  drawAnimStage();
+}
+
 function drawAnimStage() {
   if (!animSel) return;
   const d = animSel, im = stripImg(d.src);
   const W = animCanvasEl.width, H = animCanvasEl.height;
   animCtx.clearRect(0, 0, W, H);
   if (im.complete && im.naturalWidth) {
-    const idx = Math.floor(performance.now() / d.ms) % d.frames;
+    const idx = animMode === 'static'
+      ? Math.min(staticFrame, d.frames - 1)
+      : Math.floor(performance.now() / d.ms) % d.frames;
     animCtx.imageSmoothingEnabled = false;
     animCtx.drawImage(im, idx * d.w, 0, d.w, d.h, 0, 0, W, H);
   }
@@ -2907,7 +2955,7 @@ function updateBrushPreview() {
     if (im.complete && im.naturalWidth) draw();
     else im.addEventListener('load', draw, { once: true });
     document.getElementById('brushLabel').textContent =
-      `${sw}×${sh} · ${selSprite.name} · ${a.frames} frames`;
+      `${sw}×${sh} · ${selSprite.name} · ${a.frames === 1 ? 'static frame' : a.frames + ' frames'}`;
     return;
   }
   const sheet = sheetOf(selSprite);
