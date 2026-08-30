@@ -883,16 +883,14 @@ function drawThoughtBubble() {
 }
 
 // "[E]" prompt in the same colour as the interactable frame, centered on a
-// bottom-right corner (world px). No fill behind it — a dark text outline
-// keeps it readable over any sprite instead of a solid backing pill.
+// bottom-right corner (world px). No stroke/backing behind it — just the
+// glyph, with a soft shadow so it stays legible over busy sprites.
 function drawInteractBadge(cornerX, cornerY, rgb) {
   ctx.save();
   ctx.font = 'bold 11px monospace';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.lineJoin = 'round';
-  ctx.strokeStyle = 'rgba(8,16,10,0.8)';
-  ctx.lineWidth = 3;
-  ctx.strokeText('[E]', cornerX, cornerY + 0.5);
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowBlur = 3;
   ctx.fillStyle = `rgb(${rgb})`;
   ctx.fillText('[E]', cornerX, cornerY + 0.5);
   ctx.restore();
