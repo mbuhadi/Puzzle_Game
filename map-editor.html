@@ -410,10 +410,9 @@ select:focus { outline: none; border-color: var(--gold-dim); }
         <div class="sec-title" style="margin-top:8px">PLACEMENT SNAP</div>
         <div class="tool-grid" style="grid-template-columns:repeat(3,1fr)">
           <button id="snap-1" class="active" onclick="setPlaceSnap(1)"    title="Snap to whole tiles">1</button>
-          <button id="snap-2"                onclick="setPlaceSnap(0.5)"  title="Snap to half tiles — also lets Paint split a Floor/Wall/Water tile into halves">½</button>
-          <button id="snap-4"                onclick="setPlaceSnap(0.25)" title="Snap to quarter tiles — also lets Paint split a Floor/Wall/Water tile into quarters">¼</button>
+          <button id="snap-2"                onclick="setPlaceSnap(0.5)"  title="Snap to half tiles">½</button>
+          <button id="snap-4"                onclick="setPlaceSnap(0.25)" title="Snap to quarter tiles">¼</button>
         </div>
-        <div class="hint-text" style="margin-top:4px" id="snapTileHint"></div>
         <div class="sec-title" style="margin-top:8px">LAYER</div>
         <div class="tool-grid" style="grid-template-columns:1fr 1fr">
           <button onclick="layerSelection(false)" title="Send the selected object(s) behind overlapping objects — shortcut [">Behind</button>
@@ -689,9 +688,6 @@ let curRoom = 0;
 let roomIdSeq = 1;          // map-wide unique room ids: r1, r2, …
 
 let grid = makeGrid();
-let subgrid = {};           // sub-cell overrides for Placement Snap tile painting —
-                            // sparse "row,col" -> [16 tile indices] (4x4 within
-                            // that one cell), only for cells painted at <1 snap
 let spawn = null;           // {col, row}
 let mapName = 'Custom Map';
 let objects = [];           // {col, row, sx, sy, sw, sh, solid, inter?, door?}
@@ -787,7 +783,7 @@ function objAt(col, row) {
 // ── Rooms (editor tabs) ───────────────────────────────────────────────────────
 function makeRoom(name) {
   return { id: 'r' + (roomIdSeq++), name,
-           grid: makeGrid(), subgrid: {}, spawn: null, objects: [], special: '',
+           grid: makeGrid(), spawn: null, objects: [], special: '',
            _hist: [], _histIdx: -1 };
 }
 
@@ -796,7 +792,7 @@ function makeRoom(name) {
 function syncRoomFromGlobals() {
   const r = rooms[curRoom];
   if (!r) return;
-  r.grid = grid; r.subgrid = subgrid; r.spawn = spawn; r.objects = objects;
+  r.grid = grid; r.spawn = spawn; r.objects = objects;
   r._hist = history; r._histIdx = histIdx;
 }
 
@@ -804,7 +800,7 @@ function syncRoomFromGlobals() {
 function bindRoom(i) {
   curRoom = i;
   const r = rooms[i];
-  grid = r.grid; subgrid = r.subgrid || (r.subgrid = {}); spawn = r.spawn; objects = r.objects;
+  grid = r.grid; spawn = r.spawn; objects = r.objects;
   history = r._hist; histIdx = r._histIdx;
   clearSelection();
 }
@@ -987,20 +983,6 @@ function render() {
   for (let r = r0; r <= r1; r++) {
     for (let c = c0; c <= c1; c++) {
       const x = c * zoom + panX, y = r * zoom + panY;
-      const sub = subgrid[subKey(r, c)];
-      if (sub) {
-        const qz = zoom / 4;
-        for (let qr = 0; qr < 4; qr++)
-          for (let qc = 0; qc < 4; qc++) {
-            const st = sub[qr * 4 + qc];
-            if (st === T.VOID) continue;
-            const qx = x + qc * qz, qy = y + qr * qz;
-            const qtex = getCustomTileCanvas(st);
-            if (qtex) ctx.drawImage(qtex, 0, 0, 16, 16, qx, qy, qz, qz);
-            else { ctx.fillStyle = TILE_COLORS[st]; ctx.fillRect(qx, qy, qz, qz); }
-          }
-        continue;
-      }
       const t = grid[r][c];
       if (t === T.VOID) continue; // background handles void colour
       const tex = t >= CUSTOM_TILE_BASE_INDEX ? getCustomTileCanvas(t) : null;
@@ -1256,16 +1238,9 @@ function drawCollisionOutline(o, x, y, fw, fh) {
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
-function cloneSubgrid(sg) {
-  const out = {};
-  for (const k in (sg || subgrid)) out[k] = (sg || subgrid)[k].slice();
-  return out;
-}
-
 function snapshot() {
   return {
     grid: cloneGrid(),
-    subgrid: cloneSubgrid(),
     spawn: spawn ? { ...spawn } : null,
     objects: objects.map(o => ({ ...o })),
   };
@@ -1282,7 +1257,6 @@ function pushHistory() {
 
 function restoreSnapshot(s) {
   grid  = s.grid.map(r => r.slice());
-  subgrid = cloneSubgrid(s.subgrid || {});
   spawn = s.spawn ? { ...s.spawn } : null;
   objects = (s.objects || []).map(o => ({ ...o }));
   clearSelection();   // the selected references were just replaced by clones
@@ -1312,55 +1286,12 @@ function updateHistBtns() {
 }
 
 // ── Painting ──────────────────────────────────────────────────────────────────
-// A whole-cell paint always wins outright — any sub-cell mix painted into
-// that cell (see applyTileAt below) is discarded along with it.
-function subKey(row, col) { return row + ',' + col; }
-
 function applyTile(col, row, tileOverride) {
   if (!inBounds(col, row)) return false;
   const t = tileOverride !== undefined ? tileOverride : selTile;
-  const key = subKey(row, col);
-  const hadSub = !!subgrid[key];
-  if (grid[row][col] === t && !hadSub) return false;
+  if (grid[row][col] === t) return false;
   grid[row][col] = t;
-  if (hadSub) delete subgrid[key];
   return true;
-}
-
-// Paints (or, for VOID, erases) one Placement-Snap-sized patch at the exact
-// fractional (colF, rowF) — used by the Paint brush only. Sub-cell precision
-// only ever applies to the 30 textured Floor/Wall/Water tiles (they're the
-// only ones with per-quadrant rendering, in both the editor and the game);
-// every classic "Extra" tile always fills the whole cell, same as before.
-// Erasing (VOID) gets sub-cell precision too, but only into a cell that's
-// already a custom tile or already split — carving a void notch out of
-// something, not deleting an untouched classic tile one quadrant at a time.
-function applyTileAt(colF, rowF, tile) {
-  const wholeSnap = placeSnap >= 1;
-  const sc = wholeSnap ? Math.floor(colF) : snapCoord(colF);
-  const sr = wholeSnap ? Math.floor(rowF) : snapCoord(rowF);
-  const col = Math.floor(sc), row = Math.floor(sr);
-  if (!inBounds(col, row)) return false;
-
-  const key = subKey(row, col);
-  const erasing = tile === T.VOID;
-  const subOK = !wholeSnap && (erasing
-    ? (subgrid[key] || grid[row][col] >= CUSTOM_TILE_BASE_INDEX)
-    : tile >= CUSTOM_TILE_BASE_INDEX);
-  if (!subOK) return applyTile(col, row, tile);
-
-  let cell = subgrid[key];
-  if (!cell) cell = subgrid[key] = new Array(16).fill(grid[row][col]);
-  const qSize = Math.round(placeSnap * 4);      // 1 quadrant for ¼ snap, 2 for ½
-  const qc0 = Math.round((sc - col) * 4), qr0 = Math.round((sr - row) * 4);
-  let changed = false;
-  for (let qr = qr0; qr < qr0 + qSize; qr++)
-    for (let qc = qc0; qc < qc0 + qSize; qc++) {
-      const i = qr * 4 + qc;
-      if (cell[i] !== tile) { cell[i] = tile; changed = true; }
-    }
-  if (cell.every(v => v === cell[0])) { grid[row][col] = cell[0]; delete subgrid[key]; }
-  return changed;
 }
 
 function floodFill(col, row, newTile) {
@@ -1372,7 +1303,6 @@ function floodFill(col, row, newTile) {
   while (queue.length) {
     const [c, r] = queue.shift();
     grid[r][c] = newTile;
-    delete subgrid[subKey(r, c)];
     for (const [dc, dr] of [[1,0],[-1,0],[0,1],[0,-1]]) {
       const nc = c + dc, nr = r + dr;
       const key = nr * GRID_W + nc;
@@ -1405,7 +1335,7 @@ function autoWall() {
 // ── Map ops ───────────────────────────────────────────────────────────────────
 function clearMap() {
   if (!confirm(`Clear the room "${rooms[curRoom].name}"? (Other rooms are kept.)`)) return;
-  grid = makeGrid(); subgrid = {}; spawn = null;
+  grid = makeGrid(); spawn = null;
   objects = []; clearSelection(); updateInterList();
   pushHistory(); render(); updateStatus();
 }
@@ -1584,27 +1514,18 @@ function toData() {
     version: 2,
     name: mapName,
     startRoom: startRoomIndex(),
-    rooms: rooms.map(r => {
-      const room = {
-        id: r.id, name: r.name,
-        grid: r.grid.map(row => row.slice()),
-        spawn: r.spawn ? { ...r.spawn } : null,
-        special: r.special || '',
-        objects: r.objects.map(o => {
-          const c = { ...o };
-          // Drop door attachments that dangle (room deleted, then undo re-added it)
-          if (c.door && !roomIds.has(c.door)) delete c.door;
-          return c;
-        }),
-      };
-      // Sub-cell tile overrides from Placement-Snap painting — sparse, so
-      // only written out for rooms that actually have any
-      if (r.subgrid && Object.keys(r.subgrid).length) {
-        room.subgrid = {};
-        for (const k in r.subgrid) room.subgrid[k] = r.subgrid[k].slice();
-      }
-      return room;
-    }),
+    rooms: rooms.map(r => ({
+      id: r.id, name: r.name,
+      grid: r.grid.map(row => row.slice()),
+      spawn: r.spawn ? { ...r.spawn } : null,
+      special: r.special || '',
+      objects: r.objects.map(o => {
+        const c = { ...o };
+        // Drop door attachments that dangle (room deleted, then undo re-added it)
+        if (c.door && !roomIds.has(c.door)) delete c.door;
+        return c;
+      }),
+    })),
   };
 }
 
@@ -1637,17 +1558,6 @@ function fromData(data) {
       return r;
     });
     while (room.grid.length < GRID_H) room.grid.push(new Array(GRID_W).fill(T.VOID));
-    room.subgrid = {};
-    if (rm.subgrid && typeof rm.subgrid === 'object') {
-      for (const key in rm.subgrid) {
-        const m = /^(\d+),(\d+)$/.exec(key);
-        const cell = rm.subgrid[key];
-        if (!m || !Array.isArray(cell) || cell.length !== 16) continue;
-        const r = +m[1], c = +m[2];
-        if (!inBounds(c, r)) continue;
-        room.subgrid[key] = cell.map(Number);
-      }
-    }
     room.spawn = rm.spawn ? { col: +rm.spawn.col, row: +rm.spawn.row } : null;
     room.special = typeof rm.special === 'string' ? rm.special : '';
     // Legacy shape objects (palm/pot/…) are no longer supported and get dropped
@@ -2320,8 +2230,8 @@ canvas.addEventListener('mousedown', e => {
   lastCell   = null;
 
   if (inBounds(col, row)) {
-    if (applyTileAt(cellF.col, cellF.row, erasing ? T.VOID : selTile)) strokeMade = true;
-    lastCell = placeSnap < 1 ? { col: snapCoord(cellF.col), row: snapCoord(cellF.row) } : { col, row };
+    if (applyTile(col, row, erasing ? T.VOID : undefined)) strokeMade = true;
+    lastCell = { col, row };
     render();
   }
 });
@@ -2344,11 +2254,7 @@ canvas.addEventListener('mousemove', e => {
     if (tool === 'object' && placeSnap < 1)
       cellTxt += ` · place @ ${fmtn(snapCoord(hoverCellF.col))}, ${fmtn(snapCoord(hoverCellF.row))}`;
     document.getElementById('stCell').textContent = cellTxt;
-    const sub = subgrid[subKey(row, col)];
-    let info = sub
-      ? TILE_NAMES[sub[Math.min(3, Math.floor((hoverCellF.row - row) * 4)) * 4 +
-                       Math.min(3, Math.floor((hoverCellF.col - col) * 4))]] + ' (split)'
-      : TILE_NAMES[grid[row][col]];
+    let info = TILE_NAMES[grid[row][col]];
     const oi = objAt(hoverCellF.col, hoverCellF.row);
     if (oi !== -1) {
       const o = objects[oi];
@@ -2392,15 +2298,11 @@ canvas.addEventListener('mousemove', e => {
     render();
     return;
   }
-  {
-    const pc = placeSnap < 1 ? snapCoord(hoverCellF.col) : col;
-    const pr = placeSnap < 1 ? snapCoord(hoverCellF.row) : row;
-    if (lastCell && lastCell.col === pc && lastCell.row === pr) return;
-    if (!inBounds(col, row)) return;
-    if (applyTileAt(hoverCellF.col, hoverCellF.row, paintErase ? T.VOID : selTile)) strokeMade = true;
-    lastCell = { col: pc, row: pr };
-    render();
-  }
+  if (lastCell && lastCell.col === col && lastCell.row === row) return;
+  if (!inBounds(col, row)) return;
+  if (applyTile(col, row, paintErase ? T.VOID : undefined)) strokeMade = true;
+  lastCell = { col, row };
+  render();
 });
 
 window.addEventListener('mouseup', e => {
@@ -2965,9 +2867,6 @@ function setPlaceSnap(s) {
   document.getElementById('snap-1').classList.toggle('active', s === 1);
   document.getElementById('snap-2').classList.toggle('active', s === 0.5);
   document.getElementById('snap-4').classList.toggle('active', s === 0.25);
-  document.getElementById('snapTileHint').innerHTML = s < 1
-    ? 'Paint (B) now splits Floor/<br>Wall/Water tiles by snap —<br>Rect/Fill stay whole-tile'
-    : '';
   render();
 }
 
