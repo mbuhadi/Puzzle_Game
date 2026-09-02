@@ -382,7 +382,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
         <div class="tool-grid">
           <button id="tool-select" class="active" style="grid-column:1/-1"
                   onclick="setTool('select')"
-                  title="Select (V) — click an object or tile, or drag an area to select several of either. Drag an object, or drag from inside an existing tile selection, to move it; arrow keys nudge; Del deletes; Ctrl+C/V copies objects; and the options for whatever's selected apply directly">Select</button>
+                  title="Select (V) — click an object or tile, or drag an area to select several of either. Drag an object, or drag from inside an existing tile selection, to move it; arrow keys nudge; Del deletes; Ctrl+C/V/D copies; and the options for whatever's selected apply directly">Select</button>
           <button id="tool-paint"                onclick="setTool('paint')" title="Paint (B)">Paint</button>
           <button id="tool-fill"                 onclick="setTool('fill')"  title="Fill (G)">Fill</button>
           <button id="tool-rect"                 onclick="setTool('rect')"  title="Rectangle (R)">Rect</button>
@@ -760,7 +760,7 @@ let selectedTiles = new Set();
 let marquee   = null;     // {a, b, base, baseTiles} — drag rect in grid coords + prior selection (shift)
 let dragMove  = null;     // {anchor, dc, dr, moved, objs:[{o,col,row}], tiles:[{key,col,row,tile,coll}]}
                           // — moving the selection (objects and/or tiles together)
-let clipboard = null;     // {origin, items} — copied objects, positions relative to origin
+let clipboard = null;     // {origin, items, tiles} — copied objects+tiles, positions relative to origin
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const canvas = document.getElementById('editorCanvas');
@@ -2250,23 +2250,35 @@ function layerSelection(toFront) {
 }
 
 function copySelection() {
-  if (!selectedObjs.size) return;
-  const sel = [...selectedObjs];
-  const origin = { col: Math.min(...sel.map(o => o.col)),
-                   row: Math.min(...sel.map(o => o.row)) };
-  clipboard = { origin, items: sel.map(o => {
-    const c = { ...o, col: o.col - origin.col, row: o.row - origin.row };
-    if (c.anim) c.anim = { ...c.anim };
-    delete c.inter;   // puzzle ids are map-unique — copies never carry one
-    delete c.removeOnSolve;
-    return c;
-  }) };
+  if (!selectedObjs.size && !selectedTiles.size) return;
+  const objSel  = [...selectedObjs];
+  const tileSel = [...selectedTiles].map(key => {
+    const [c, r] = key.split(',').map(Number);
+    return { col: c, row: r };
+  });
+  const cols = [...objSel.map(o => o.col), ...tileSel.map(t => t.col)];
+  const rows = [...objSel.map(o => o.row), ...tileSel.map(t => t.row)];
+  const origin = { col: Math.min(...cols), row: Math.min(...rows) };
+  clipboard = {
+    origin,
+    items: objSel.map(o => {
+      const c = { ...o, col: o.col - origin.col, row: o.row - origin.row };
+      if (c.anim) c.anim = { ...c.anim };
+      delete c.inter;   // puzzle ids are map-unique — copies never carry one
+      delete c.removeOnSolve;
+      return c;
+    }),
+    tiles: tileSel.map(t => ({
+      col: t.col - origin.col, row: t.row - origin.row,
+      tile: grid[t.row][t.col], coll: tileColl[t.col + ',' + t.row],
+    })),
+  };
 }
 
 // atCursor=true pastes at the mouse position; false drops one tile down-right
 // of where the copy was taken (Ctrl+D duplicate)
 function pasteClipboard(atCursor) {
-  if (!clipboard || !clipboard.items.length) return;
+  if (!clipboard || (!clipboard.items.length && !clipboard.tiles.length)) return;
   const base = (atCursor && hoverCellF &&
                 inBounds(Math.floor(hoverCellF.col), Math.floor(hoverCellF.row)))
     ? { col: snapCoord(hoverCellF.col), row: snapCoord(hoverCellF.row) }
@@ -2280,6 +2292,16 @@ function pasteClipboard(atCursor) {
     o.row = Math.max(0, Math.min(GRID_H - objH(o), o.row));
     objects.push(o);
     selectedObjs.add(o);
+  }
+  // Tiles paste on whole cells only — round off any fractional object snap
+  const tc = Math.round(base.col), tr = Math.round(base.row);
+  for (const t of clipboard.tiles) {
+    const nc = Math.max(0, Math.min(GRID_W - 1, t.col + tc));
+    const nr = Math.max(0, Math.min(GRID_H - 1, t.row + tr));
+    grid[nr][nc] = t.tile;
+    const key = nc + ',' + nr;
+    if (t.coll !== undefined) tileColl[key] = t.coll; else delete tileColl[key];
+    selectedTiles.add(key);
   }
   updateSelStatus(); updateInterList(); pushHistory(); render();
 }
@@ -2572,7 +2594,7 @@ window.addEventListener('keydown', e => {
     if (k === 'c') { copySelection(); e.preventDefault(); return; }
     if (k === 'v') { pasteClipboard(true); e.preventDefault(); return; }
     if (k === 'd') {
-      if (selectedObjs.size) { copySelection(); pasteClipboard(false); }
+      if (selectedObjs.size || selectedTiles.size) { copySelection(); pasteClipboard(false); }
       e.preventDefault(); return;
     }
     return;
