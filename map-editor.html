@@ -382,7 +382,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
         <div class="tool-grid">
           <button id="tool-select" class="active" style="grid-column:1/-1"
                   onclick="setTool('select')"
-                  title="Select (V) — click an object or tile, or drag an area to select several of either. Drag an object to move it, Del deletes, Ctrl+C/V copies, and the options for whatever's selected apply directly">Select</button>
+                  title="Select (V) — click an object or tile, or drag an area to select several of either. Drag an object, or drag from inside an existing tile selection, to move it; arrow keys nudge; Del deletes; Ctrl+C/V copies objects; and the options for whatever's selected apply directly">Select</button>
           <button id="tool-paint"                onclick="setTool('paint')" title="Paint (B)">Paint</button>
           <button id="tool-fill"                 onclick="setTool('fill')"  title="Fill (G)">Fill</button>
           <button id="tool-rect"                 onclick="setTool('rect')"  title="Rectangle (R)">Rect</button>
@@ -699,6 +699,18 @@ let tileColl = {};          // sparse "col,row" -> 'solid'|'over'|'under' — a
                             // a wall, or an invisible wall on open floor)
 const COLL_LABEL = { solid: 'Solid', over: 'Walk-Over', under: 'Walk-Under' };
 const COLL_TINT  = { solid: 'rgba(220,80,80,0.35)', over: 'rgba(90,200,120,0.35)', under: 'rgba(90,160,220,0.35)' };
+// Shared 3-state collision model for BOTH tiles and objects: 'solid' blocks
+// the player; 'over' is walkable floor; 'under' is walkable but draws over
+// the player. Objects always store their own state; a tile stores only a
+// sparse override (tileColl) and otherwise falls back to its type's default.
+function getObjColl(o) { return o.solid ? 'solid' : (o.under ? 'under' : 'over'); }
+function setObjColl(o, state) {
+  o.solid = state === 'solid';
+  if (state === 'under') o.under = true; else delete o.under;
+}
+function tileDefaultColl(col, row) { return WALKABLE_TILES.has(grid[row][col]) ? 'over' : 'solid'; }
+function getTileColl(col, row) { return tileColl[col + ',' + row] || tileDefaultColl(col, row); }
+function setTileColl(col, row, state) { tileColl[col + ',' + row] = state; }
 let zoom = 12;
 let panX = 0, panY = 0;
 let tool = 'select';
@@ -746,7 +758,8 @@ let selectedObjs = new Set();
 // of one) are different things that can both be selected at once
 let selectedTiles = new Set();
 let marquee   = null;     // {a, b, base, baseTiles} — drag rect in grid coords + prior selection (shift)
-let dragMove  = null;     // {anchor, orig:[{o, col, row}], moved} — moving the selection
+let dragMove  = null;     // {anchor, dc, dr, moved, objs:[{o,col,row}], tiles:[{key,col,row,tile,coll}]}
+                          // — moving the selection (objects and/or tiles together)
 let clipboard = null;     // {origin, items} — copied objects, positions relative to origin
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -1065,6 +1078,30 @@ function render() {
     ctx.restore();
   }
 
+  // Live preview while dragging a tile selection: dim the vacated cells and
+  // draw the moved tiles at their new (offset) position
+  if (dragMove && dragMove.tiles.length && (dragMove.dc || dragMove.dr)) {
+    const { dc, dr } = dragMove;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    for (const rec of dragMove.tiles) {
+      if (rec.col < c0 || rec.col > c1 || rec.row < r0 || rec.row > r1) continue;
+      const { x, y } = cellXY(rec.col, rec.row);
+      ctx.fillRect(x, y, zoom, zoom);
+    }
+    ctx.globalAlpha = 0.85;
+    ctx.imageSmoothingEnabled = false;
+    for (const rec of dragMove.tiles) {
+      const nc = rec.col + dc, nr = rec.row + dr;
+      if (nc < c0 || nc > c1 || nr < r0 || nr > r1) continue;
+      const { x, y } = cellXY(nc, nr);
+      const tex = rec.tile >= CUSTOM_TILE_BASE_INDEX ? getCustomTileCanvas(rec.tile) : null;
+      if (tex) ctx.drawImage(tex, 0, 0, 16, 16, x, y, zoom, zoom);
+      else if (rec.tile !== T.VOID) { ctx.fillStyle = TILE_COLORS[rec.tile]; ctx.fillRect(x, y, zoom, zoom); }
+    }
+    ctx.restore();
+  }
+
   // Grid border
   ctx.strokeStyle = CANVAS_THEME.accent;
   ctx.lineWidth   = 1.5;
@@ -1087,10 +1124,12 @@ function render() {
     ctx.strokeStyle = CANVAS_THEME.accent;
     ctx.lineWidth = 2;
     ctx.setLineDash([5, 3]);
+    const dc = dragMove ? dragMove.dc : 0, dr = dragMove ? dragMove.dr : 0;
     for (const key of selectedTiles) {
       const [c, r] = key.split(',').map(Number);
-      if (c < c0 || c > c1 || r < r0 || r > r1) continue;
-      const x = c * zoom + panX, y = r * zoom + panY;
+      const cc = c + dc, rr = r + dr;
+      if (cc < c0 || cc > c1 || rr < r0 || rr > r1) continue;
+      const x = cc * zoom + panX, y = rr * zoom + panY;
       ctx.strokeRect(x + 1.5, y + 1.5, zoom - 3, zoom - 3);
     }
     ctx.restore();
@@ -2143,19 +2182,54 @@ function applyMarqueeSelection() {
     ...(objsHit.length ? [] : tilesInRect(marquee.a, marquee.b))]);
 }
 
-// Clamp a group move so the whole selection stays in bounds without the
-// group's shape distorting at the edges
-function clampGroupDelta(recs, dc, dr) {
-  for (const rec of recs) {
+// Clamp a group move so the whole selection — objects and/or tiles — stays
+// in bounds without the group's shape distorting at the edges
+function clampGroupDelta(objRecs, tileRecs, dc, dr) {
+  for (const rec of objRecs) {
     dc = Math.max(-rec.col, Math.min(GRID_W - objW(rec.o) - rec.col, dc));
     dr = Math.max(-rec.row, Math.min(GRID_H - objH(rec.o) - rec.row, dr));
+  }
+  for (const rec of tileRecs) {
+    dc = Math.max(-rec.col, Math.min(GRID_W - 1 - rec.col, dc));
+    dr = Math.max(-rec.row, Math.min(GRID_H - 1 - rec.row, dr));
   }
   return [dc, dr];
 }
 
+// Snapshot of the selected tiles for a move — captures each cell's tile and
+// collision override before anything is mutated
+function tileRecsFromSelection() {
+  return [...selectedTiles].map(key => {
+    const [c, r] = key.split(',').map(Number);
+    return { key, col: c, row: r, tile: grid[r][c], coll: tileColl[key] };
+  });
+}
+
+// Moves every selected tile cell by (dc,dr) — used by both a finished drag
+// and arrow-key nudging. Clears every source cell first so a shape doesn't
+// corrupt itself when its destination overlaps its own old footprint.
+function translateSelectedTiles(dc, dr) {
+  if (!dc && !dr) return;
+  const recs = tileRecsFromSelection();
+  for (const rec of recs) { grid[rec.row][rec.col] = T.VOID; delete tileColl[rec.key]; }
+  const newKeys = new Set();
+  for (const rec of recs) {
+    const nc = rec.col + dc, nr = rec.row + dr;
+    grid[nr][nc] = rec.tile;
+    if (rec.coll !== undefined) tileColl[nc + ',' + nr] = rec.coll;
+    newKeys.add(nc + ',' + nr);
+  }
+  selectedTiles = newKeys;
+}
+
 function deleteSelection() {
-  if (!selectedObjs.size) return;
-  objects = objects.filter(o => !selectedObjs.has(o));
+  if (!selectedObjs.size && !selectedTiles.size) return;
+  if (selectedObjs.size) objects = objects.filter(o => !selectedObjs.has(o));
+  for (const key of selectedTiles) {
+    const [c, r] = key.split(',').map(Number);
+    grid[r][c] = T.VOID;
+    delete tileColl[key];
+  }
   clearSelection();
   updateInterList(); pushHistory(); render();
 }
@@ -2239,12 +2313,21 @@ canvas.addEventListener('mousedown', e => {
         updateSelStatus(); render(); return;
       }
       if (!selectedObjs.has(o)) { selectedObjs.clear(); selectedTiles.clear(); selectedObjs.add(o); }
-      dragMove = { anchor: { ...cellF }, moved: false,
-                   orig: [...selectedObjs].map(s => ({ o: s, col: s.col, row: s.row })) };
+      dragMove = { anchor: { ...cellF }, moved: false, dc: 0, dr: 0,
+                   objs: [...selectedObjs].map(s => ({ o: s, col: s.col, row: s.row })),
+                   tiles: tileRecsFromSelection() };
       updateSelStatus(); updateCursor(); render(); return;
     }
-    // No object here — clicking selects the tile itself; dragging (with or
-    // without shift) extends into a marquee. Shift keeps the prior selection.
+    // No object here. Dragging from a cell that's already selected moves the
+    // whole selection (tiles, plus any objects selected alongside them) —
+    // exactly the same select-then-drag interface as an object. Dragging
+    // from anywhere else starts a marquee; shift keeps the prior selection.
+    if (!e.shiftKey && inBounds(col, row) && selectedTiles.has(col + ',' + row)) {
+      dragMove = { anchor: { ...cellF }, moved: false, dc: 0, dr: 0,
+                   objs: [...selectedObjs].map(s => ({ o: s, col: s.col, row: s.row })),
+                   tiles: tileRecsFromSelection() };
+      updateCursor(); render(); return;
+    }
     marquee = { a: { ...cellF }, b: { ...cellF },
                 base: e.shiftKey ? [...selectedObjs] : [],
                 baseTiles: e.shiftKey ? new Set(selectedTiles) : new Set() };
@@ -2348,11 +2431,15 @@ canvas.addEventListener('mousemove', e => {
   }
 
   if (dragMove) {
-    // Move the whole selection by a snapped delta from the drag anchor
-    let dc = Math.round((hoverCellF.col - dragMove.anchor.col) / placeSnap) * placeSnap;
-    let dr = Math.round((hoverCellF.row - dragMove.anchor.row) / placeSnap) * placeSnap;
-    [dc, dr] = clampGroupDelta(dragMove.orig, dc, dr);
-    for (const rec of dragMove.orig) { rec.o.col = rec.col + dc; rec.o.row = rec.row + dr; }
+    // Move the whole selection by a snapped delta from the drag anchor.
+    // Tiles are grid-cell based, so a drag touching any tile snaps to whole
+    // cells; an objects-only drag keeps the finer placement snap.
+    const step = dragMove.tiles.length ? 1 : placeSnap;
+    let dc = Math.round((hoverCellF.col - dragMove.anchor.col) / step) * step;
+    let dr = Math.round((hoverCellF.row - dragMove.anchor.row) / step) * step;
+    [dc, dr] = clampGroupDelta(dragMove.objs, dragMove.tiles, dc, dr);
+    for (const rec of dragMove.objs) { rec.o.col = rec.col + dc; rec.o.row = rec.row + dr; }
+    dragMove.dc = dc; dragMove.dr = dr;
     if (dc || dr) dragMove.moved = true;
     render(); return;
   }
@@ -2393,7 +2480,10 @@ window.addEventListener('mouseup', e => {
     updateCursor(); return;
   }
   if (dragMove) {
-    if (dragMove.moved) pushHistory();
+    if (dragMove.moved) {
+      if (dragMove.tiles.length) translateSelectedTiles(dragMove.dc, dragMove.dr);
+      pushHistory();
+    }
     dragMove = null;
     updateCursor(); render(); return;
   }
@@ -2461,10 +2551,10 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  if (e.key === 'Escape' && selectedObjs.size) { clearSelection(); render(); return; }
+  if (e.key === 'Escape' && (selectedObjs.size || selectedTiles.size)) { clearSelection(); render(); return; }
   if (e.key === 'Escape' && selSprite) { clearSpriteBrush(); return; }
 
-  if ((e.key === 'Delete' || e.key === 'Backspace') && selectedObjs.size) {
+  if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedObjs.size || selectedTiles.size)) {
     deleteSelection(); e.preventDefault(); return;
   }
 
@@ -2493,12 +2583,20 @@ window.addEventListener('keydown', e => {
   const arrow = { ArrowLeft: [-1, 0], ArrowRight: [1, 0],
                   ArrowUp: [0, -1],  ArrowDown: [0, 1] }[e.key];
   if (arrow) {
-    // A selection nudges as one group (single undo entry via flushNudge)
-    if (selectedObjs.size) {
-      const recs = [...selectedObjs].map(o => ({ o, col: o.col, row: o.row }));
-      const [dc, dr] = clampGroupDelta(recs, arrow[0] * placeSnap, arrow[1] * placeSnap);
+    // A selection nudges as one group (single undo entry via flushNudge).
+    // Tiles only ever move in whole cells, so a nudge touching any tile
+    // ignores placeSnap and steps by exactly one cell.
+    if (selectedObjs.size || selectedTiles.size) {
+      const step = selectedTiles.size ? 1 : placeSnap;
+      const objRecs  = [...selectedObjs].map(o => ({ o, col: o.col, row: o.row }));
+      const tileRecs = [...selectedTiles].map(key => {
+        const [c, r] = key.split(',').map(Number);
+        return { col: c, row: r };
+      });
+      const [dc, dr] = clampGroupDelta(objRecs, tileRecs, arrow[0] * step, arrow[1] * step);
       if (dc || dr) {
-        for (const rec of recs) { rec.o.col += dc; rec.o.row += dr; }
+        for (const rec of objRecs) { rec.o.col += dc; rec.o.row += dr; }
+        if (selectedTiles.size) translateSelectedTiles(dc, dr);
         nudgePending = true;
         render();
       }
@@ -2974,10 +3072,7 @@ function setObjPass(v) {
   if (selectedObjs.size) {
     let changed = false;
     for (const o of selectedObjs) {
-      const solid = v === 'solid', under = v === 'under';
-      if (o.solid !== solid || !!o.under !== under) changed = true;
-      o.solid = solid;
-      if (under) o.under = true; else delete o.under;
+      if (getObjColl(o) !== v) { setObjColl(o, v); changed = true; }
     }
     if (changed) { pushHistory(); render(); }
   }
@@ -2991,7 +3086,8 @@ function setCollBrush(v) {
   if (selectedTiles.size) {
     let changed = false;
     for (const key of selectedTiles) {
-      if (tileColl[key] !== v) { tileColl[key] = v; changed = true; }
+      const [c, r] = key.split(',').map(Number);
+      if (getTileColl(c, r) !== v) { setTileColl(c, r, v); changed = true; }
     }
     if (changed) { pushHistory(); render(); }
   }
