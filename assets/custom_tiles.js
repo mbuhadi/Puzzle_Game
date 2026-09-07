@@ -429,6 +429,79 @@ const WATER_DEFS = [
     } },
 ];
 
+// ── 4 more floor tiles — a small celestial set (sun/moon/star) on a shared
+// night-sky field so they read as one family. Appended last again, after
+// FLOOR_DEFS_MORE — same index-stability rule as above: existing indices
+// (9-47) must never move, so this can only ever grow the array from the end.
+function starPoly(cx, cy, points, rOuter, rInner, rotate) {
+  const v = [];
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 === 0 ? rOuter : rInner;
+    const a = rotate + i * Math.PI / points;
+    v.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+  }
+  return v;
+}
+// Standard ray-casting point-in-polygon test — used for the 5-point star,
+// whose concave silhouette the square+diamond union (8-point star) can't make.
+function inPoly(x, y, verts) {
+  let inside = false;
+  for (let i = 0, j = verts.length - 1; i < verts.length; j = i++) {
+    const [xi, yi] = verts[i], [xj, yj] = verts[j];
+    if (((yi > y) !== (yj > y)) &&
+        (x < (xj - xi) * (y - yi) / (yj - yi) + xi))
+      inside = !inside;
+  }
+  return inside;
+}
+const NIGHT_SKY = '#232a4d';
+function skyField(ctx, seed) {
+  rect(ctx, 0, 0, 16, 16, NIGHT_SKY);
+  speckle(ctx, seed, 0.03, '#4a5488', 0.8);   // faint distant stars
+}
+const FLOOR_DEFS_CELESTIAL = [
+  { key: 'FLOOR_SUNSTAR8', name: 'Golden Sun Star', base: NIGHT_SKY, draw(ctx) {
+      skyField(ctx, 201);
+      for (let y = 0; y < 16; y++)
+        for (let x = 0; x < 16; x++) {
+          const dx = x - 7.5, dy = y - 7.5;
+          const diamond = Math.abs(dx) + Math.abs(dy) <= 7;
+          const square  = Math.max(Math.abs(dx), Math.abs(dy)) <= 5;
+          if (diamond || square) px(ctx, x, y, '#e8a83c');
+        }
+      for (let y = 0; y < 16; y++)
+        for (let x = 0; x < 16; x++)
+          if (Math.hypot(x - 7.5, y - 7.5) <= 2.6) px(ctx, x, y, '#fbdd8a');
+    } },
+  { key: 'FLOOR_FULLMOON', name: 'Full Moon', base: NIGHT_SKY, draw(ctx) {
+      skyField(ctx, 202);
+      for (let y = 0; y < 16; y++)
+        for (let x = 0; x < 16; x++)
+          if (Math.hypot(x - 7.5, y - 7.5) <= 6) px(ctx, x, y, '#e8e6da');
+      for (const [cx, cy, r] of [[5, 6, 1.2], [10, 5, 0.9], [8, 10, 1.4], [6, 11, 0.7]])
+        for (let y = 0; y < 16; y++)
+          for (let x = 0; x < 16; x++)
+            if (Math.hypot(x - cx, y - cy) <= r && Math.hypot(x - 7.5, y - 7.5) <= 6)
+              px(ctx, x, y, '#c9c6b6');
+    } },
+  { key: 'FLOOR_CRESCENT', name: 'Crescent Moon', base: NIGHT_SKY, draw(ctx) {
+      skyField(ctx, 203);
+      for (let y = 0; y < 16; y++)
+        for (let x = 0; x < 16; x++) {
+          const d1 = Math.hypot(x - 7.5, y - 7.5);
+          const d2 = Math.hypot(x - 10, y - 6.5);
+          if (d1 <= 6 && d2 > 5.4) px(ctx, x, y, '#eee7cf');
+        }
+    } },
+  { key: 'FLOOR_STAR5', name: 'Five-Point Star', base: NIGHT_SKY, draw(ctx) {
+      skyField(ctx, 204);
+      const verts = starPoly(7.5, 7.5, 5, 7, 2.9, -Math.PI / 2);
+      for (let y = 0; y < 16; y++)
+        for (let x = 0; x < 16; x++)
+          if (inPoly(x + 0.5, y + 0.5, verts)) px(ctx, x, y, '#f2d675');
+    } },
+];
+
 const CUSTOM_TILE_CATEGORIES = { floor: FLOOR_DEFS, wall: WALL_DEFS, water: WATER_DEFS };
 const CUSTOM_TILE_LIST = [];
 ['floor', 'wall', 'water'].forEach(cat => {
@@ -445,6 +518,13 @@ FLOOR_DEFS_MORE.forEach(def => {
   def.index = CUSTOM_TILE_BASE_INDEX + CUSTOM_TILE_LIST.length;
   CUSTOM_TILE_LIST.push(def);
   FLOOR_DEFS.push(def);   // keep FLOOR_DEFS as the complete floor list too
+});
+// Appended last again — see the comment above FLOOR_DEFS_CELESTIAL
+FLOOR_DEFS_CELESTIAL.forEach(def => {
+  def.category = 'floor';
+  def.index = CUSTOM_TILE_BASE_INDEX + CUSTOM_TILE_LIST.length;
+  CUSTOM_TILE_LIST.push(def);
+  FLOOR_DEFS.push(def);
 });
 
 const canvasCache = new Map();
