@@ -479,15 +479,101 @@ const SOLVED_CHUNKS = new Set((() => {
 })());
 function persistSolved() { sessionStorage.setItem(SOLVED_KEY, JSON.stringify([...SOLVED_CHUNKS])); }
 function resetSolved()   { SOLVED_CHUNKS.clear(); persistSolved(); }
+
+// ── Map Change transition ─────────────────────────────────────────────────────
+// A Map Change swaps tiles/objects the instant its puzzle solves. Doing that
+// in full view would just look like a pop, so when the change is in the room
+// the player is currently standing in, it's masked behind a fade to black and
+// back (TRANSITION_MS total, split evenly) with a short chime at the midpoint,
+// where the actual swap happens unseen.
+const TRANSITION_MS = 600;   // adjustable — the whole fade-out + fade-in
+const SOUND_MS = 400;        // hard cap for the chime's own length
+let fadeAlpha = 0;           // 0 = clear, 1 = fully black
+let fadeStart = null, fadeMidDone = false, fadeMidFn = null;
+
+function startMapChangeTransition(applyFn) {
+  fadeStart = performance.now();
+  fadeMidDone = false;
+  fadeMidFn = applyFn;
+  playChangeChime();
+}
+
+function updateFade() {
+  if (fadeStart == null) return;
+  const half = TRANSITION_MS / 2;
+  const t = performance.now() - fadeStart;
+  if (t < half) {
+    fadeAlpha = t / half;
+  } else if (t < TRANSITION_MS) {
+    if (!fadeMidDone) { fadeMidDone = true; fadeMidFn && fadeMidFn(); }
+    fadeAlpha = 1 - (t - half) / half;
+  } else {
+    fadeAlpha = 0;
+    fadeStart = null;
+    fadeMidFn = null;
+  }
+}
+
+function drawFadeOverlay() {
+  if (fadeAlpha <= 0) return;
+  ctx.save();
+  ctx.fillStyle = `rgba(0,0,0,${fadeAlpha})`;
+  ctx.fillRect(0, 0, VIEWPORT_W, VIEWPORT_H);
+  ctx.restore();
+}
+
+// A short synthesized chime (no audio asset needed) — two soft rising sine
+// tones, comfortably under SOUND_MS.
+let fxAudioCtx = null;
+function playChangeChime() {
+  try {
+    if (!fxAudioCtx) fxAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (fxAudioCtx.state === 'suspended') fxAudioCtx.resume();
+    const ctxA = fxAudioCtx, now = ctxA.currentTime;
+    const notes = [{ freq: 660, start: 0,    len: 0.22 },
+                   { freq: 990, start: 0.09, len: 0.20 }];
+    for (const n of notes) {
+      const osc = ctxA.createOscillator(), gain = ctxA.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(n.freq, now + n.start);
+      osc.frequency.exponentialRampToValueAtTime(n.freq * 1.4, now + n.start + n.len);
+      gain.gain.setValueAtTime(0.0001, now + n.start);
+      gain.gain.exponentialRampToValueAtTime(0.22, now + n.start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + n.start + n.len);
+      osc.connect(gain).connect(ctxA.destination);
+      osc.start(now + n.start);
+      osc.stop(now + n.start + n.len + 0.02);
+    }
+  } catch (e) { /* Web Audio unavailable — the visual fade still plays */ }
+}
+
 window.addEventListener('message', e => {
   if (!(e.data && e.data.type === 'puzzle-solved' && typeof e.data.chunk === 'string')) return;
   const firstSolve = !SOLVED_CHUNKS.has(e.data.chunk);
   SOLVED_CHUNKS.add(e.data.chunk);
   persistSolved();
-  // Re-evaluate collision immediately — a removeOnSolve door in the current
-  // room should open the passage the instant its puzzle is solved, not wait
-  // for the next room load.
-  if (firstSolve) rebuildObjSolid();
+  // A removeOnSolve door or Map Change transform in the current room should
+  // take effect the instant its puzzle is solved, not wait for the next room
+  // load. A Map Change specifically is masked behind the fade transition so
+  // the swap itself never happens in view.
+  if (firstSolve) {
+    const rm = ROOMS && ROOMS[curRoomIdx];
+    const t = rm && (rm.transforms || []).find(x => x.puzzleId === e.data.chunk);
+    if (t) {
+      startMapChangeTransition(() => {
+        applyTransformTiles(mapGrid, t);
+        OBJECTS.length = 0;
+        for (const o of roomObjectsWithTransforms(rm)) OBJECTS.push(o);
+        rebuildObjSolid();
+      });
+    } else {
+      if (rm) {
+        OBJECTS.length = 0;
+        for (const o of roomObjectsWithTransforms(rm)) OBJECTS.push(o);
+      }
+      rebuildObjSolid();
+    }
+  }
   // A locked door fires the moment its puzzle is solved: after a short beat
   // (so the solved feedback is visible) the puzzle closes and the door
   // carries the player through to its room.
@@ -506,6 +592,29 @@ window.addEventListener('message', e => {
 });
 function puzzleSolved(interId) {
   return SOLVED_CHUNKS.has(String(interId).replace(/s$/, ''));
+}
+
+// Puzzle "Map Change" — a rectangular area (Map Studio: highlight the area,
+// then edit what it looks like once a puzzle is solved) whose tiles/objects
+// swap in the moment that puzzle solves. Objects outside any solved
+// transform's rect pass through untouched; objects inside one are replaced
+// wholesale by that transform's own object list.
+function objInRect(o, rect) {
+  const w = o.sw || 1, h = o.sh || 1;
+  return o.col < rect.c1 + 1 && o.col + w > rect.c0 &&
+         o.row < rect.r1 + 1 && o.row + h > rect.r0;
+}
+function applyTransformTiles(grid, t) {
+  for (let r = t.rect.r0; r <= t.rect.r1; r++)
+    for (let c = t.rect.c0; c <= t.rect.c1; c++)
+      grid[r][c] = t.tiles[r - t.rect.r0][c - t.rect.c0];
+}
+function roomObjectsWithTransforms(rm) {
+  const solvedT = (rm.transforms || []).filter(t => puzzleSolved(t.puzzleId));
+  if (!solvedT.length) return rm.objects.slice();
+  const out = rm.objects.filter(o => !solvedT.some(t => objInRect(o, t.rect)));
+  for (const t of solvedT) out.push(...t.objects);
+  return out;
 }
 
 // An in-room locked door: `inter` gates it like any puzzle object, but with
@@ -578,10 +687,10 @@ function updateNearby() {
 // ── Update ────────────────────────────────────────────────────────────────────
 function update(dt) {
   let dx = JOY.dx, dy = JOY.dy;
-  if (keys['ArrowLeft']  || keys['a'] || keys['A']) dx -= 1;
-  if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 1;
-  if (keys['ArrowUp']    || keys['w'] || keys['W']) dy -= 1;
-  if (keys['ArrowDown']  || keys['s'] || keys['S']) dy += 1;
+  if (keys['ArrowLeft']  || keys['a']) dx -= 1;
+  if (keys['ArrowRight'] || keys['d']) dx += 1;
+  if (keys['ArrowUp']    || keys['w']) dy -= 1;
+  if (keys['ArrowDown']  || keys['s']) dy += 1;
   // Clamp combined input to unit length
   const mag = Math.sqrt(dx*dx + dy*dy);
   if (mag > 1) { dx /= mag; dy /= mag; }
@@ -1036,6 +1145,7 @@ function render() {
   ctx.restore();
 
   drawJoystick();        // screen space — fixed overlay on canvas
+  drawFadeOverlay();     // screen space — on top of everything, including the joystick
 }
 
 // ── Game loop ─────────────────────────────────────────────────────────────────
@@ -1045,20 +1155,28 @@ function loop(ts) {
   lastTs = ts;
   tickAnimPlays();   // finish door swings (fires their teleport)
   update(dt);
+  updateFade();
   render();
   requestAnimationFrame(loop);
 }
 
 // ── Input ─────────────────────────────────────────────────────────────────────
 canvas.addEventListener('keydown', e => {
-  keys[e.key] = true;
+  // Normalize letter keys to lowercase — e.key reflects Shift state at the
+  // moment of the event, so holding Shift mid-press can make keydown fire
+  // 'a' but keyup fire 'A', leaving the original key stuck "held" forever.
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  keys[k] = true;
   e.preventDefault();
   if ((e.key === 'e' || e.key === 'E') && !examineOverlay.classList.contains('open')) {
     if (nearbyInteractable) interactWith(nearbyInteractable);
   }
   if (e.key === 'Escape') closeExamine();
 });
-canvas.addEventListener('keyup',  e => { keys[e.key] = false; });
+canvas.addEventListener('keyup',  e => {
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  keys[k] = false;
+});
 canvas.addEventListener('blur',   ()  => { for (const k in keys) keys[k] = false; });
 window.addEventListener('blur',   ()  => { for (const k in keys) keys[k] = false; });
 
@@ -1210,14 +1328,46 @@ function sanitizeObjects(raw) {
   return out;
 }
 
+// A Map Studio "Map Change": highlight-an-area rect plus the tiles/objects it
+// becomes once puzzleId is solved. Objects in the after-state carry no `inter`/
+// `door` of their own in maps authored by the editor, but nothing here forbids
+// it — a hand-edited file can chain a new interactable in behind one.
+function sanitizeTransforms(raw) {
+  const out = [];
+  if (!Array.isArray(raw)) return out;
+  for (const t of raw) {
+    if (!t || typeof t.puzzleId !== 'string') continue;
+    const puzzleId = t.puzzleId.replace(/s$/, '');
+    if (!ALL.some(x => x.id === puzzleId)) continue;
+    const rect = t.rect || {};
+    const c0 = +rect.c0, r0 = +rect.r0, c1 = +rect.c1, r1 = +rect.r1;
+    if (![c0, r0, c1, r1].every(Number.isInteger)) continue;
+    if (c0 < 0 || r0 < 0 || c1 >= GRID_W || r1 >= GRID_H || c1 < c0 || r1 < r0) continue;
+    const w = c1 - c0 + 1, h = r1 - r0 + 1;
+    if (!Array.isArray(t.tiles) || t.tiles.length !== h ||
+        t.tiles.some(row => !Array.isArray(row) || row.length !== w)) continue;
+    const tiles = t.tiles.map(row => row.map(Number));
+    const objects = sanitizeObjects(t.objects).filter(o => {
+      const ow = o.sw || 1, oh = o.sh || 1;
+      return o.col >= c0 && o.col + ow - 1 <= c1 && o.row >= r0 && o.row + oh - 1 <= r1;
+    });
+    out.push({ puzzleId, rect: { c0, r0, c1, r1 }, tiles, objects });
+  }
+  return out;
+}
+
 // Swap the active room in: grid, objects, interactable markers, player
 function enterRoom(idx, px, py) {
   const rm = ROOMS[idx];
   curRoomIdx = idx;
-  mapGrid = rm.grid;
+  // A fresh per-visit copy — Map Change transforms bake into this instance,
+  // leaving rm.grid itself untouched as the "before" state for any later
+  // fresh load (Play/Randomize opens a new tab and reparses from source).
+  mapGrid = rm.grid.map(row => row.slice());
+  for (const t of rm.transforms || []) if (puzzleSolved(t.puzzleId)) applyTransformTiles(mapGrid, t);
   tileColl = rm.tileColl || {};
   OBJECTS.length = 0;
-  for (const o of rm.objects) OBJECTS.push(o);
+  for (const o of roomObjectsWithTransforms(rm)) OBJECTS.push(o);
   rebuildObjSolid();
   player.x = px; player.y = py;
   const fc = rm.grid.flat().filter(t => t === T.FLOOR || t === T.COURTYARD).length;
@@ -1255,6 +1405,7 @@ function loadCustomData(_data, resume) {
       grid: g,
       spawn: rm.spawn ? { col: +rm.spawn.col, row: +rm.spawn.row } : null,
       objects: sanitizeObjects(rm.objects),
+      transforms: sanitizeTransforms(rm.transforms),
       tileColl: sanitizeTileColl(rm.tileColl),
       // Per-room special instructions from Map Studio — no runtime behavior
       // yet, carried so future features can read them
