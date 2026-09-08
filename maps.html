@@ -73,8 +73,11 @@
     display: none;
     align-items: center;
     justify-content: center;
+    opacity: 1;
+    transition: opacity 0.3s ease;
   }
   #examineOverlay.open { display: flex; }
+  #examineOverlay.closing { opacity: 0; }
   #examineBox {
     display: flex;
     flex-direction: column;
@@ -495,7 +498,7 @@ function startMapChangeTransition(applyFn) {
   fadeStart = performance.now();
   fadeMidDone = false;
   fadeMidFn = applyFn;
-  playChangeChime();
+  playUnlockSound();
 }
 
 function updateFade() {
@@ -522,28 +525,82 @@ function drawFadeOverlay() {
   ctx.restore();
 }
 
-// A short synthesized chime (no audio asset needed) — two soft rising sine
-// tones, comfortably under SOUND_MS.
+// A short synthesized "door unlock" sound (no audio asset needed) — pin
+// tumbler clicks, then a low bolt thunk with a metallic clunk and ring-out.
+// Comfortably under SOUND_MS.
 let fxAudioCtx = null;
-function playChangeChime() {
+let _fxNoiseBuf = null;
+function fxNoiseBuffer(ctxA) {
+  if (_fxNoiseBuf) return _fxNoiseBuf;
+  const len = Math.ceil(ctxA.sampleRate * 0.3);
+  const buf = ctxA.createBuffer(1, len, ctxA.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  _fxNoiseBuf = buf;
+  return buf;
+}
+function playUnlockSound() {
   try {
     if (!fxAudioCtx) fxAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (fxAudioCtx.state === 'suspended') fxAudioCtx.resume();
     const ctxA = fxAudioCtx, now = ctxA.currentTime;
-    const notes = [{ freq: 660, start: 0,    len: 0.22 },
-                   { freq: 990, start: 0.09, len: 0.20 }];
-    for (const n of notes) {
-      const osc = ctxA.createOscillator(), gain = ctxA.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(n.freq, now + n.start);
-      osc.frequency.exponentialRampToValueAtTime(n.freq * 1.4, now + n.start + n.len);
-      gain.gain.setValueAtTime(0.0001, now + n.start);
-      gain.gain.exponentialRampToValueAtTime(0.22, now + n.start + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + n.start + n.len);
-      osc.connect(gain).connect(ctxA.destination);
-      osc.start(now + n.start);
-      osc.stop(now + n.start + n.len + 0.02);
+    const noiseBuf = fxNoiseBuffer(ctxA);
+
+    // Pin clicks as the key turns.
+    const clicks = [{ t: 0, f: 3200 }, { t: 0.045, f: 3600 }, { t: 0.085, f: 4000 }];
+    for (const c of clicks) {
+      const src = ctxA.createBufferSource();
+      src.buffer = noiseBuf;
+      const bp = ctxA.createBiquadFilter();
+      bp.type = 'bandpass'; bp.frequency.value = c.f; bp.Q.value = 5;
+      const gain = ctxA.createGain();
+      gain.gain.setValueAtTime(0.0001, now + c.t);
+      gain.gain.exponentialRampToValueAtTime(0.5, now + c.t + 0.004);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + c.t + 0.02);
+      src.connect(bp).connect(gain).connect(ctxA.destination);
+      src.start(now + c.t);
+      src.stop(now + c.t + 0.03);
     }
+
+    // Bolt thunk — a low punchy thud as the bolt slides back.
+    const thunkT = 0.13;
+    const osc = ctxA.createOscillator(), oGain = ctxA.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(150, now + thunkT);
+    osc.frequency.exponentialRampToValueAtTime(65, now + thunkT + 0.12);
+    oGain.gain.setValueAtTime(0.0001, now + thunkT);
+    oGain.gain.exponentialRampToValueAtTime(0.5, now + thunkT + 0.008);
+    oGain.gain.exponentialRampToValueAtTime(0.0001, now + thunkT + 0.16);
+    osc.connect(oGain).connect(ctxA.destination);
+    osc.start(now + thunkT);
+    osc.stop(now + thunkT + 0.18);
+
+    // Metallic clunk texture layered under the thunk.
+    const clunkSrc = ctxA.createBufferSource();
+    clunkSrc.buffer = noiseBuf;
+    const lp = ctxA.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 700;
+    const cGain = ctxA.createGain();
+    cGain.gain.setValueAtTime(0.0001, now + thunkT);
+    cGain.gain.exponentialRampToValueAtTime(0.35, now + thunkT + 0.006);
+    cGain.gain.exponentialRampToValueAtTime(0.0001, now + thunkT + 0.06);
+    clunkSrc.connect(lp).connect(cGain).connect(ctxA.destination);
+    clunkSrc.start(now + thunkT);
+    clunkSrc.stop(now + thunkT + 0.07);
+
+    // Metallic ring-out as the latch settles.
+    const ringT = thunkT + 0.03;
+    const ringSrc = ctxA.createBufferSource();
+    ringSrc.buffer = noiseBuf;
+    const ringBp = ctxA.createBiquadFilter();
+    ringBp.type = 'bandpass'; ringBp.frequency.value = 1400; ringBp.Q.value = 8;
+    const ringGain = ctxA.createGain();
+    ringGain.gain.setValueAtTime(0.0001, now + ringT);
+    ringGain.gain.exponentialRampToValueAtTime(0.18, now + ringT + 0.01);
+    ringGain.gain.exponentialRampToValueAtTime(0.0001, now + ringT + 0.2);
+    ringSrc.connect(ringBp).connect(ringGain).connect(ctxA.destination);
+    ringSrc.start(now + ringT);
+    ringSrc.stop(now + ringT + 0.22);
   } catch (e) { /* Web Audio unavailable — the visual fade still plays */ }
 }
 
@@ -574,19 +631,22 @@ window.addEventListener('message', e => {
       rebuildObjSolid();
     }
   }
-  // A locked door fires the moment its puzzle is solved: after a short beat
-  // (so the solved feedback is visible) the puzzle closes and the door
-  // carries the player through to its room.
+  // The puzzle being examined fires the moment it's solved: after a short
+  // beat (so the solved feedback is visible) it closes on its own — no
+  // "Leave" click needed. A locked door additionally carries the player
+  // through to its room once the fade-out finishes.
   const a = activeInteractable;
-  if (firstSolve && a && a.door && a.id && String(a.id).replace(/s$/, '') === e.data.chunk) {
+  if (firstSolve && a && a.id && String(a.id).replace(/s$/, '') === e.data.chunk) {
     setTimeout(() => {
-      examineOverlay.classList.remove('open');
-      examineFrame.src = '';
-      activeInteractable = null;   // skip closeExamine()'s step-back nudge
-      canvas.focus();
-      if (a.obj && a.obj.anim && a.obj.anim.once)
-        playAnimOnce(a.obj, () => doorTransit(a.door));
-      else doorTransit(a.door);
+      fadeCloseExamine(() => {
+        activeInteractable = null;   // skip closeExamine()'s step-back nudge
+        canvas.focus();
+        if (a.door) {
+          if (a.obj && a.obj.anim && a.obj.anim.once)
+            playAnimOnce(a.obj, () => doorTransit(a.door));
+          else doorTransit(a.door);
+        }
+      });
     }, 900);
   }
 });
@@ -643,16 +703,30 @@ function openExamine(p) {
   examineOverlay.classList.add('open');
 }
 
+// Fades #examineOverlay out over the CSS opacity transition (0.3s), then
+// hides it and clears the iframe. `after` runs once fully closed — callers
+// use it for whatever should happen next (step the player back, transit
+// through a door, etc).
+function fadeCloseExamine(after) {
+  if (!examineOverlay.classList.contains('open')) { if (after) after(); return; }
+  examineOverlay.classList.add('closing');
+  setTimeout(() => {
+    examineOverlay.classList.remove('open', 'closing');
+    examineFrame.src = '';
+    if (after) after();
+  }, 300);
+}
+
 function closeExamine() {
-  examineOverlay.classList.remove('open');
-  examineFrame.src = '';
-  if (activeInteractable) {
-    const ix = activeInteractable.col + 0.5, iy = activeInteractable.row + 0.5;
-    const tx = ix + exitDir.x * 2.5, ty = iy + exitDir.y * 2.5;
-    if (canMoveTo(tx, ty)) { player.x = tx; player.y = ty; }
-    activeInteractable = null;
-  }
-  canvas.focus();
+  fadeCloseExamine(() => {
+    if (activeInteractable) {
+      const ix = activeInteractable.col + 0.5, iy = activeInteractable.row + 0.5;
+      const tx = ix + exitDir.x * 2.5, ty = iy + exitDir.y * 2.5;
+      if (canMoveTo(tx, ty)) { player.x = tx; player.y = ty; }
+      activeInteractable = null;
+    }
+    canvas.focus();
+  });
 }
 
 document.getElementById('examineLeave').addEventListener('click', closeExamine);

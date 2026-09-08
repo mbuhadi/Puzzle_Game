@@ -495,10 +495,41 @@ const FLOOR_DEFS_CELESTIAL = [
     } },
   { key: 'FLOOR_STAR5', name: 'Five-Point Star', base: NIGHT_SKY, draw(ctx) {
       skyField(ctx, 204);
-      const verts = starPoly(7.5, 7.5, 5, 7, 2.9, -Math.PI / 2);
+      const cx = 7.5, cy = 7.5, outerR = 7, innerR = 2.9;
+      const verts      = starPoly(cx, cy, 5, outerR, innerR, -Math.PI / 2);
+      const vertsInset = starPoly(cx, cy, 5, outerR - 1.1, innerR - 0.5, -Math.PI / 2);
+      const [skyR, skyG, skyB]     = hexToRgb(NIGHT_SKY);
+      const [coreR, coreG, coreB]  = hexToRgb('#fff3c4');   // bright highlight core
+      const [midR, midG, midB]     = hexToRgb('#f7d873');   // main gold
+      const [edgeR, edgeG, edgeB]  = hexToRgb('#b9772a');   // deep bronze rim
       for (let y = 0; y < 16; y++)
-        for (let x = 0; x < 16; x++)
-          if (inPoly(x + 0.5, y + 0.5, verts)) px(ctx, x, y, '#f2d675');
+        for (let x = 0; x < 16; x++) {
+          const px_ = x + 0.5, py_ = y + 0.5;
+          if (!inPoly(px_, py_, verts)) {
+            // soft gold bloom haloing the points, fading into the night sky
+            const d = Math.hypot(px_ - cx, py_ - cy) - outerR;
+            const glow = Math.max(0, 1 - d / 3);
+            if (glow > 0) {
+              const t = glow * glow * 0.4;
+              px(ctx, x, y, rgbToHex(
+                skyR + (midR - skyR) * t,
+                skyG + (midG - skyG) * t,
+                skyB + (midB - skyB) * t));
+            }
+            continue;
+          }
+          if (!inPoly(px_, py_, vertsInset)) {
+            // thin bronze rim gives the silhouette a crisp, cut edge
+            px(ctx, x, y, rgbToHex(edgeR, edgeG, edgeB));
+          } else {
+            // radial gradient from a bright core out to the gold body
+            const t = Math.min(1, Math.hypot(px_ - cx, py_ - cy) / (outerR * 0.75));
+            px(ctx, x, y, rgbToHex(
+              coreR + (midR - coreR) * t,
+              coreG + (midG - coreG) * t,
+              coreB + (midB - coreB) * t));
+          }
+        }
     } },
 ];
 
