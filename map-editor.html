@@ -422,10 +422,12 @@ select:focus { outline: none; border-color: var(--gold-dim); }
 
       <div class="divider" id="tileDivider"></div>
 
+      <!-- Browse Tileset — always visible, not selection-dependent -->
+      <button onclick="openTileset()" style="width:100%;margin-bottom:6px" title="Pick a sprite from the Modern Interiors sheet">Browse Tileset…</button>
+
       <!-- Objects — hidden when the selection has tiles but no objects -->
       <div id="objectSection">
         <div class="sec-title">OBJECTS</div>
-        <button onclick="openTileset()" style="width:100%;margin-bottom:6px" title="Pick a sprite from the Modern Interiors sheet">Browse Tileset…</button>
         <div id="brushWrap">
           <canvas id="brushPreview"></canvas>
           <div class="hint-text" id="brushLabel"></div>
