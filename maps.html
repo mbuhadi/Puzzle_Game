@@ -1045,53 +1045,18 @@ function drawPlayer(px, py) {
   ctx.beginPath(); ctx.arc(cx-2.5, cy-2.5, 4, 0, Math.PI*2); ctx.fill();
 }
 
-function roundRect(x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x+r, y);
-  ctx.lineTo(x+w-r, y);  ctx.arcTo(x+w, y,   x+w, y+r,   r);
-  ctx.lineTo(x+w, y+h-r); ctx.arcTo(x+w, y+h, x+w-r, y+h, r);
-  ctx.lineTo(x+r, y+h);  ctx.arcTo(x,   y+h, x,   y+h-r, r);
-  ctx.lineTo(x, y+r);    ctx.arcTo(x,   y,   x+r, y,     r);
-  ctx.closePath();
-}
-
-// Draws speech bubble in world-pixel space (inside ctx.translate block).
-// Updates bubbleBounds for tap hit-testing.
+// No longer drawn (the speech-bubble glyph over the player's head was
+// removed) — this just keeps bubbleBounds current so the touch tap-to-
+// interact hit region above the player's head still works.
 function drawThoughtBubble() {
   if (!nearbyInteractable) { bubbleBounds = null; return; }
   const S = TILE_PX;
   const pcx = (player.x - 0.5) * S + S/2;   // player center x (world px)
   const pcy = (player.y - 0.5) * S;           // player top y (world px)
 
-  const BW = 48, BH = 30, R = 7;
+  const BW = 48, BH = 30;
   const bx = pcx - BW/2, by = pcy - BH - 24;
   bubbleBounds = { wx: bx, wy: by, ww: BW, wh: BH };
-
-  // Tail dots
-  ctx.fillStyle = '#fffde0';
-  [[pcx-2, pcy-6, 5], [pcx+1, pcy-13, 4], [pcx-1, pcy-19, 3]].forEach(([x,y,r]) => {
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
-  });
-  // Bubble fill
-  ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.45)';
-  ctx.shadowBlur = 8;
-  ctx.fillStyle = '#fffde0';
-  roundRect(bx, by, BW, BH, R); ctx.fill();
-  ctx.restore();
-  // Bubble border
-  ctx.strokeStyle = '#c8a84b'; ctx.lineWidth = 1.5;
-  roundRect(bx, by, BW, BH, R); ctx.stroke();
-  // Glyph mirrors what E will do: "→" for a doorway that will transit, "?" for
-  // something examinable (including a door still locked behind its puzzle)
-  const willTransit = nearbyInteractable.door &&
-    (!nearbyInteractable.id || puzzleSolved(nearbyInteractable.id));
-  // "✦" marks a bare animation trigger (a door that swings but leads nowhere)
-  const glyph = willTransit ? '→' : nearbyInteractable.id ? '?' : '✦';
-  ctx.fillStyle = '#7a5a10';
-  ctx.font = 'bold 15px monospace';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(glyph, bx + BW/2, by + BH/2 + 0.5);
 }
 
 // "[E]" prompt in the same colour as the interactable frame, centered on a
