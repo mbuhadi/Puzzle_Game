@@ -719,9 +719,19 @@ let tileColl = {};          // sparse "col,row" -> 'solid'|'over'|'under' — a
                             // per-cell collision override, independent of the
                             // tile painted there (e.g. a secret passage through
                             // a wall, or an invisible wall on open floor)
-let transforms = [];        // [{puzzleId, rect:{c0,r0,c1,r1}, tiles, objects}] —
-                            // this room's Map Change areas (see "Map Change"
-                            // section below). One area per puzzle, map-wide.
+let transforms = [];        // [{puzzleId, rect:{c0,r0,c1,r1}, tiles, objects,
+                            // tileColl}] — this room's Map Change areas (see
+                            // "Map Change" section below). One area per
+                            // puzzle, map-wide. An after-state object can
+                            // carry its own inter/door, revealing a brand new
+                            // puzzle trigger or door once the Map Change fires.
+
+// A puzzle id must stay unique across the whole map even when the object
+// that owns it is currently hidden inside another puzzle's not-yet-solved
+// Map Change — so every "is this id already used" check scans both places.
+function allRoomObjects(rm) {
+  return rm.objects.concat(...(rm.transforms || []).map(t => t.objects));
+}
 const COLL_LABEL = { solid: 'Solid', over: 'Walk-Over', under: 'Walk-Under' };
 const COLL_TINT  = { solid: 'rgba(220,80,80,0.35)', over: 'rgba(90,200,120,0.35)', under: 'rgba(90,160,220,0.35)' };
 // Shared 3-state collision model for BOTH tiles and objects: 'solid' blocks
@@ -1361,7 +1371,8 @@ function drawCollisionOutline(o, x, y, fw, fh) {
 function cloneTransform(t) {
   return { puzzleId: t.puzzleId, rect: { ...t.rect },
            tiles: t.tiles.map(row => row.slice()),
-           objects: t.objects.map(o => ({ ...o })) };
+           objects: t.objects.map(o => ({ ...o })),
+           tileColl: { ...(t.tileColl || {}) } };
 }
 
 function snapshot() {
@@ -1635,16 +1646,24 @@ function toData() {
       transforms: (r.transforms || []).map(t => ({
         puzzleId: t.puzzleId, rect: { ...t.rect },
         tiles: t.tiles.map(row => row.slice()),
-        objects: t.objects.map(o => ({ ...o })),
+        objects: t.objects.map(o => {
+          const c = { ...o };
+          // Drop door attachments that dangle (room deleted, then undo re-added it)
+          if (c.door && !roomIds.has(c.door)) delete c.door;
+          return c;
+        }),
+        tileColl: { ...(t.tileColl || {}) },
       })),
     })),
   };
 }
 
-// A transform's "after" objects are plain set-dressing — no inter/door/
-// removeOnSolve of their own (chaining a new puzzle trigger behind a Map
-// Change is out of scope for now). Shape-parsing mirrors room.objects above.
-function parseTransformObjects(raw, rect) {
+// A transform's "after" objects are normal objects — one can carry its own
+// inter/door, so a Map Change can reveal a brand new puzzle trigger or door,
+// not just re-dress the room. Shape-parsing mirrors room.objects above;
+// `seenInter` is the same map-wide set that pass uses, so an id already
+// claimed by a regular object (or another Map Change) can't be reused here.
+function parseTransformObjects(raw, rect, seenInter) {
   const out = [];
   if (!Array.isArray(raw)) return out;
   for (const o of raw) {
@@ -1669,13 +1688,19 @@ function parseTransformObjects(raw, rect) {
     const w2 = objW(obj), h2 = objH(obj);
     if (obj.col < rect.c0 || obj.col + w2 - 1 > rect.c1 ||
         obj.row < rect.r0 || obj.row + h2 - 1 > rect.r1) continue;
+    const inter = typeof o.inter === 'string' ? o.inter.replace(/s$/, '') : null;
+    if (inter && INTERACTABLE_IDS.some(x => x.id === inter) && !seenInter.has(inter)) {
+      obj.inter = inter;
+      seenInter.add(inter);
+    }
+    if (typeof o.door === 'string') obj.door = o.door;
     out.push(obj);
   }
   return out;
 }
 
 // Puzzle ids live on at most one Map Change map-wide, same rule as `inter`.
-function parseTransforms(raw, room, seenTransformPuzzles) {
+function parseTransforms(raw, room, seenTransformPuzzles, seenInter) {
   const out = [];
   if (!Array.isArray(raw)) return out;
   for (const t of raw) {
@@ -1690,9 +1715,21 @@ function parseTransforms(raw, room, seenTransformPuzzles) {
     if (!Array.isArray(t.tiles) || t.tiles.length !== h ||
         t.tiles.some(row => !Array.isArray(row) || row.length !== w)) continue;
     seenTransformPuzzles.add(puzzleId);
+    const tileColl = {};
+    if (t.tileColl && typeof t.tileColl === 'object') {
+      for (const key in t.tileColl) {
+        const m = /^(\d+),(\d+)$/.exec(key);
+        if (!m) continue;
+        const cc = +m[1], rr = +m[2];
+        if (cc < c0 || cc > c1 || rr < r0 || rr > r1) continue;
+        const mode = t.tileColl[key];
+        if (mode === 'solid' || mode === 'over' || mode === 'under') tileColl[key] = mode;
+      }
+    }
     out.push({ puzzleId, rect: { c0, r0, c1, r1 },
                tiles: t.tiles.map(row => row.map(Number)),
-               objects: parseTransformObjects(t.objects, { c0, r0, c1, r1 }) });
+               objects: parseTransformObjects(t.objects, { c0, r0, c1, r1 }, seenInter),
+               tileColl });
   }
   return out;
 }
@@ -1774,7 +1811,7 @@ function fromData(data) {
             return obj;
           })
       : [];
-    room.transforms = parseTransforms(rm.transforms, room, seenTransformPuzzles);
+    room.transforms = parseTransforms(rm.transforms, room, seenTransformPuzzles, seenInter);
     // Migrate the old "remove on solve" checkbox: a puzzle-unique Map Change
     // over the object's own footprint, with no objects in the after-state —
     // reveals the tile already painted underneath, exactly as it did before.
@@ -2225,7 +2262,7 @@ function placeObjectAt(col, row) {
     // door attachment this makes a locked door.
     syncRoomFromGlobals();
     for (const rm of rooms)
-      for (const o of rm.objects) if (o.inter === selPuzzle) delete o.inter;
+      for (const o of allRoomObjects(rm)) if (o.inter === selPuzzle) delete o.inter;
     obj.inter = selPuzzle;
   }
   selPuzzle = selDoor = null;   // one-shot: reset to None after attaching
@@ -3282,7 +3319,7 @@ function selectPuzzle(id) {
     if (id) {
       // Each puzzle id lives on exactly one object map-wide — steal it if reused
       for (const rm of rooms)
-        for (const o of rm.objects) if (o.inter === id) delete o.inter;
+        for (const o of allRoomObjects(rm)) if (o.inter === id) delete o.inter;
       [...selectedObjs][0].inter = id;
     }
     selPuzzle = null;
@@ -3324,7 +3361,7 @@ function updateInterList() {
   INTERACTABLE_IDS.forEach(({ id }) => {
     const opt = document.createElement('option');
     opt.value = id;
-    const holder = rooms.find(rm => rm.objects.some(o => o.inter === id));
+    const holder = rooms.find(rm => allRoomObjects(rm).some(o => o.inter === id));
     opt.textContent = id + (holder ? ` ● ${holder.name}` : '');
     pSel.appendChild(opt);
   });
@@ -3360,8 +3397,8 @@ function updateInterList() {
 let transformMode = null;      // null | 'pick-rect' | 'editing'
 let transformPuzzleId = null;  // puzzle id the in-progress edit belongs to
 let transformRect = null;      // {c0,r0,c1,r1} grid coords, inclusive
-let transformBackup = null;    // {grid, objects} — the room's true "before"
-                                // state while 'editing' sandboxes the after-look
+let transformBackup = null;    // {grid, objects, tileColl} — the room's true
+                                // "before" state while 'editing' sandboxes the after-look
 
 // Cell-rect a marquee drag covers, in grid coords (any corner order) —
 // mirrors tilesInRect()'s rounding so a rect matches what tile selection would
@@ -3420,7 +3457,7 @@ function beginTransformEdit(id, rect, existingTransform) {
   transformMode = 'editing';
   transformPuzzleId = id;
   transformRect = rect;
-  transformBackup = { grid: cloneGrid(), objects: objects.map(o => ({ ...o })) };
+  transformBackup = { grid: cloneGrid(), objects: objects.map(o => ({ ...o })), tileColl: { ...tileColl } };
   clearSelection();
   if (existingTransform) {
     // Paint the stored after-state onto the live room so editing continues
@@ -3430,6 +3467,10 @@ function beginTransformEdit(id, rect, existingTransform) {
         grid[r][c] = existingTransform.tiles[r - rect.r0][c - rect.c0];
     objects = objects.filter(o => !objInTransformRect(o, rect));
     for (const o of existingTransform.objects) objects.push({ ...o });
+    for (let r = rect.r0; r <= rect.r1; r++)
+      for (let c = rect.c0; c <= rect.c1; c++)
+        delete tileColl[c + ',' + r];
+    for (const key in (existingTransform.tileColl || {})) tileColl[key] = existingTransform.tileColl[key];
   }
   setTool('select');
   updateTransformUI();
@@ -3440,26 +3481,29 @@ function saveTransformEdit() {
   const rect = transformRect;
   const tiles = [];
   for (let r = rect.r0; r <= rect.r1; r++) tiles.push(grid[r].slice(rect.c0, rect.c1 + 1));
+  // Kept as-is, inter/door included — a Map Change can reveal a brand new
+  // puzzle trigger or door, not just re-dress the room with plain objects
   const afterObjects = objects
     .filter(o => objInTransformRect(o, rect))
-    .map(o => {
-      const c = { ...o };
-      // Chaining a new puzzle trigger behind a Map Change is out of scope —
-      // after-objects are plain set-dressing only
-      delete c.inter; delete c.door;
-      return c;
-    });
+    .map(o => ({ ...o }));
+  const tileCollOut = {};
+  for (let r = rect.r0; r <= rect.r1; r++)
+    for (let c = rect.c0; c <= rect.c1; c++) {
+      const key = c + ',' + r;
+      if (tileColl[key] !== undefined) tileCollOut[key] = tileColl[key];
+    }
 
   // Restore the room to its true "before" state — editing was a sandbox on
   // top of it, never meant to become the room's actual live look
   grid = transformBackup.grid;
   objects = transformBackup.objects;
+  tileColl = transformBackup.tileColl;
 
   // One Map Change per puzzle, map-wide — steal it from wherever it lived
   transforms = transforms.filter(t => t.puzzleId !== transformPuzzleId);
   for (const rm of rooms)
     if (rm !== rooms[curRoom]) rm.transforms = (rm.transforms || []).filter(t => t.puzzleId !== transformPuzzleId);
-  transforms.push({ puzzleId: transformPuzzleId, rect: { ...rect }, tiles, objects: afterObjects });
+  transforms.push({ puzzleId: transformPuzzleId, rect: { ...rect }, tiles, objects: afterObjects, tileColl: tileCollOut });
 
   exitTransformMode();
   pushHistory();
@@ -3470,6 +3514,7 @@ function cancelTransform() {
   if (transformMode === 'editing' && transformBackup) {
     grid = transformBackup.grid;
     objects = transformBackup.objects;
+    tileColl = transformBackup.tileColl;
     syncRoomFromGlobals();
   }
   exitTransformMode();
@@ -3514,8 +3559,11 @@ function updateTransformUI() {
     bar.style.display = 'none';
   }
   const locked = transformMode !== null;
-  document.getElementById('interSelect').disabled = locked;
-  document.getElementById('doorSelect').disabled = locked;
+  // Still no object context while picking the rect, but once 'editing' starts
+  // these attach to whatever's placed/selected inside the highlighted box —
+  // that's how a Map Change reveals a new puzzle trigger or door
+  document.getElementById('interSelect').disabled = transformMode === 'pick-rect';
+  document.getElementById('doorSelect').disabled = transformMode === 'pick-rect';
   document.getElementById('btnMapChangeClear').disabled = locked;
   updateMapChangeStatus();
 }

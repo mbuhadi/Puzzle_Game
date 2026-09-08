@@ -668,6 +668,12 @@ function applyTransformTiles(grid, t) {
   for (let r = t.rect.r0; r <= t.rect.r1; r++)
     for (let c = t.rect.c0; c <= t.rect.c1; c++)
       grid[r][c] = t.tiles[r - t.rect.r0][c - t.rect.c0];
+  // A Map Change can also flip collision in its rect (e.g. a wall becomes
+  // walkable) — replace any prior override there with the transform's own
+  for (let r = t.rect.r0; r <= t.rect.r1; r++)
+    for (let c = t.rect.c0; c <= t.rect.c1; c++)
+      delete tileColl[c + ',' + r];
+  for (const key in (t.tileColl || {})) tileColl[key] = t.tileColl[key];
 }
 function roomObjectsWithTransforms(rm) {
   const solvedT = (rm.transforms || []).filter(t => puzzleSolved(t.puzzleId));
@@ -1367,10 +1373,10 @@ function sanitizeObjects(raw) {
   return out;
 }
 
-// A Map Studio "Map Change": highlight-an-area rect plus the tiles/objects it
-// becomes once puzzleId is solved. Objects in the after-state carry no `inter`/
-// `door` of their own in maps authored by the editor, but nothing here forbids
-// it — a hand-edited file can chain a new interactable in behind one.
+// A Map Studio "Map Change": highlight-an-area rect plus the tiles, objects
+// and collision overrides it becomes once puzzleId is solved. An after-state
+// object can carry its own `inter`/`door` — a Map Change can reveal a brand
+// new puzzle trigger or door, not just re-dress the room.
 function sanitizeTransforms(raw) {
   const out = [];
   if (!Array.isArray(raw)) return out;
@@ -1390,7 +1396,18 @@ function sanitizeTransforms(raw) {
       const ow = o.sw || 1, oh = o.sh || 1;
       return o.col >= c0 && o.col + ow - 1 <= c1 && o.row >= r0 && o.row + oh - 1 <= r1;
     });
-    out.push({ puzzleId, rect: { c0, r0, c1, r1 }, tiles, objects });
+    const tileColl = {};
+    if (t.tileColl && typeof t.tileColl === 'object') {
+      for (const key in t.tileColl) {
+        const m = /^(\d+),(\d+)$/.exec(key);
+        if (!m) continue;
+        const cc = +m[1], rr = +m[2];
+        if (cc < c0 || cc > c1 || rr < r0 || rr > r1) continue;
+        const mode = t.tileColl[key];
+        if (mode === 'solid' || mode === 'over' || mode === 'under') tileColl[key] = mode;
+      }
+    }
+    out.push({ puzzleId, rect: { c0, r0, c1, r1 }, tiles, objects, tileColl });
   }
   return out;
 }
@@ -1403,8 +1420,10 @@ function enterRoom(idx, px, py) {
   // leaving rm.grid itself untouched as the "before" state for any later
   // fresh load (Play/Randomize opens a new tab and reparses from source).
   mapGrid = rm.grid.map(row => row.slice());
+  // Also a fresh per-visit copy — a solved transform's collision override
+  // must not bleed into rm.tileColl, the room's own "before" state
+  tileColl = { ...(rm.tileColl || {}) };
   for (const t of rm.transforms || []) if (puzzleSolved(t.puzzleId)) applyTransformTiles(mapGrid, t);
-  tileColl = rm.tileColl || {};
   OBJECTS.length = 0;
   for (const o of roomObjectsWithTransforms(rm)) OBJECTS.push(o);
   rebuildObjSolid();
