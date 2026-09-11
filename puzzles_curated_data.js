@@ -129,7 +129,7 @@ const PUZZLES = [
           مادري وين يروحون
         </div>
       </div>`,
-    problem:``,
+    problem:`<div class="chunk"><span class="clabel">p4p1</span></div>`,
   },
   {
     num:'5', name:'خيال الاطفال مفتاح الثروة', loc:'The Basement', incomplete:false, build:'puzzle5',

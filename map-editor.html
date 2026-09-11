@@ -80,7 +80,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   flex-shrink: 0; border-bottom: none; border-radius: 6px 6px 0 0;
   padding: 5px 10px; font-size: 13px; line-height: 1;
 }
-/* Special-instructions tab — pinned to the far right of the tab bar. Not a
+/* Unique-puzzles tab — pinned to the far right of the tab bar. Not a
    .room-tab so renderTabs() doesn't wipe it. */
 #specialTab {
   margin-left: auto; flex-shrink: 0;
@@ -226,7 +226,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
   font-size: 10px; letter-spacing: 1.5px; color: var(--dim);
 }
 
-/* ── Special instructions panel ─────────────────────────────────────────── */
+/* ── Unique puzzles panel ───────────────────────────────────────────────── */
 #specialBox { width: 520px; height: 60vh; }
 #specialBody { flex: 1; display: flex; flex-direction: column; padding: 10px 12px; min-height: 0; }
 #specialText {
@@ -376,8 +376,8 @@ select:focus { outline: none; border-color: var(--gold-dim); }
     <!-- tabs injected by renderTabs() -->
     <button id="addRoomBtn" onclick="addRoom()" title="Add a room to this map">+</button>
     <div id="specialTab" onclick="openSpecialPanel()"
-         title="Special instructions for the current room — custom behaviors added to the game outside the studio">
-      <span id="specialTabLabel">✦ Special</span>
+         title="Unique puzzles for the current room — custom puzzles with bespoke win conditions, implemented outside the studio">
+      <span id="specialTabLabel">✦ Puzzles</span>
     </div>
   </div>
 
@@ -543,19 +543,19 @@ select:focus { outline: none; border-color: var(--gold-dim); }
     </div>
   </div>
 
-  <!-- Special instructions panel (per room) -->
+  <!-- Unique puzzles panel (per room) -->
   <div id="specialOverlay" class="overlay">
     <div id="specialBox" class="overlay-box">
-      <div class="overlay-head">SPECIAL INSTRUCTIONS — <span id="specialRoomName"></span>
+      <div class="overlay-head">UNIQUE PUZZLES — <span id="specialRoomName"></span>
         <button style="margin-left:auto" onclick="closeSpecialPanel()">Close</button>
       </div>
       <div id="specialBody">
         <div class="hint-text" style="margin-bottom:6px">
-          Notes for custom behaviors this room should have in the game — things the
+          Notes for unique puzzles this room should have — bespoke win conditions the
           studio can't build. They're saved with the map and implemented outside the studio.
         </div>
         <textarea id="specialText" spellcheck="false"
-                  placeholder="e.g. lights flicker when the player enters…"></textarea>
+                  placeholder="e.g. solved by stepping on tiles in a specific order…"></textarea>
       </div>
     </div>
   </div>
@@ -935,9 +935,9 @@ function renderTabs() {
   updateSpecialTab();
 }
 
-// ── Special instructions (per room) ───────────────────────────────────────────
-// Free-form notes describing custom behaviors the room should have in the
-// game — things the studio can't build. Saved with the map; implemented
+// ── Unique puzzles (per room) ──────────────────────────────────────────────────
+// Free-form notes describing unique puzzles the room should have — bespoke
+// win conditions the studio can't build. Saved with the map; implemented
 // outside the studio. Edits save live (every keystroke), so closing the
 // panel any way is safe.
 function openSpecialPanel() {
@@ -961,7 +961,7 @@ document.getElementById('specialText').addEventListener('keydown', e => {
 function updateSpecialTab() {
   const has = !!(rooms[curRoom] && rooms[curRoom].special && rooms[curRoom].special.trim());
   document.getElementById('specialTab').classList.toggle('has-notes', has);
-  document.getElementById('specialTabLabel').textContent = has ? '✦ Special ●' : '✦ Special';
+  document.getElementById('specialTabLabel').textContent = has ? '✦ Puzzles ●' : '✦ Puzzles';
 }
 
 function startTabRename(i, tab, nameEl) {

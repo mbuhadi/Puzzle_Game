@@ -654,6 +654,39 @@ function puzzleSolved(interId) {
   return SOLVED_CHUNKS.has(String(interId).replace(/s$/, ''));
 }
 
+// ── p4 — Courtyard tile-order puzzle (Unique Puzzle, no visual builder) ────────
+// Recorded in Map Studio's Unique Puzzles notes for the courtyard room. Solved
+// by stepping on the celestial floor tiles — full moon, sun, crescent, star
+// (assets/custom_tiles.js FLOOR_DEFS_CELESTIAL) — in this fixed order:
+//   full moon → sun → full moon → crescent → full moon → sun → star
+// Walking across plain floor between them doesn't affect progress; landing on
+// a celestial tile out of order restarts the sequence (immediately counting as
+// step 1 if it's a full moon, since the sequence starts there).
+const P4_SEQUENCE = [T.FLOOR_FULLMOON, T.FLOOR_SUNSTAR8, T.FLOOR_FULLMOON,
+                      T.FLOOR_CRESCENT, T.FLOOR_FULLMOON, T.FLOOR_SUNSTAR8, T.FLOOR_STAR5];
+let p4Progress = 0;
+let p4LastTileKey = null;   // col,row of the celestial tile currently stood on — one step per arrival, not per frame
+function resetP4Puzzle() { p4Progress = 0; p4LastTileKey = null; }
+function updateP4CourtyardPuzzle() {
+  if (puzzleSolved('p4')) return;
+  const col = Math.floor(player.x), row = Math.floor(player.y);
+  if (row < 0 || row >= GRID_H || col < 0 || col >= GRID_W) return;
+  const t = mapGrid[row][col];
+  if (!P4_SEQUENCE.includes(t)) { p4LastTileKey = null; return; }
+  const key = col + ',' + row;
+  if (key === p4LastTileKey) return;   // still standing on the same tile
+  p4LastTileKey = key;
+  if (t === P4_SEQUENCE[p4Progress]) {
+    p4Progress++;
+    if (p4Progress === P4_SEQUENCE.length) {
+      p4Progress = 0;
+      window.postMessage({ type: 'puzzle-solved', chunk: 'p4' }, '*');
+    }
+  } else {
+    p4Progress = (t === P4_SEQUENCE[0]) ? 1 : 0;
+  }
+}
+
 // Puzzle "Map Change" — a rectangular area (Map Studio: highlight the area,
 // then edit what it looks like once a puzzle is solved) whose tiles/objects
 // swap in the moment that puzzle solves. Objects outside any solved
@@ -782,6 +815,7 @@ function update(dt) {
     if (canMoveTo(player.x, player.y + sdy)) player.y += sdy;
   }
   updateNearby();
+  updateP4CourtyardPuzzle();
 }
 
 // ── Door traversal ────────────────────────────────────────────────────────────
@@ -1428,6 +1462,7 @@ function enterRoom(idx, px, py) {
   for (const o of roomObjectsWithTransforms(rm)) OBJECTS.push(o);
   rebuildObjSolid();
   player.x = px; player.y = py;
+  resetP4Puzzle();   // entering any room restarts the courtyard step sequence
   const fc = rm.grid.flat().filter(t => t === T.FLOOR || t === T.COURTYARD).length;
   document.getElementById('sqftLabel').textContent =
     (ROOMS.length > 1 ? rm.name + ' · ' : '') +
