@@ -78,6 +78,11 @@
     border-color:#5db87a; color:#5db87a; background:rgba(93,184,122,0.14);}
   .chunk-tags{margin-left:10px;}
   .chunk-tags .tag{font-size:10px; padding:3px 9px;}
+  /* Static (non-toggle) badge marking a chunk solved by bespoke game logic
+     instead of a visual builder here — see UNIQUE_PUZZLES in
+     puzzles_curated_data.js */
+  .tag-unique{cursor:default; border-color:#4a90d9; color:#6ab0f0; background:rgba(74,144,217,0.16);}
+  .tag-unique:hover{border-color:#4a90d9; color:#6ab0f0;}
 
   .section{margin-bottom:32px; max-width:1150px;}
   .section h2{font-size:14px; letter-spacing:3px; color:var(--gold-bright); border-bottom:1px solid var(--line); padding-bottom:8px; margin-bottom:16px; font-family:sans-serif;}
@@ -1429,7 +1434,16 @@ function select(i){
   // Status tags: on the title, and after every chunk label
   detail.querySelector('.title-row').appendChild(makeTagRow('puzzle:'+p.num,PUZZLE_TAGS));
   detail.querySelectorAll('.clabel').forEach(cl=>{
-    cl.after(makeTagRow('chunk:'+cl.textContent.trim(),CHUNK_TAGS,'chunk-tags'));
+    const id=cl.textContent.trim();
+    const nodes=[];
+    if(UNIQUE_PUZZLES[id]){
+      const u=document.createElement('span');
+      u.className='tag tag-unique';
+      u.textContent='Unique';
+      nodes.push(u);
+    }
+    nodes.push(makeTagRow('chunk:'+id,CHUNK_TAGS,'chunk-tags'));
+    cl.after(...nodes);
   });
   // Interactive canvases (incl. any hidden in the solution) are drawn once here.
   if(p.build&&BUILDERS[p.build]){ const ret=BUILDERS[p.build](); if(typeof ret==='function')teardown=ret; }

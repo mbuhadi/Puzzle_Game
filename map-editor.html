@@ -235,6 +235,16 @@ select:focus { outline: none; border-color: var(--gold-dim); }
   font-family: monospace; font-size: 12px; line-height: 1.5;
 }
 #specialText:focus { outline: none; border-color: var(--gold-dim); }
+/* Auto-detected unique-puzzle notes — read-only, shown only while the chunk
+   is actually attached to an object in this room (see roomUniquePuzzleNotes) */
+.auto-note {
+  border: 1px solid var(--gold-dim); border-radius: 6px; background: var(--bg3);
+  padding: 10px 12px; margin-bottom: 10px; font-size: 12px; line-height: 1.5; color: var(--text);
+}
+.auto-note + .auto-note { margin-top: -4px; }
+.auto-note-title {
+  display: block; color: var(--gold); font-weight: bold; letter-spacing: 0.5px; margin-bottom: 4px;
+}
 
 /* ── Tileset picker ─────────────────────────────────────────────────────── */
 #tsBox { width: 600px; height: 84vh; }
@@ -554,6 +564,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
           Notes for unique puzzles this room should have — bespoke win conditions the
           studio can't build. They're saved with the map and implemented outside the studio.
         </div>
+        <div id="specialAutoNotes"></div>
         <textarea id="specialText" spellcheck="false"
                   placeholder="e.g. solved by stepping on tiles in a specific order…"></textarea>
       </div>
@@ -940,10 +951,30 @@ function renderTabs() {
 // win conditions the studio can't build. Saved with the map; implemented
 // outside the studio. Edits save live (every keystroke), so closing the
 // panel any way is safe.
+//
+// Alongside the free-form field, any puzzle registered in UNIQUE_PUZZLES
+// (puzzles_curated_data.js) gets a read-only reminder of its win condition —
+// but only once its chunk is actually attached to an object in this room, so
+// it never describes a puzzle that isn't in the map yet.
+function roomUniquePuzzleNotes(rm) {
+  if (!rm) return [];
+  const attachedIds = new Set(
+    allRoomObjects(rm)
+      .map(o => typeof o.inter === 'string' ? o.inter.replace(/s$/, '') : null)
+      .filter(Boolean)
+  );
+  return Object.keys(UNIQUE_PUZZLES).filter(id => attachedIds.has(id)).map(id => UNIQUE_PUZZLES[id]);
+}
+function renderAutoNotes(rm) {
+  document.getElementById('specialAutoNotes').innerHTML = roomUniquePuzzleNotes(rm)
+    .map(n => `<div class="auto-note"><span class="auto-note-title">⚡ ${n.label}</span>${n.instructions}</div>`)
+    .join('');
+}
 function openSpecialPanel() {
   syncRoomFromGlobals();
   document.getElementById('specialRoomName').textContent = rooms[curRoom].name.toUpperCase();
   document.getElementById('specialText').value = rooms[curRoom].special || '';
+  renderAutoNotes(rooms[curRoom]);
   document.getElementById('specialOverlay').classList.add('open');
   document.getElementById('specialText').focus();
 }
@@ -957,9 +988,13 @@ document.getElementById('specialText').addEventListener('input', e => {
 document.getElementById('specialText').addEventListener('keydown', e => {
   if (e.key === 'Escape') { e.stopPropagation(); closeSpecialPanel(); }
 });
-// Gold tint on the tab when the active room has instructions
+// Gold tint on the tab when the active room has instructions — free-form
+// notes, or an attached unique puzzle with an auto-generated reminder
 function updateSpecialTab() {
-  const has = !!(rooms[curRoom] && rooms[curRoom].special && rooms[curRoom].special.trim());
+  const rm = rooms[curRoom];
+  const hasManual = !!(rm && rm.special && rm.special.trim());
+  const hasAuto = roomUniquePuzzleNotes(rm).length > 0;
+  const has = hasManual || hasAuto;
   document.getElementById('specialTab').classList.toggle('has-notes', has);
   document.getElementById('specialTabLabel').textContent = has ? '✦ Puzzles ●' : '✦ Puzzles';
 }

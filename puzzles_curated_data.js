@@ -18,6 +18,20 @@ const TV_HTML=`
     </table>
   </div></div>`;
 
+/* Puzzles solved by bespoke game logic instead of a visual builder in this
+   file — no `build` key, no interactive chunk here. Flagged with a blue
+   "Unique" tag next to their chunk label in the Puzzle Guide (puzzles_
+   curated.html), and surfaced in Map Studio's Unique Puzzles panel — but
+   only once their chunk id is actually attached to an object in the room,
+   so the note never describes a puzzle that isn't in the map yet. */
+const UNIQUE_PUZZLES = {
+  p4p1: {
+    puzzle: 4,
+    label: 'Courtyard tile order',
+    instructions: `Solved by stepping on the courtyard's celestial floor tiles in this exact order: Full Moon → Sun → Full Moon → Crescent → Full Moon → Sun → Star. Walking on plain floor between them doesn't break progress; landing on the wrong tile resets the sequence. Tracked directly in maps.html (updateP4CourtyardPuzzle) — there's no visual builder for this one.`,
+  },
+};
+
 const PUZZLES = [
   {
     num:'1', name:'عائلتنا الكريمة', loc:'At the Gate', build:'tree',
@@ -129,7 +143,12 @@ const PUZZLES = [
           مادري وين يروحون
         </div>
       </div>`,
-    problem:`<div class="chunk"><span class="clabel">p4p1</span></div>`,
+    problem:`<div class="chunk"><span class="clabel">p4p1</span>
+        <div class="note" style="font-style:normal; border-left-color:var(--gold); background:var(--panel2); border-radius:8px; padding:16px 20px; max-width:640px;">
+          <strong style="color:var(--gold); display:block; margin-bottom:8px; font-family:sans-serif; letter-spacing:0.5px;">⚡ UNIQUE PUZZLE — no visual builder</strong>
+          ${UNIQUE_PUZZLES.p4p1.instructions}
+        </div>
+      </div>`,
   },
   {
     num:'5', name:'خيال الاطفال مفتاح الثروة', loc:'The Basement', incomplete:false, build:'puzzle5',
