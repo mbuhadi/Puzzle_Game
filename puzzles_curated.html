@@ -1545,6 +1545,15 @@ if (!CHUNK_PARAM) {
       setTimeout(fitChunkToViewport, 300);
     });
     if (window.visualViewport) window.visualViewport.addEventListener('resize', fitChunkToViewport);
+    // Resize/orientation events dispatched to THIS (nested, nav-loaded)
+    // iframe's own window aren't reliably delivered on every mobile browser
+    // when the resize is really the parent frame (maps.html) resizing the
+    // iframe element via CSS, rather than the top-level window itself
+    // changing size — the exact case here, since examineBox is resized from
+    // the parent on rotation. Expose this so the parent can call it directly
+    // once it knows the iframe has actually settled to its new size, instead
+    // of hoping this frame's own listeners above fire.
+    window.fitChunkToViewport = fitChunkToViewport;
 
     // Dev Skip: maps.html?dev=1 (from the editor's "Play (Dev Skip)" button)
     // forwards &dev=1 into every puzzle iframe it opens. Inject a button that
