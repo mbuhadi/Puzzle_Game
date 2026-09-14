@@ -74,11 +74,10 @@
     display: none;
     align-items: center;
     justify-content: center;
-    opacity: 1;
+    opacity: 0;
     transition: opacity 0.3s ease;
   }
   #examineOverlay.open { display: flex; }
-  #examineOverlay.closing { opacity: 0; }
   /* Fills essentially the whole screen — the game is meant to be played with
      the phone held sideways, and every puzzle should get as much of that
      landscape screen as it can. */
@@ -760,21 +759,24 @@ function openExamine(p) {
   const baseId = p.id.replace(/s$/, '');
   examineFrame.src = 'puzzles_curated.html?chunk=' + baseId + (DEV_SKIP ? '&dev=1' : '');
   examineOverlay.classList.add('open');
+  examineOverlay.style.opacity = '0';
+  void examineOverlay.offsetWidth;   // force reflow so the opacity:1 below actually transitions
+  examineOverlay.style.opacity = '1';
   // No scrolling behind the puzzle while it's open — body alone isn't enough,
   // since <html> is the element that actually scrolls in most browsers.
   document.documentElement.style.overflow = 'hidden';
   document.body.style.overflow = 'hidden';
 }
 
-// Fades #examineOverlay out over the CSS opacity transition (0.3s), then
-// hides it and clears the iframe. `after` runs once fully closed — callers
-// use it for whatever should happen next (step the player back, transit
-// through a door, etc).
+// Fades #examineOverlay in/out over the CSS opacity transition (0.3s).
+// `after` (close only) runs once fully closed — callers use it for whatever
+// should happen next (step the player back, transit through a door, etc).
 function fadeCloseExamine(after) {
   if (!examineOverlay.classList.contains('open')) { if (after) after(); return; }
-  examineOverlay.classList.add('closing');
+  examineOverlay.style.opacity = '0';
   setTimeout(() => {
-    examineOverlay.classList.remove('open', 'closing');
+    examineOverlay.classList.remove('open');
+    examineOverlay.style.opacity = '';
     examineFrame.src = '';
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
