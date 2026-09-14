@@ -47,6 +47,7 @@
     border-radius: 4px;
     outline: none;
     max-width: 100%;
+    height: auto;   /* scale down proportionally instead of squashing when narrower than 800px (e.g. phone held upright) */
     touch-action: none;
   }
   #mapCanvas:focus { border-color: #c8a84b; }
@@ -1300,8 +1301,11 @@ canvas.addEventListener('touchcancel', e => {
 const DPR = Math.min(window.devicePixelRatio || 1, 3);
 canvas.width  = Math.round(VIEWPORT_W * DPR);
 canvas.height = Math.round(VIEWPORT_H * DPR);
-canvas.style.width  = VIEWPORT_W + 'px';
-canvas.style.height = VIEWPORT_H + 'px';
+canvas.style.width = VIEWPORT_W + 'px';
+// No inline height: CSS (max-width:100%; height:auto) scales it down
+// proportionally, off the width/height attributes just set above, when the
+// screen is narrower than VIEWPORT_W (e.g. phone held upright) — an inline
+// height here would pin it at VIEWPORT_H and squash the picture instead.
 ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 
 function applyMap(result, seed) {
