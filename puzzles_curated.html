@@ -117,13 +117,11 @@
 
   /* ── Sliding window interactive ── */
   /* Shrink-wrapped to its canvas (width:fit-content, keeping normal block
-     flow so it still stacks above/below siblings like .slide-controls) — a
-     plain block div here would stretch full-width and leave the narrower
-     canvas sitting off-center inside it. */
+     flow so it still stacks above/below siblings) — a plain block div here
+     would stretch full-width and leave the narrower canvas sitting
+     off-center inside it. */
   .slide-wrap{width:fit-content;}
   .slide-wrap canvas{display:block; max-width:100%; border-radius:6px; box-shadow:0 6px 20px rgba(0,0,0,.5); cursor:grab; touch-action:none;}
-  .slide-controls{display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;}
-  .slide-controls .reveal-btn{padding:10px 22px;}
 
   /* ── Set-the-clock interactive ── */
   .clockset-wrap{width:fit-content;}
@@ -403,10 +401,6 @@ function buildSlidingWindow(){
     if(e.key==='ArrowLeft'){ e.preventDefault(); off=clamp(off-5); draw(); }
     if(e.key==='ArrowRight'){ e.preventDefault(); off=clamp(off+5); draw(); }
   });
-  const bl=document.getElementById('slideLeft'), br=document.getElementById('slideRight'), rs=document.getElementById('slideReset');
-  if(bl)bl.onclick=()=>{ off=clamp(off-6); draw(); };
-  if(br)br.onclick=()=>{ off=clamp(off+6); draw(); };
-  if(rs)rs.onclick=()=>{ off=START; draw(); };
 
   // test hook for verification
   window.__slideTest=v=>{ off=clamp(v==null?CORRECT:v); draw(); return {off,CORRECT,MAXOFF,aligned:Math.abs(off-CORRECT)<=3}; };

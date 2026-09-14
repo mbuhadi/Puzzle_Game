@@ -49,11 +49,6 @@ const PUZZLES = [
       <div class="chunk"><span class="clabel">p2g1</span>
         <div class="slide-wrap">
           <canvas id="slideWin" width="720" height="424" tabindex="0"></canvas>
-          <div class="slide-controls">
-            <button class="reveal-btn" id="slideLeft">◀</button>
-            <button class="reveal-btn" id="slideRight">▶</button>
-            <button class="reveal-btn" id="slideReset">↺ RESET</button>
-          </div>
         </div>
       </div>`,
     problem:`<div class="chunk"><span class="clabel">p2p1</span>
