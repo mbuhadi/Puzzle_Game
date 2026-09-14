@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Map 1 — Puzzle Game</title>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -472,7 +472,26 @@ const keys   = {};
 
 // ── Examine system ────────────────────────────────────────────────────────────
 const examineOverlay = document.getElementById('examineOverlay');
+const examineBox     = document.getElementById('examineBox');
 const examineFrame   = document.getElementById('examineFrame');
+
+// #examineBox is sized in vh/vw in CSS, but on some mobile browsers those
+// units go stale after a couple of orientation changes (the box keeps the
+// old orientation's size instead of the new one) — leaving a gap at one edge
+// that shows the page behind instead of the puzzle, with the iframe's real,
+// correctly-sized content underneath not lining up with where taps land.
+// Pin the box to real pixel dimensions from JS instead, recomputed on every
+// resize/orientationchange, so it can't get stuck on a stale value.
+function syncExamineBoxSize() {
+  examineBox.style.width  = Math.round(window.innerWidth  * 0.96) + 'px';
+  examineBox.style.height = Math.round(window.innerHeight * 0.94) + 'px';
+}
+window.addEventListener('resize', syncExamineBoxSize);
+window.addEventListener('orientationchange', () => {
+  syncExamineBoxSize();
+  setTimeout(syncExamineBoxSize, 300);
+});
+if (window.visualViewport) window.visualViewport.addEventListener('resize', syncExamineBoxSize);
 
 // ── Puzzle chunk preloading ───────────────────────────────────────────────────
 // Opening a puzzle navigates the examine iframe to puzzles_curated.html?chunk=…
@@ -758,6 +777,7 @@ function openExamine(p) {
   exitDir = dist > 0.05 ? { x: dx/dist, y: dy/dist } : { x: 0, y: -1 };
   const baseId = p.id.replace(/s$/, '');
   examineFrame.src = 'puzzles_curated.html?chunk=' + baseId + (DEV_SKIP ? '&dev=1' : '');
+  syncExamineBoxSize();
   examineOverlay.classList.add('open');
   examineOverlay.style.opacity = '0';
   void examineOverlay.offsetWidth;   // force reflow so the opacity:1 below actually transitions
@@ -1287,10 +1307,13 @@ canvas.addEventListener('blur',   ()  => { for (const k in keys) keys[k] = false
 window.addEventListener('blur',   ()  => { for (const k in keys) keys[k] = false; });
 
 // A quick double-tap on the canvas can still trigger the browser's native
-// double-tap-to-zoom on some mobile browsers even with touch-action:none and
-// the viewport's user-scalable=no (both are ignored in places) — leaving the
-// page "stuck" zoomed in with no easy way back. Belt-and-suspenders: treat
-// any touchend within 300ms of the previous one as a double-tap and swallow it.
+// double-tap-to-zoom on some mobile browsers even with touch-action:none —
+// leaving the page "stuck" zoomed in with no easy way back. Locking zoom via
+// the viewport meta (maximum-scale/user-scalable=no) would also stop it, but
+// on some Android/Chrome builds that combination itself causes a stale black
+// strip and dead touch input after a couple of orientation changes — worse
+// than the bug it fixes — so handle it in JS instead: treat any touchend
+// within 300ms of the previous one as a double-tap and swallow it.
 let lastTouchEnd = 0;
 document.addEventListener('touchend', e => {
   const now = Date.now();
