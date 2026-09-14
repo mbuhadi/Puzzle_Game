@@ -485,6 +485,16 @@ const examineFrame   = document.getElementById('examineFrame');
 function syncExamineBoxSize() {
   examineBox.style.width  = Math.round(window.innerWidth  * 0.96) + 'px';
   examineBox.style.height = Math.round(window.innerHeight * 0.94) + 'px';
+  // Force layout now so the iframe element itself has actually settled to
+  // its new size before the line below runs — then drive its own refit
+  // directly rather than hoping its resize/orientationchange listeners
+  // fired: on a nested iframe resized by the *parent's* CSS (this case,
+  // every rotation), that delivery isn't reliable on every mobile browser,
+  // and a missed one leaves the puzzle scaled/positioned for the previous
+  // orientation — showing as a black gap over part of the puzzle, with
+  // taps landing on the wrong spot since the visible content has moved.
+  void examineFrame.offsetWidth;
+  try { examineFrame.contentWindow.fitChunkToViewport(); } catch (e) { /* not loaded, or a multi-puzzle (non-chunk) page that has no such function */ }
 }
 window.addEventListener('resize', syncExamineBoxSize);
 window.addEventListener('orientationchange', () => {
