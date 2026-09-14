@@ -710,7 +710,7 @@ window.addEventListener('message', e => {
   if (firstSolve && a && a.id && String(a.id).replace(/s$/, '') === e.data.chunk) {
     setTimeout(() => {
       fadeCloseExamine(() => {
-        activeInteractable = null;   // skip closeExamine()'s step-back nudge
+        activeInteractable = null;
         canvas.focus();
         if (a.door) {
           if (a.obj && a.obj.anim && a.obj.anim.once)
@@ -764,17 +764,12 @@ function isRemovedDoor(o) {
 
 const INTERACT_RADIUS = 1.2;  // tiles — proximity for the interact highlight
 let activeInteractable = null;
-let exitDir = { x: 0, y: -1 };
 let nearbyInteractable = null; // updated each frame; drives the interact highlight
 let bubbleBounds = null;       // world-pixel rect of the nearby interactable, for touch tap hit-test
 
 function openExamine(p) {
   for (const k in keys) keys[k] = false;
   activeInteractable = p;
-  const ix = p.col + 0.5, iy = p.row + 0.5;
-  const dx = player.x - ix, dy = player.y - iy;
-  const dist = Math.sqrt(dx*dx + dy*dy);
-  exitDir = dist > 0.05 ? { x: dx/dist, y: dy/dist } : { x: 0, y: -1 };
   const baseId = p.id.replace(/s$/, '');
   examineFrame.src = 'puzzles_curated.html?chunk=' + baseId + (DEV_SKIP ? '&dev=1' : '');
   syncExamineBoxSize();
@@ -796,7 +791,7 @@ function openExamine(p) {
 
 // Fades #examineOverlay in/out over the CSS opacity transition (0.3s).
 // `after` (close only) runs once fully closed — callers use it for whatever
-// should happen next (step the player back, transit through a door, etc).
+// should happen next (transit through a door, etc).
 function fadeCloseExamine(after) {
   if (!examineOverlay.classList.contains('open')) { if (after) after(); return; }
   examineOverlay.style.opacity = '0';
@@ -812,12 +807,7 @@ function fadeCloseExamine(after) {
 
 function closeExamine() {
   fadeCloseExamine(() => {
-    if (activeInteractable) {
-      const ix = activeInteractable.col + 0.5, iy = activeInteractable.row + 0.5;
-      const tx = ix + exitDir.x * 2.5, ty = iy + exitDir.y * 2.5;
-      if (canMoveTo(tx, ty)) { player.x = tx; player.y = ty; }
-      activeInteractable = null;
-    }
+    activeInteractable = null;
     canvas.focus();
   });
 }
