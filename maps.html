@@ -698,11 +698,11 @@ function isRemovedDoor(o) {
   return !!(o.removeOnSolve && o.inter && !o.door && puzzleSolved(o.inter));
 }
 
-const INTERACT_RADIUS = 1.2;  // tiles — proximity for thought bubble
+const INTERACT_RADIUS = 1.2;  // tiles — proximity for the interact highlight
 let activeInteractable = null;
 let exitDir = { x: 0, y: -1 };
-let nearbyInteractable = null; // updated each frame; drives thought bubble
-let bubbleBounds = null;       // world-pixel rect of thought bubble for tap hit-test
+let nearbyInteractable = null; // updated each frame; drives the interact highlight
+let bubbleBounds = null;       // world-pixel rect of the nearby interactable, for touch tap hit-test
 
 function openExamine(p) {
   for (const k in keys) keys[k] = false;
@@ -772,9 +772,24 @@ function getNearbyInteractable() {
 }
 
 function updateNearby() {
-  if (examineOverlay.classList.contains('open')) { nearbyInteractable = null; return; }
+  if (examineOverlay.classList.contains('open')) { nearbyInteractable = null; bubbleBounds = null; return; }
   nearbyInteractable = getNearbyInteractable();
-  if (!nearbyInteractable) bubbleBounds = null;
+  if (!nearbyInteractable) { bubbleBounds = null; return; }
+  // Tap target for touch: the interactable's own on-screen footprint — the
+  // same rect drawInteractHighlight glows around — padded out so a phone tap
+  // doesn't have to land on the exact pixel-perfect edge. Previously this was
+  // a small fixed-size zone floating above the player's head (left over from
+  // a since-removed speech-bubble glyph), invisible and nowhere near the
+  // glowing object players actually tap, which is why taps so often missed.
+  const o = nearbyInteractable.obj;
+  const S = TILE_PX, PAD = 16;
+  const w = o.sw || 1, h = o.sh || 1;
+  bubbleBounds = {
+    wx: o.col * S - PAD,
+    wy: o.row * S - PAD,
+    ww: w * S + PAD * 2,
+    wh: h * S + PAD * 2,
+  };
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────
@@ -1064,20 +1079,6 @@ function drawPlayer(px, py) {
   ctx.beginPath(); ctx.arc(cx-2.5, cy-2.5, 4, 0, Math.PI*2); ctx.fill();
 }
 
-// No longer drawn (the speech-bubble glyph over the player's head was
-// removed) — this just keeps bubbleBounds current so the touch tap-to-
-// interact hit region above the player's head still works.
-function drawThoughtBubble() {
-  if (!nearbyInteractable) { bubbleBounds = null; return; }
-  const S = TILE_PX;
-  const pcx = (player.x - 0.5) * S + S/2;   // player center x (world px)
-  const pcy = (player.y - 0.5) * S;           // player top y (world px)
-
-  const BW = 48, BH = 30;
-  const bx = pcx - BW/2, by = pcy - BH - 24;
-  bubbleBounds = { wx: bx, wy: by, ww: BW, wh: BH };
-}
-
 // "[E]" prompt in the same colour as the interactable frame, centered on a
 // bottom-right corner (world px). No stroke/backing behind it — just the
 // glyph, with a soft shadow so it stays legible over busy sprites.
@@ -1198,7 +1199,6 @@ function render() {
     if (coveredByObject) continue;
     drawTile(mapGrid[r][c], c*TILE_PX, r*TILE_PX);
   }
-  drawThoughtBubble();   // world space — drawn above player, inside translate
   drawInteractHighlight();  // always last — on top of every tile/object/player
   ctx.restore();
 
@@ -1251,7 +1251,7 @@ canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   for (const t of e.changedTouches) {
     const { cx, cy } = canvasTouch(t);
-    // Thought bubble tap — check first so a tap on the bubble doesn't also spawn the joystick
+    // Tap on the highlighted interactable — check first so it doesn't also spawn the joystick
     if (!examineOverlay.classList.contains('open') && bubbleBounds && nearbyInteractable) {
       const cam = getCamera();
       const wx = cx + cam.x, wy = cy + cam.y;
