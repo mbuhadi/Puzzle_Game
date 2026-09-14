@@ -780,8 +780,14 @@ function openExamine(p) {
   syncExamineBoxSize();
   examineOverlay.classList.add('open');
   examineOverlay.style.opacity = '0';
-  void examineOverlay.offsetWidth;   // force reflow so the opacity:1 below actually transitions
-  examineOverlay.style.opacity = '1';
+  // The very first time this element ever leaves display:none, a forced
+  // reflow (offsetWidth) alone isn't always enough to make the browser
+  // treat opacity:0 as a real prior frame to transition from — it can just
+  // jump straight to opacity:1 with no fade, only on that first open. A
+  // double rAF guarantees a full style+paint pass happens in between.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => { examineOverlay.style.opacity = '1'; });
+  });
   // No scrolling behind the puzzle while it's open — body alone isn't enough,
   // since <html> is the element that actually scrolls in most browsers.
   document.documentElement.style.overflow = 'hidden';
