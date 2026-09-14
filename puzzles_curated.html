@@ -95,7 +95,7 @@
   .solution.shown{display:block;}
   .solution h2{color:var(--gold); border-color:#3a3214;}
   .answer{font-size:24px; color:var(--gold-bright); margin:10px 0 18px; font-family:monospace; letter-spacing:1px;}
-  .note{font-size:13px; color:var(--dim); font-style:italic; font-family:sans-serif; border-left:2px solid var(--line); padding-left:12px; margin-top:16px;}
+  .note{font-size:13px; color:var(--dim); font-style:italic; font-family:sans-serif; border-left:2px solid var(--line); padding-left:12px; margin-top:16px; width:fit-content;}
   .tree-sol{font-family:'Amiri',serif; direction:rtl; line-height:2.2; font-size:18px;}
   .tree-sol b{color:var(--gold-bright);}
 
@@ -116,11 +116,17 @@
   .tree-clues{flex:1; min-width:300px;}
 
   /* ── Sliding window interactive ── */
+  /* Shrink-wrapped to its canvas (width:fit-content, keeping normal block
+     flow so it still stacks above/below siblings like .slide-controls) — a
+     plain block div here would stretch full-width and leave the narrower
+     canvas sitting off-center inside it. */
+  .slide-wrap{width:fit-content;}
   .slide-wrap canvas{display:block; max-width:100%; border-radius:6px; box-shadow:0 6px 20px rgba(0,0,0,.5); cursor:grab; touch-action:none;}
   .slide-controls{display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;}
   .slide-controls .reveal-btn{padding:10px 22px;}
 
   /* ── Set-the-clock interactive ── */
+  .clockset-wrap{width:fit-content;}
   .clockset-wrap canvas{display:block; max-width:100%; border-radius:14px; box-shadow:0 6px 20px rgba(0,0,0,.5); cursor:grab; touch-action:none;}
 
   /* ── TV / Morse reference ── */
@@ -140,15 +146,15 @@
   .play-hint b{color:var(--gold-bright);}
 
   /* ── Basement Venn diagram ── */
-  .circles-wrap{margin:16px 0;}
+  .circles-wrap{margin:16px 0; width:fit-content;}
   .circles-wrap canvas{display:block; max-width:100%; border-radius:6px; box-shadow:0 6px 20px rgba(0,0,0,.5);}
 
   /* ── Clothesline (Morse) ── */
-  .clothes-wrap{margin:16px 0;}
+  .clothes-wrap{margin:16px 0; width:fit-content;}
   .clothes-wrap canvas{display:block; max-width:100%; border:1px solid var(--line); border-radius:10px; box-shadow:0 6px 20px rgba(0,0,0,.5);}
 
   /* ── Wardrobes (Morse) ── */
-  .wardrobe-wrap{margin:16px 0;}
+  .wardrobe-wrap{margin:16px 0; width:fit-content;}
   .wardrobe-wrap img{display:block; width:100%; max-width:560px; height:auto; image-rendering:pixelated; border:1px solid var(--line); border-radius:10px; box-shadow:0 6px 20px rgba(0,0,0,.5);}
 
   /* ── Shapes Grid ── */
@@ -1469,13 +1475,19 @@ if (!CHUNK_PARAM) {
     document.getElementById('menuBtn').style.display = 'none';
     document.getElementById('menuOverlay').style.display = 'none';
 
-    // Full-screen centered layout for the chunk
-    document.body.style.overflow  = 'auto';
-    document.body.style.height    = 'auto';
-    document.body.style.minHeight = '100vh';
-    document.body.style.alignItems    = 'flex-start';
+    // Played inside maps.html's examine iframe, phone held sideways
+    // (landscape): the chunk fills the frame exactly, centered, with no
+    // page scroll and no pinch/double-tap zoom — see fitChunkToViewport().
+    const vp = document.querySelector('meta[name="viewport"]');
+    if (vp) vp.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+    document.documentElement.style.overflow = 'hidden';
+    document.documentElement.style.height   = '100%';
+    document.body.style.overflow  = 'hidden';
+    document.body.style.height    = '100%';
+    document.body.style.alignItems     = 'center';
     document.body.style.justifyContent = 'center';
-    document.body.style.padding = '60px 80px';
+    document.body.style.padding = '0';
+    document.body.style.touchAction = 'none';
 
     detail.style.flex    = 'none';
     detail.style.padding = '0';
@@ -1487,6 +1499,48 @@ if (!CHUNK_PARAM) {
     if (builderKey && BUILDERS[builderKey]) {
       try { BUILDERS[builderKey](); } catch(e) {}
     }
+
+    // Scale the chunk up or down — uniformly, preserving its shape — so it
+    // fills as much of the frame as it can while just barely staying inside
+    // it, centered, with no scrollbar ever appearing. `detail` keeps its
+    // design width (up to 900px, for builders that size themselves off
+    // detail.clientWidth) but most puzzles don't actually fill that box, so
+    // the fit is measured off the tight bounding box of what's actually
+    // drawn — detail's own children — not detail's box itself; otherwise a
+    // narrow puzzle would be scaled as if it were 900px wide and end up
+    // small and off-center. Recomputed on resize/orientation change
+    // (rotating the phone, the browser chrome showing/hiding, etc).
+    const FIT_MARGIN = 10;   // px of breathing room so nothing touches the edge
+    function fitChunkToViewport() {
+      detail.style.transform = 'none';
+      detail.style.transformOrigin = '0 0';
+      const detailRect = detail.getBoundingClientRect();
+      const kids = [...detail.children];
+      const rects = (kids.length ? kids : [detail]).map(k => k.getBoundingClientRect());
+      const left   = Math.min(...rects.map(r => r.left));
+      const top    = Math.min(...rects.map(r => r.top));
+      const right  = Math.max(...rects.map(r => r.right));
+      const bottom = Math.max(...rects.map(r => r.bottom));
+      const cw = right - left, ch = bottom - top;
+      if (!cw || !ch) return;
+      const scale = Math.max(Math.min(
+        (window.innerWidth  - FIT_MARGIN * 2) / cw,
+        (window.innerHeight - FIT_MARGIN * 2) / ch
+      ), 0.05);
+      // The content's center, in detail's own local (pre-transform) coordinates —
+      // used as the scale origin so scaling doesn't shift it off-screen —
+      // plus a translate (in normal, unscaled page pixels, since it's applied
+      // after the scale) from that point's original position to the viewport center.
+      const cx = (left + right) / 2 - detailRect.left;
+      const cy = (top + bottom) / 2 - detailRect.top;
+      const tx = window.innerWidth  / 2 - (detailRect.left + cx);
+      const ty = window.innerHeight / 2 - (detailRect.top  + cy);
+      detail.style.transformOrigin = cx + 'px ' + cy + 'px';
+      detail.style.transform = 'translate(' + tx + 'px, ' + ty + 'px) scale(' + scale + ')';
+    }
+    fitChunkToViewport();
+    window.addEventListener('resize', fitChunkToViewport);
+    window.addEventListener('orientationchange', fitChunkToViewport);
 
     // Dev Skip: maps.html?dev=1 (from the editor's "Play (Dev Skip)" button)
     // forwards &dev=1 into every puzzle iframe it opens. Inject a button that

@@ -78,12 +78,16 @@
   }
   #examineOverlay.open { display: flex; }
   #examineOverlay.closing { opacity: 0; }
+  /* Fills essentially the whole screen — the game is meant to be played with
+     the phone held sideways, and every puzzle should get as much of that
+     landscape screen as it can. */
   #examineBox {
     display: flex;
     flex-direction: column;
-    width: 960px;
-    height: 82vh;
+    width: 96vw;
+    height: 94vh;
     max-width: 96vw;
+    max-height: 94vh;
     background: #14120e;
     border: 2px solid #c8a84b;
     border-radius: 10px;
@@ -97,9 +101,9 @@
     border-top: 1px solid #2e2a1e;
     color: #c8a84b;
     font-family: 'Cinzel', serif;
-    font-size: 13px;
+    font-size: 11px;
     letter-spacing: 2px;
-    padding: 14px 0;
+    padding: 7px 0;
     cursor: pointer;
     width: 100%;
     transition: background 0.15s, color 0.15s;
@@ -707,6 +711,10 @@ function openExamine(p) {
   const baseId = p.id.replace(/s$/, '');
   examineFrame.src = 'puzzles_curated.html?chunk=' + baseId + (DEV_SKIP ? '&dev=1' : '');
   examineOverlay.classList.add('open');
+  // No scrolling behind the puzzle while it's open — body alone isn't enough,
+  // since <html> is the element that actually scrolls in most browsers.
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
 }
 
 // Fades #examineOverlay out over the CSS opacity transition (0.3s), then
@@ -719,6 +727,8 @@ function fadeCloseExamine(after) {
   setTimeout(() => {
     examineOverlay.classList.remove('open', 'closing');
     examineFrame.src = '';
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
     if (after) after();
   }, 300);
 }

@@ -219,7 +219,7 @@ const PUZZLES = [
         </div>
       </div>`,
     problem:`<div class="chunk"><span class="clabel">p6p1</span>
-        <div id="p6grid" style="margin:20px 0;"></div>
+        <div id="p6grid" style="margin:20px 0; width:fit-content;"></div>
         <button class="reveal-btn" id="p6reset" style="margin-top:8px;">↺ RESET</button>
       </div>`,
   },
@@ -229,7 +229,7 @@ const PUZZLES = [
       <div class="chunk"><span class="clabel">p7g1</span></div>
       <div class="chunk"><span class="clabel">p7g2</span></div>`,
     problem:`<div class="chunk"><span class="clabel">p7p1</span>
-        <div id="p7grid" style="margin:20px 0;"></div>
+        <div id="p7grid" style="margin:20px 0; width:fit-content;"></div>
         <button class="reveal-btn" id="p7reset" style="margin-top:8px;">↺ RESET</button>
       </div>`,
   },
@@ -237,7 +237,7 @@ const PUZZLES = [
     num:'8', name:'؟؟؟', loc:'', build:'puzzle8',
     given:``,
     problem:`<div class="chunk"><span class="clabel">p8p1</span>
-        <div id="p8grid" style="margin:20px 0;"></div>
+        <div id="p8grid" style="margin:20px 0; width:fit-content;"></div>
       </div>`,
   },
 ];
