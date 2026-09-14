@@ -1534,7 +1534,17 @@ if (!CHUNK_PARAM) {
     }
     fitChunkToViewport();
     window.addEventListener('resize', fitChunkToViewport);
-    window.addEventListener('orientationchange', fitChunkToViewport);
+    // Phones often fire 'orientationchange' before window.innerWidth/innerHeight
+    // have actually updated to the new orientation (and before the browser's
+    // chrome bars finish showing/hiding) — a refit measured at that instant
+    // reads the old size and, if no further 'resize' happens to correct it,
+    // leaves the puzzle scaled to the wrong aspect ratio for good. Refit
+    // immediately for responsiveness, then again once things have settled.
+    window.addEventListener('orientationchange', () => {
+      fitChunkToViewport();
+      setTimeout(fitChunkToViewport, 300);
+    });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', fitChunkToViewport);
 
     // Dev Skip: maps.html?dev=1 (from the editor's "Play (Dev Skip)" button)
     // forwards &dev=1 into every puzzle iframe it opens. Inject a button that

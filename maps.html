@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Map 1 — Puzzle Game</title>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -1285,6 +1285,18 @@ canvas.addEventListener('keyup',  e => {
 });
 canvas.addEventListener('blur',   ()  => { for (const k in keys) keys[k] = false; });
 window.addEventListener('blur',   ()  => { for (const k in keys) keys[k] = false; });
+
+// A quick double-tap on the canvas can still trigger the browser's native
+// double-tap-to-zoom on some mobile browsers even with touch-action:none and
+// the viewport's user-scalable=no (both are ignored in places) — leaving the
+// page "stuck" zoomed in with no easy way back. Belt-and-suspenders: treat
+// any touchend within 300ms of the previous one as a double-tap and swallow it.
+let lastTouchEnd = 0;
+document.addEventListener('touchend', e => {
+  const now = Date.now();
+  if (now - lastTouchEnd <= 300) e.preventDefault();
+  lastTouchEnd = now;
+}, { passive: false });
 
 // ── Touch input (joystick + thought-bubble tap) ───────────────────────────────
 function canvasTouch(touch) {
