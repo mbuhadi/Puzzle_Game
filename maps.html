@@ -172,6 +172,10 @@
   </div>
 </div>
 
+<!-- Off-screen home for puzzle chunks warming up in the background — see the
+     preload system near the examine code below. -->
+<div id="preloadPool" style="position:fixed; left:-9999px; top:-9999px; width:1px; height:1px; overflow:hidden;"></div>
+
 <script src="assets/custom_tiles.js"></script>
 <script src="puzzles_curated_data.js"></script>
 <script>
@@ -470,6 +474,47 @@ const keys   = {};
 // ── Examine system ────────────────────────────────────────────────────────────
 const examineOverlay = document.getElementById('examineOverlay');
 const examineFrame   = document.getElementById('examineFrame');
+
+// ── Puzzle chunk preloading ───────────────────────────────────────────────────
+// Opening a puzzle navigates the examine iframe to puzzles_curated.html?chunk=…
+// — a fresh page load (webfonts, the shared puzzle data script, any per-chunk
+// images), which is why the first open of each puzzle feels slow. Warm the
+// browser's cache for that ahead of time: as soon as the map starts, load
+// puzzle 1's chunks (p1g1, p1p1) in hidden iframes; once those finish, move on
+// to puzzle 2's chunks, then puzzle 3's, and so on — one puzzle's worth of
+// network traffic at a time — so by the time a player actually reaches a
+// puzzle, its resources are already cached and it opens fast.
+const preloadPool = document.getElementById('preloadPool');
+const PUZZLE_GROUPS = (() => {
+  const byNum = new Map();
+  for (const c of ALL) {
+    if (!byNum.has(c.puzzle)) byNum.set(c.puzzle, []);
+    byNum.get(c.puzzle).push(c.id);
+  }
+  return [...byNum.keys()].sort((a, b) => a - b).map(n => byNum.get(n));
+})();
+
+function preloadChunk(id) {
+  return new Promise(resolve => {
+    const f = document.createElement('iframe');
+    f.style.cssText = 'width:1px;height:1px;border:none;';
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      f.remove();   // job's done — free it, don't keep 20+ iframes alive
+      resolve();
+    };
+    f.addEventListener('load', finish, { once: true });
+    setTimeout(finish, 8000);   // one stuck chunk shouldn't stall the queue
+    f.src = 'puzzles_curated.html?chunk=' + id;
+    preloadPool.appendChild(f);
+  });
+}
+
+async function preloadPuzzlesInOrder() {
+  for (const group of PUZZLE_GROUPS) await Promise.all(group.map(preloadChunk));
+}
 
 // "Play (Dev Skip)" from the editor opens maps.html?...&dev=1 — every puzzle
 // then gets a Skip button injected (see puzzles_curated.html) so puzzle-locked
@@ -1607,6 +1652,7 @@ if (!_started) loadProcedural(currentSeed, true);
 renderLibrary();
 canvas.focus();
 requestAnimationFrame(loop);
+preloadPuzzlesInOrder();
 
 document.getElementById('btnRandomize').addEventListener('click', () => {
   currentSeed = Date.now() | 0;
