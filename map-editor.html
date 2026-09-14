@@ -80,19 +80,6 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   flex-shrink: 0; border-bottom: none; border-radius: 6px 6px 0 0;
   padding: 5px 10px; font-size: 13px; line-height: 1;
 }
-/* Unique-puzzles tab — pinned to the far right of the tab bar. Not a
-   .room-tab so renderTabs() doesn't wipe it. */
-#specialTab {
-  margin-left: auto; flex-shrink: 0;
-  display: flex; align-items: center; padding: 5px 12px;
-  background: var(--bg2); border: 1px solid var(--border); border-bottom: none;
-  border-radius: 6px 6px 0 0; cursor: pointer;
-  font-size: 11px; letter-spacing: 0.5px; color: var(--dim);
-  user-select: none;
-}
-#specialTab:hover { color: var(--text); }
-#specialTab.has-notes { color: var(--gold); border-color: var(--gold-dim); }
-
 /* ── Main area ───────────────────────────────────────────────────────────── */
 #main { flex: 1; display: flex; overflow: hidden; min-height: 0; }
 
@@ -224,26 +211,6 @@ select:focus { outline: none; border-color: var(--gold-dim); }
   flex-shrink: 0; display: flex; align-items: center; gap: 10px;
   padding: 8px 12px; border-bottom: 1px solid var(--border);
   font-size: 10px; letter-spacing: 1.5px; color: var(--dim);
-}
-
-/* ── Unique puzzles panel ───────────────────────────────────────────────── */
-#specialBox { width: 520px; height: 60vh; }
-#specialBody { flex: 1; display: flex; flex-direction: column; padding: 10px 12px; min-height: 0; }
-#specialText {
-  flex: 1; resize: none; background: var(--bg); color: var(--text);
-  border: 1px solid var(--border); border-radius: 4px; padding: 8px;
-  font-family: monospace; font-size: 12px; line-height: 1.5;
-}
-#specialText:focus { outline: none; border-color: var(--gold-dim); }
-/* Auto-detected unique-puzzle notes — read-only, shown only while the chunk
-   is actually attached to an object in this room (see roomUniquePuzzleNotes) */
-.auto-note {
-  border: 1px solid var(--gold-dim); border-radius: 6px; background: var(--bg3);
-  padding: 10px 12px; margin-bottom: 10px; font-size: 12px; line-height: 1.5; color: var(--text);
-}
-.auto-note + .auto-note { margin-top: -4px; }
-.auto-note-title {
-  display: block; color: var(--gold); font-weight: bold; letter-spacing: 0.5px; margin-bottom: 4px;
 }
 
 /* ── Tileset picker ─────────────────────────────────────────────────────── */
@@ -385,10 +352,6 @@ select:focus { outline: none; border-color: var(--gold-dim); }
   <div id="roomTabs">
     <!-- tabs injected by renderTabs() -->
     <button id="addRoomBtn" onclick="addRoom()" title="Add a room to this map">+</button>
-    <div id="specialTab" onclick="openSpecialPanel()"
-         title="Unique puzzles for the current room — custom puzzles with bespoke win conditions, implemented outside the studio">
-      <span id="specialTabLabel">✦ Puzzles</span>
-    </div>
   </div>
 
   <!-- Main -->
@@ -549,24 +512,6 @@ select:focus { outline: none; border-color: var(--gold-dim); }
         <span class="hint-text" style="margin-right:auto">arrows move · shift+arrows resize · enter = use</span>
         <button onclick="tsCancel()">Cancel</button>
         <button id="tsUseBtn" onclick="tsUse()" disabled>Use Selection</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Unique puzzles panel (per room) -->
-  <div id="specialOverlay" class="overlay">
-    <div id="specialBox" class="overlay-box">
-      <div class="overlay-head">UNIQUE PUZZLES — <span id="specialRoomName"></span>
-        <button style="margin-left:auto" onclick="closeSpecialPanel()">Close</button>
-      </div>
-      <div id="specialBody">
-        <div class="hint-text" style="margin-bottom:6px">
-          Notes for unique puzzles this room should have — bespoke win conditions the
-          studio can't build. They're saved with the map and implemented outside the studio.
-        </div>
-        <div id="specialAutoNotes"></div>
-        <textarea id="specialText" spellcheck="false"
-                  placeholder="e.g. solved by stepping on tiles in a specific order…"></textarea>
       </div>
     </div>
   </div>
@@ -853,7 +798,7 @@ function objAt(col, row) {
 // ── Rooms (editor tabs) ───────────────────────────────────────────────────────
 function makeRoom(name) {
   return { id: 'r' + (roomIdSeq++), name,
-           grid: makeGrid(), spawn: null, objects: [], special: '', tileColl: {},
+           grid: makeGrid(), spawn: null, objects: [], tileColl: {},
            transforms: [], _hist: [], _histIdx: -1 };
 }
 
@@ -943,60 +888,6 @@ function renderTabs() {
     tab.ondblclick = () => startTabRename(i, tab, nm);
     bar.insertBefore(tab, addBtn);
   });
-  updateSpecialTab();
-}
-
-// ── Unique puzzles (per room) ──────────────────────────────────────────────────
-// Free-form notes describing unique puzzles the room should have — bespoke
-// win conditions the studio can't build. Saved with the map; implemented
-// outside the studio. Edits save live (every keystroke), so closing the
-// panel any way is safe.
-//
-// Alongside the free-form field, any puzzle registered in UNIQUE_PUZZLES
-// (puzzles_curated_data.js) gets a read-only reminder of its win condition —
-// but only once its chunk is actually attached to an object in this room, so
-// it never describes a puzzle that isn't in the map yet.
-function roomUniquePuzzleNotes(rm) {
-  if (!rm) return [];
-  const attachedIds = new Set(
-    allRoomObjects(rm)
-      .map(o => typeof o.inter === 'string' ? o.inter.replace(/s$/, '') : null)
-      .filter(Boolean)
-  );
-  return Object.keys(UNIQUE_PUZZLES).filter(id => attachedIds.has(id)).map(id => UNIQUE_PUZZLES[id]);
-}
-function renderAutoNotes(rm) {
-  document.getElementById('specialAutoNotes').innerHTML = roomUniquePuzzleNotes(rm)
-    .map(n => `<div class="auto-note"><span class="auto-note-title">⚡ ${n.label}</span>${n.instructions}</div>`)
-    .join('');
-}
-function openSpecialPanel() {
-  syncRoomFromGlobals();
-  document.getElementById('specialRoomName').textContent = rooms[curRoom].name.toUpperCase();
-  document.getElementById('specialText').value = rooms[curRoom].special || '';
-  renderAutoNotes(rooms[curRoom]);
-  document.getElementById('specialOverlay').classList.add('open');
-  document.getElementById('specialText').focus();
-}
-function closeSpecialPanel() {
-  document.getElementById('specialOverlay').classList.remove('open');
-  updateSpecialTab();
-}
-document.getElementById('specialText').addEventListener('input', e => {
-  rooms[curRoom].special = e.target.value;
-});
-document.getElementById('specialText').addEventListener('keydown', e => {
-  if (e.key === 'Escape') { e.stopPropagation(); closeSpecialPanel(); }
-});
-// Gold tint on the tab when the active room has instructions — free-form
-// notes, or an attached unique puzzle with an auto-generated reminder
-function updateSpecialTab() {
-  const rm = rooms[curRoom];
-  const hasManual = !!(rm && rm.special && rm.special.trim());
-  const hasAuto = roomUniquePuzzleNotes(rm).length > 0;
-  const has = hasManual || hasAuto;
-  document.getElementById('specialTab').classList.toggle('has-notes', has);
-  document.getElementById('specialTabLabel').textContent = has ? '✦ Puzzles ●' : '✦ Puzzles';
 }
 
 function startTabRename(i, tab, nameEl) {
@@ -1670,7 +1561,6 @@ function toData() {
       id: r.id, name: r.name,
       grid: r.grid.map(row => row.slice()),
       spawn: r.spawn ? { ...r.spawn } : null,
-      special: r.special || '',
       tileColl: { ...(r.tileColl || {}) },
       objects: r.objects.map(o => {
         const c = { ...o };
@@ -1800,7 +1690,6 @@ function fromData(data) {
     });
     while (room.grid.length < GRID_H) room.grid.push(new Array(GRID_W).fill(T.VOID));
     room.spawn = rm.spawn ? { col: +rm.spawn.col, row: +rm.spawn.row } : null;
-    room.special = typeof rm.special === 'string' ? rm.special : '';
     room.tileColl = {};
     if (rm.tileColl && typeof rm.tileColl === 'object') {
       for (const [key, mode] of Object.entries(rm.tileColl)) {
@@ -2768,7 +2657,6 @@ window.addEventListener('keydown', e => {
   if (openOverlay) {
     if (e.key === 'Escape') {
       if (openOverlay === tsOverlay) tsCancel();
-      else if (openOverlay.id === 'specialOverlay') closeSpecialPanel();
       else if (openOverlay.id === 'tileOverlay') closeTilePicker();
       else closeMapsPanel();
       return;
