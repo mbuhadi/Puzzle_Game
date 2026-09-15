@@ -11,7 +11,11 @@
     background: #14120e;
     color: #e8dfc8;
     font-family: 'Cinzel', serif;
-    min-height: 100vh;
+    /* +2px over the viewport guarantees a sliver of real scroll room even
+       when the page's own content would otherwise exactly fill the
+       viewport — needed so the scroll-nudge trick below always has
+       somewhere to scroll to, in any orientation. */
+    min-height: calc(100vh + 2px);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -888,7 +892,30 @@ function openExamine(p) {
   // eating taps itself, looking exactly like a stuck black bar. #examineOverlay's
   // own touch-action:none now blocks scroll-through the same way without
   // taking away the page's scrollability.
+  nudgeBrowserChrome();
 }
+
+// Merely making the page scrollable again (removing overflow:hidden, above)
+// wasn't enough on its own for at least one real device: some mobile
+// browsers need an actual scroll to happen before they'll collapse their
+// address bar back down, not just have the option available — they don't
+// do it proactively just because a resize/orientationchange fired. This is
+// the standard trick for that: nudge the page's scroll position by a
+// harmless 1px. #examineOverlay is position:fixed, so this is invisible to
+// the player — it's purely to give the browser a scroll event to react to.
+function nudgeBrowserChrome() {
+  window.scrollTo(0, 1);
+  // The rotation's own reflow can still be settling when the first nudge
+  // fires; a couple of follow-ups a beat later catch the browser once it has.
+  setTimeout(() => window.scrollTo(0, 1), 150);
+  setTimeout(() => window.scrollTo(0, 1), 400);
+}
+window.addEventListener('orientationchange', () => {
+  if (examineOverlay.classList.contains('open')) nudgeBrowserChrome();
+});
+window.addEventListener('resize', () => {
+  if (examineOverlay.classList.contains('open')) nudgeBrowserChrome();
+});
 
 // Fades #examineOverlay in/out over the CSS opacity transition (0.3s).
 // `after` (close only) runs once fully closed — callers use it for whatever
