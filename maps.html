@@ -92,6 +92,20 @@
     border-radius: 10px;
     overflow: hidden;
   }
+  /* vh/vw are the *layout* viewport — on mobile that doesn't shrink/grow as
+     the browser's address bar shows or hides (e.g. after rotating back),
+     so the box can end up sized for a taller/shorter viewport than the one
+     actually visible, leaving a gap at an edge. dvh/dvw are the dynamic
+     viewport equivalents purpose-built for this — they track the *actual*
+     visible viewport — so prefer them wherever supported. */
+  @supports (height: 100dvh) {
+    #examineBox {
+      width: 96dvw;
+      height: 94dvh;
+      max-width: 96dvw;
+      max-height: 94dvh;
+    }
+  }
   #examineFrame { display: block; border: none; width: 100%; height: 100%; }
   /* Small corner button, floating over the iframe — leaves the whole frame
      for the puzzle instead of losing a strip of height to a bottom bar. */
@@ -472,62 +486,33 @@ const keys   = {};
 
 // ── Examine system ────────────────────────────────────────────────────────────
 const examineOverlay = document.getElementById('examineOverlay');
-const examineBox     = document.getElementById('examineBox');
 const examineFrame   = document.getElementById('examineFrame');
 
-// `#examineOverlay` is `position:fixed`, which is supposed to track the
-// screen regardless of scroll — but on many mobile browsers, fixed elements
-// actually track the *layout* viewport, not the *visual* one. When rotating
-// back to landscape brings the browser's address bar back on screen, the
-// visual viewport shrinks (and its top edge shifts down) while the layout
-// viewport a fixed element is pinned to doesn't, leaving a strip at the top
-// of the fixed overlay tucked behind the address bar — exactly the black
-// bar across the top of the puzzle. Stop trusting position:fixed for this
-// and pin the overlay to window.visualViewport's own offset/size directly.
-function syncExamineOverlayViewport() {
-  if (!window.visualViewport) return;
-  const vv = window.visualViewport;
-  examineOverlay.style.left   = vv.offsetLeft + 'px';
-  examineOverlay.style.top    = vv.offsetTop + 'px';
-  examineOverlay.style.width  = vv.width + 'px';
-  examineOverlay.style.height = vv.height + 'px';
-}
-
-// #examineBox is sized in vh/vw in CSS, but on some mobile browsers those
-// units go stale after a couple of orientation changes (the box keeps the
-// old orientation's size instead of the new one) — leaving a gap at one edge
-// that shows the page behind instead of the puzzle, with the iframe's real,
-// correctly-sized content underneath not lining up with where taps land.
-// Pin the box to real pixel dimensions from JS instead, recomputed on every
-// resize/orientationchange, so it can't get stuck on a stale value.
-function syncExamineBoxSize() {
-  syncExamineOverlayViewport();
-  const vv = window.visualViewport;
-  examineBox.style.width  = Math.round((vv ? vv.width  : window.innerWidth)  * 0.96) + 'px';
-  examineBox.style.height = Math.round((vv ? vv.height : window.innerHeight) * 0.94) + 'px';
-  // Force layout now so the iframe element itself has actually settled to
-  // its new size before the line below runs — then drive its own refit
-  // directly rather than hoping its resize/orientationchange listeners
-  // fired: on a nested iframe resized by the *parent's* CSS (this case,
-  // every rotation), that delivery isn't reliable on every mobile browser,
-  // and a missed one leaves the puzzle scaled/positioned for the previous
-  // orientation — showing as a black gap over part of the puzzle, with
-  // taps landing on the wrong spot since the visible content has moved.
-  void examineFrame.offsetWidth;
+// #examineBox's own sizing is handled in CSS now (dvh/dvw, which track the
+// true visible viewport across address-bar show/hide — see the stylesheet).
+// Two earlier attempts to also drive it from JS (pixel sizes off
+// window.innerWidth/innerHeight, then pinning #examineOverlay itself to
+// window.visualViewport's offset/size) both made a real device's black-bar-
+// after-rotation bug *worse* — showing the raw page through gaps at both
+// edges instead of just one — so that's been backed out in favor of letting
+// the browser's own dvh/dvw handle it, which needs no JS at all.
+//
+// What JS still has to do: nudge the puzzle *iframe*'s own fit. It's resized
+// by its parent (this page, via CSS) rather than its own top-level window
+// changing size, and that flavor of resize isn't reliably delivered to a
+// nested iframe's own resize/orientationchange listeners on every mobile
+// browser — a missed one leaves the puzzle content scaled/positioned for
+// the previous orientation.
+function refitExamineFrame() {
+  void examineFrame.offsetWidth;   // force layout so the iframe has settled to its current size first
   try { examineFrame.contentWindow.fitChunkToViewport(); } catch (e) { /* not loaded, or a multi-puzzle (non-chunk) page that has no such function */ }
 }
-window.addEventListener('resize', syncExamineBoxSize);
+window.addEventListener('resize', refitExamineFrame);
 window.addEventListener('orientationchange', () => {
-  syncExamineBoxSize();
-  setTimeout(syncExamineBoxSize, 300);
+  refitExamineFrame();
+  setTimeout(refitExamineFrame, 300);
 });
-if (window.visualViewport) {
-  // 'resize' covers the address bar changing the viewport's size; 'scroll'
-  // covers it shifting the viewport's offset without necessarily resizing
-  // it (both can happen independently when the toolbar animates in/out).
-  window.visualViewport.addEventListener('resize', syncExamineBoxSize);
-  window.visualViewport.addEventListener('scroll', syncExamineBoxSize);
-}
+if (window.visualViewport) window.visualViewport.addEventListener('resize', refitExamineFrame);
 
 // ── Puzzle chunk preloading ───────────────────────────────────────────────────
 // Opening a puzzle navigates the examine iframe to puzzles_curated.html?chunk=…
@@ -808,7 +793,6 @@ function openExamine(p) {
   activeInteractable = p;
   const baseId = p.id.replace(/s$/, '');
   examineFrame.src = 'puzzles_curated.html?chunk=' + baseId + (DEV_SKIP ? '&dev=1' : '');
-  syncExamineBoxSize();
   examineOverlay.classList.add('open');
   examineOverlay.style.opacity = '0';
   // The very first time this element ever leaves display:none, a forced
