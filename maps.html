@@ -115,7 +115,10 @@
       max-height: 94dvh;
     }
   }
-  #examineFrame { display: block; border: none; width: 100%; height: 100%; }
+  /* Matches #examineBox's own background so the iframe doesn't show a flash
+     of plain white — its default "blank" canvas — while the puzzle page
+     it's navigating to is still loading its own CSS. */
+  #examineFrame { display: block; border: none; width: 100%; height: 100%; background: #14120e; }
   /* Small corner button, floating over the iframe — leaves the whole frame
      for the puzzle instead of losing a strip of height to a bottom bar. */
   #examineLeave {
