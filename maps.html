@@ -475,6 +475,24 @@ const examineOverlay = document.getElementById('examineOverlay');
 const examineBox     = document.getElementById('examineBox');
 const examineFrame   = document.getElementById('examineFrame');
 
+// `#examineOverlay` is `position:fixed`, which is supposed to track the
+// screen regardless of scroll — but on many mobile browsers, fixed elements
+// actually track the *layout* viewport, not the *visual* one. When rotating
+// back to landscape brings the browser's address bar back on screen, the
+// visual viewport shrinks (and its top edge shifts down) while the layout
+// viewport a fixed element is pinned to doesn't, leaving a strip at the top
+// of the fixed overlay tucked behind the address bar — exactly the black
+// bar across the top of the puzzle. Stop trusting position:fixed for this
+// and pin the overlay to window.visualViewport's own offset/size directly.
+function syncExamineOverlayViewport() {
+  if (!window.visualViewport) return;
+  const vv = window.visualViewport;
+  examineOverlay.style.left   = vv.offsetLeft + 'px';
+  examineOverlay.style.top    = vv.offsetTop + 'px';
+  examineOverlay.style.width  = vv.width + 'px';
+  examineOverlay.style.height = vv.height + 'px';
+}
+
 // #examineBox is sized in vh/vw in CSS, but on some mobile browsers those
 // units go stale after a couple of orientation changes (the box keeps the
 // old orientation's size instead of the new one) — leaving a gap at one edge
@@ -483,8 +501,10 @@ const examineFrame   = document.getElementById('examineFrame');
 // Pin the box to real pixel dimensions from JS instead, recomputed on every
 // resize/orientationchange, so it can't get stuck on a stale value.
 function syncExamineBoxSize() {
-  examineBox.style.width  = Math.round(window.innerWidth  * 0.96) + 'px';
-  examineBox.style.height = Math.round(window.innerHeight * 0.94) + 'px';
+  syncExamineOverlayViewport();
+  const vv = window.visualViewport;
+  examineBox.style.width  = Math.round((vv ? vv.width  : window.innerWidth)  * 0.96) + 'px';
+  examineBox.style.height = Math.round((vv ? vv.height : window.innerHeight) * 0.94) + 'px';
   // Force layout now so the iframe element itself has actually settled to
   // its new size before the line below runs — then drive its own refit
   // directly rather than hoping its resize/orientationchange listeners
@@ -501,7 +521,13 @@ window.addEventListener('orientationchange', () => {
   syncExamineBoxSize();
   setTimeout(syncExamineBoxSize, 300);
 });
-if (window.visualViewport) window.visualViewport.addEventListener('resize', syncExamineBoxSize);
+if (window.visualViewport) {
+  // 'resize' covers the address bar changing the viewport's size; 'scroll'
+  // covers it shifting the viewport's offset without necessarily resizing
+  // it (both can happen independently when the toolbar animates in/out).
+  window.visualViewport.addEventListener('resize', syncExamineBoxSize);
+  window.visualViewport.addEventListener('scroll', syncExamineBoxSize);
+}
 
 // ── Puzzle chunk preloading ───────────────────────────────────────────────────
 // Opening a puzzle navigates the examine iframe to puzzles_curated.html?chunk=…
