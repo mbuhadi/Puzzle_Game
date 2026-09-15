@@ -127,6 +127,41 @@
   }
   #examineLeave:hover { background: #1a1814; color: #e8c860; border-color: #c8a84b; }
 
+  /* Temporary diagnostic aid — see the comment by its markup. */
+  #examineDebugToggle {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    z-index: 6;
+    background: #0e0d0a;
+    border: 1px solid #3a3020;
+    border-radius: 6px;
+    font-size: 16px;
+    line-height: 1;
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+  #examineDebugPanel {
+    display: none;
+    position: absolute;
+    left: 12px;
+    top: 12px;
+    z-index: 6;
+    max-width: calc(100% - 24px);
+    margin: 0;
+    background: rgba(0,0,0,0.85);
+    border: 1px solid #5a4a20;
+    border-radius: 6px;
+    color: #7fffa0;
+    font-family: monospace;
+    font-size: 10px;
+    line-height: 1.5;
+    padding: 8px 10px;
+    white-space: pre-wrap;
+    pointer-events: none;
+  }
+  #examineDebugPanel.open { display: block; }
+
   a { font-size: 12px; color: #4a4540; font-family: sans-serif; text-decoration: none; margin-top: 4px; }
   a:hover { color: #c8a84b; }
 
@@ -182,6 +217,12 @@
   <div id="examineBox">
     <iframe id="examineFrame"></iframe>
     <button id="examineLeave">Leave</button>
+    <!-- Temporary diagnostic aid for the rotation black-bar bug — a small
+         toggle that dumps live viewport/box measurements as on-screen text,
+         since the bug only reproduces on real phones we can't attach a
+         debugger to. Remove once that bug is confirmed fixed. -->
+    <button id="examineDebugToggle" title="Show viewport debug info">🐛</button>
+    <pre id="examineDebugPanel"></pre>
   </div>
 </div>
 
@@ -497,6 +538,52 @@ const examineFrame   = document.getElementById('examineFrame');
 // #examineOverlay to visualViewport, a direct contentWindow call after a
 // forced reflow) each left real-device gaps after rotating, so none of
 // that lives here anymore.
+
+// ── Temporary rotation-bug diagnostics ─────────────────────────────────────────
+// The black-bar-after-rotation bug only reproduces on real phones, so instead
+// of guessing at another blind fix, dump the actual numbers involved as an
+// on-screen panel the reporter can screenshot mid-bug. Remove this block (and
+// its markup/CSS) once that bug is confirmed fixed for good.
+const examineDebugToggle = document.getElementById('examineDebugToggle');
+const examineDebugPanel  = document.getElementById('examineDebugPanel');
+let examineDebugTimer = null;
+function updateExamineDebugPanel() {
+  if (!examineDebugPanel.classList.contains('open')) return;
+  const vv = window.visualViewport;
+  const box = document.getElementById('examineBox').getBoundingClientRect();
+  const overlay = examineOverlay.getBoundingClientRect();
+  const frameRect = examineFrame.getBoundingClientRect();
+  let innerRect = 'n/a', innerWH = 'n/a';
+  try {
+    const d = examineFrame.contentWindow.document;
+    const r = d.documentElement.getBoundingClientRect();
+    innerRect = `${r.top.toFixed(0)},${r.left.toFixed(0)} ${r.width.toFixed(0)}x${r.height.toFixed(0)}`;
+    innerWH = `${examineFrame.contentWindow.innerWidth}x${examineFrame.contentWindow.innerHeight}`;
+  } catch (e) { innerRect = 'err: ' + e.message; }
+  examineDebugPanel.textContent =
+`t=${new Date().toISOString().slice(11,19)}
+window: ${window.innerWidth}x${window.innerHeight}  dpr=${window.devicePixelRatio}
+screen: ${screen.width}x${screen.height}  orient=${screen.orientation ? screen.orientation.type : 'n/a'}
+visualViewport: ${vv ? `${vv.width.toFixed(0)}x${vv.height.toFixed(0)} off=${vv.offsetLeft.toFixed(0)},${vv.offsetTop.toFixed(0)} scale=${vv.scale}` : 'unsupported'}
+dvh supported: ${CSS.supports('height', '100dvh')}
+overlay rect: top=${overlay.top.toFixed(0)} bottom=${overlay.bottom.toFixed(0)} ${overlay.width.toFixed(0)}x${overlay.height.toFixed(0)}
+box rect:     top=${box.top.toFixed(0)} bottom=${box.bottom.toFixed(0)} ${box.width.toFixed(0)}x${box.height.toFixed(0)}
+box computed: ${getComputedStyle(document.getElementById('examineBox')).height}
+frame rect:   top=${frameRect.top.toFixed(0)} bottom=${frameRect.bottom.toFixed(0)} ${frameRect.width.toFixed(0)}x${frameRect.height.toFixed(0)}
+iframe inner window: ${innerWH}
+iframe <html> rect:  ${innerRect}
+UA: ${navigator.userAgent}`;
+}
+examineDebugToggle.addEventListener('click', () => {
+  const nowOpen = examineDebugPanel.classList.toggle('open');
+  if (nowOpen) {
+    updateExamineDebugPanel();
+    examineDebugTimer = setInterval(updateExamineDebugPanel, 250);
+  } else if (examineDebugTimer) {
+    clearInterval(examineDebugTimer);
+    examineDebugTimer = null;
+  }
+});
 
 // ── Puzzle chunk preloading ───────────────────────────────────────────────────
 // Opening a puzzle navigates the examine iframe to puzzles_curated.html?chunk=…
