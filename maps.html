@@ -76,6 +76,11 @@
     justify-content: center;
     opacity: 0;
     transition: opacity 0.3s ease;
+    /* Blocks a swipe on the overlay's own margin (outside #examineBox) from
+       scroll-chaining to the game page underneath, without needing
+       document/body overflow:hidden — see the JS below for why that
+       mattered enough to change. */
+    touch-action: none;
   }
   #examineOverlay.open { display: flex; }
   /* Fills essentially the whole screen — the game is meant to be played with
@@ -874,10 +879,15 @@ function openExamine(p) {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => { examineOverlay.style.opacity = '1'; });
   });
-  // No scrolling behind the puzzle while it's open — body alone isn't enough,
-  // since <html> is the element that actually scrolls in most browsers.
-  document.documentElement.style.overflow = 'hidden';
-  document.body.style.overflow = 'hidden';
+  // "No scrolling behind the puzzle" used to be document/body
+  // overflow:hidden, but that turned out to be the actual cause of the
+  // black-bar-after-rotation bug: it left the page with zero scroll play,
+  // and mobile browsers re-show their own address bar on rotation and rely
+  // on the page being scrollable to let them auto-hide it again — with
+  // none available, their toolbar was staying parked on top of the puzzle,
+  // eating taps itself, looking exactly like a stuck black bar. #examineOverlay's
+  // own touch-action:none now blocks scroll-through the same way without
+  // taking away the page's scrollability.
 }
 
 // Fades #examineOverlay in/out over the CSS opacity transition (0.3s).
@@ -890,8 +900,6 @@ function fadeCloseExamine(after) {
     examineOverlay.classList.remove('open');
     examineOverlay.style.opacity = '';
     examineFrame.src = '';
-    document.documentElement.style.overflow = '';
-    document.body.style.overflow = '';
     if (after) after();
   }, 300);
 }
