@@ -1533,27 +1533,20 @@ if (!CHUNK_PARAM) {
       detail.style.transform = 'translate(' + tx + 'px, ' + ty + 'px) scale(' + scale + ')';
     }
     fitChunkToViewport();
-    window.addEventListener('resize', fitChunkToViewport);
-    // Phones often fire 'orientationchange' before window.innerWidth/innerHeight
-    // have actually updated to the new orientation (and before the browser's
-    // chrome bars finish showing/hiding) — a refit measured at that instant
-    // reads the old size and, if no further 'resize' happens to correct it,
-    // leaves the puzzle scaled to the wrong aspect ratio for good. Refit
-    // immediately for responsiveness, then again once things have settled.
-    window.addEventListener('orientationchange', () => {
-      fitChunkToViewport();
-      setTimeout(fitChunkToViewport, 300);
-    });
-    if (window.visualViewport) window.visualViewport.addEventListener('resize', fitChunkToViewport);
-    // Resize/orientation events dispatched to THIS (nested, nav-loaded)
-    // iframe's own window aren't reliably delivered on every mobile browser
-    // when the resize is really the parent frame (maps.html) resizing the
-    // iframe element via CSS, rather than the top-level window itself
-    // changing size — the exact case here, since examineBox is resized from
-    // the parent on rotation. Expose this so the parent can call it directly
-    // once it knows the iframe has actually settled to its new size, instead
-    // of hoping this frame's own listeners above fire.
-    window.fitChunkToViewport = fitChunkToViewport;
+    // 'resize'/'orientationchange'/visualViewport's 'resize' all describe a
+    // *reason* the viewport might have changed, and three rounds of trying
+    // to lean on them (in this frame, then having the parent frame call in
+    // directly, then also pinning the parent's overlay to visualViewport)
+    // each left real-device gaps: some browsers don't fire them reliably
+    // for THIS iframe when it's the *parent* resizing it via CSS rather
+    // than the top-level window itself changing size, and even when they
+    // do fire, window.innerWidth/innerHeight can still be mid-transition.
+    // ResizeObserver sidesteps all of that by watching the *effect*
+    // instead of guessing at causes: it fires whenever this document's own
+    // rendered box actually changes size, for any reason, and hands back
+    // the settled size directly — no event-timing guessing needed.
+    new ResizeObserver(() => fitChunkToViewport()).observe(document.documentElement);
+    window.fitChunkToViewport = fitChunkToViewport;   // still exposed for a caller that wants to force one
 
     // Dev Skip: maps.html?dev=1 (from the editor's "Play (Dev Skip)" button)
     // forwards &dev=1 into every puzzle iframe it opens. Inject a button that

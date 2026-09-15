@@ -488,31 +488,15 @@ const keys   = {};
 const examineOverlay = document.getElementById('examineOverlay');
 const examineFrame   = document.getElementById('examineFrame');
 
-// #examineBox's own sizing is handled in CSS now (dvh/dvw, which track the
-// true visible viewport across address-bar show/hide — see the stylesheet).
-// Two earlier attempts to also drive it from JS (pixel sizes off
-// window.innerWidth/innerHeight, then pinning #examineOverlay itself to
-// window.visualViewport's offset/size) both made a real device's black-bar-
-// after-rotation bug *worse* — showing the raw page through gaps at both
-// edges instead of just one — so that's been backed out in favor of letting
-// the browser's own dvh/dvw handle it, which needs no JS at all.
-//
-// What JS still has to do: nudge the puzzle *iframe*'s own fit. It's resized
-// by its parent (this page, via CSS) rather than its own top-level window
-// changing size, and that flavor of resize isn't reliably delivered to a
-// nested iframe's own resize/orientationchange listeners on every mobile
-// browser — a missed one leaves the puzzle content scaled/positioned for
-// the previous orientation.
-function refitExamineFrame() {
-  void examineFrame.offsetWidth;   // force layout so the iframe has settled to its current size first
-  try { examineFrame.contentWindow.fitChunkToViewport(); } catch (e) { /* not loaded, or a multi-puzzle (non-chunk) page that has no such function */ }
-}
-window.addEventListener('resize', refitExamineFrame);
-window.addEventListener('orientationchange', () => {
-  refitExamineFrame();
-  setTimeout(refitExamineFrame, 300);
-});
-if (window.visualViewport) window.visualViewport.addEventListener('resize', refitExamineFrame);
+// #examineBox's own sizing is handled in CSS (dvh/dvw, which track the true
+// visible viewport across address-bar show/hide — see the stylesheet), and
+// the puzzle iframe's own content now refits itself via a ResizeObserver
+// watching its own rendered size (see puzzles_curated.html) rather than
+// this page having to notice a rotation and reach in to nudge it — three
+// earlier attempts at driving that from here (JS pixel sizes, pinning
+// #examineOverlay to visualViewport, a direct contentWindow call after a
+// forced reflow) each left real-device gaps after rotating, so none of
+// that lives here anymore.
 
 // ── Puzzle chunk preloading ───────────────────────────────────────────────────
 // Opening a puzzle navigates the examine iframe to puzzles_curated.html?chunk=…
