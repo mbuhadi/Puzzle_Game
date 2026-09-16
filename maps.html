@@ -105,6 +105,12 @@
     border: 2px solid #c8a84b;
     border-radius: 10px;
     overflow: hidden;
+    /* Faded in/out in its own stage, after/before the backdrop (see the JS)
+       so it only ever blends with the now-solid-black backdrop behind it,
+       never with the map page — that's what caused the ghosting a fade
+       shared with #examineOverlay's opacity used to cause. */
+    opacity: 0;
+    transition: opacity 0.15s ease;
   }
   /* vh/vw are the *layout* viewport — on mobile that doesn't shrink/grow as
      the browser's address bar shows or hides (e.g. after rotating back),
@@ -544,6 +550,7 @@ const keys   = {};
 
 // ── Examine system ────────────────────────────────────────────────────────────
 const examineOverlay = document.getElementById('examineOverlay');
+const examineBox     = document.getElementById('examineBox');
 const examineFrame   = document.getElementById('examineFrame');
 
 // #examineBox's own sizing is handled in CSS (dvh/dvw, which track the true
@@ -876,7 +883,8 @@ let activeInteractable = null;
 let nearbyInteractable = null; // updated each frame; drives the interact highlight
 let bubbleBounds = null;       // world-pixel rect of the nearby interactable, for touch tap hit-test
 
-const EXAMINE_BACKDROP = 'rgba(0,0,0,0.88)';
+const EXAMINE_BACKDROP  = 'rgba(0,0,0,0.88)';
+const EXAMINE_STAGE_MS  = 150;   // each stage's duration — backdrop then box on open, box then backdrop on close
 
 function openExamine(p) {
   for (const k in keys) keys[k] = false;
@@ -885,14 +893,24 @@ function openExamine(p) {
   examineFrame.src = 'puzzles_curated.html?chunk=' + baseId + (DEV_SKIP ? '&dev=1' : '');
   examineOverlay.classList.add('open');
   examineOverlay.style.backgroundColor = 'rgba(0,0,0,0)';
+  examineBox.style.opacity = '0';
   // The very first time this element ever leaves display:none, a forced
   // reflow (offsetWidth) alone isn't always enough to make the browser
   // treat the transparent backdrop as a real prior frame to transition
   // from — it can just jump straight to the full backdrop with no fade,
   // only on that first open. A double rAF guarantees a full style+paint
-  // pass happens in between.
+  // pass happens in between. #examineBox's own fade doesn't need this same
+  // treatment — by the time it starts (after the backdrop stage below), it's
+  // already had several real painted frames at opacity:0 to transition from.
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => { examineOverlay.style.backgroundColor = EXAMINE_BACKDROP; });
+    requestAnimationFrame(() => {
+      examineOverlay.style.backgroundColor = EXAMINE_BACKDROP;
+      // Wait for the backdrop to actually be solid before fading the box
+      // in — fading both at once would have the box blend with whatever
+      // of the map page is still showing through the still-transparent
+      // backdrop behind it, which is the exact ghosting this replaced.
+      setTimeout(() => { examineBox.style.opacity = '1'; }, EXAMINE_STAGE_MS);
+    });
   });
   // "No scrolling behind the puzzle" used to be document/body
   // overflow:hidden, but that turned out to be the actual cause of the
@@ -928,19 +946,25 @@ window.addEventListener('resize', () => {
   if (examineOverlay.classList.contains('open')) nudgeBrowserChrome();
 });
 
-// Fades #examineOverlay's backdrop in/out over its CSS background-color
-// transition (0.3s) — see the CSS for why that, not opacity. `after`
-// (close only) runs once fully closed — callers use it for whatever
-// should happen next (transit through a door, etc).
+// Fades #examineBox out, then #examineOverlay's backdrop out behind it —
+// the reverse order from opening, so the box is always fading against a
+// still-solid backdrop rather than one that's simultaneously going
+// transparent (which is what let the map page ghost through it before).
+// `after` (close only) runs once fully closed — callers use it for
+// whatever should happen next (transit through a door, etc).
 function fadeCloseExamine(after) {
   if (!examineOverlay.classList.contains('open')) { if (after) after(); return; }
-  examineOverlay.style.backgroundColor = 'rgba(0,0,0,0)';
+  examineBox.style.opacity = '0';
   setTimeout(() => {
-    examineOverlay.classList.remove('open');
-    examineOverlay.style.backgroundColor = '';
-    examineFrame.src = '';
-    if (after) after();
-  }, 300);
+    examineOverlay.style.backgroundColor = 'rgba(0,0,0,0)';
+    setTimeout(() => {
+      examineOverlay.classList.remove('open');
+      examineOverlay.style.backgroundColor = '';
+      examineBox.style.opacity = '';
+      examineFrame.src = '';
+      if (after) after();
+    }, EXAMINE_STAGE_MS);
+  }, EXAMINE_STAGE_MS);
 }
 
 function closeExamine() {
