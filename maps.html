@@ -73,13 +73,18 @@
   #examineOverlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.88);
+    /* Faded in/out via this background's own alpha (JS below), not the
+       element's opacity — opacity would multiply through to every child,
+       including #examineBox's own solid background, so mid-fade the box
+       and the puzzle inside it would turn translucent too and the map
+       page underneath would bleed/ghost through them. Animating just the
+       backdrop's alpha keeps the box fully opaque the entire time. */
+    background: rgba(0,0,0,0);
     z-index: 1000;
     display: none;
     align-items: center;
     justify-content: center;
-    opacity: 0;
-    transition: opacity 0.3s ease;
+    transition: background-color 0.3s ease;
     /* Blocks a swipe on the overlay's own margin (outside #examineBox) from
        scroll-chaining to the game page underneath, without needing
        document/body overflow:hidden — see the JS below for why that
@@ -871,20 +876,23 @@ let activeInteractable = null;
 let nearbyInteractable = null; // updated each frame; drives the interact highlight
 let bubbleBounds = null;       // world-pixel rect of the nearby interactable, for touch tap hit-test
 
+const EXAMINE_BACKDROP = 'rgba(0,0,0,0.88)';
+
 function openExamine(p) {
   for (const k in keys) keys[k] = false;
   activeInteractable = p;
   const baseId = p.id.replace(/s$/, '');
   examineFrame.src = 'puzzles_curated.html?chunk=' + baseId + (DEV_SKIP ? '&dev=1' : '');
   examineOverlay.classList.add('open');
-  examineOverlay.style.opacity = '0';
+  examineOverlay.style.backgroundColor = 'rgba(0,0,0,0)';
   // The very first time this element ever leaves display:none, a forced
   // reflow (offsetWidth) alone isn't always enough to make the browser
-  // treat opacity:0 as a real prior frame to transition from — it can just
-  // jump straight to opacity:1 with no fade, only on that first open. A
-  // double rAF guarantees a full style+paint pass happens in between.
+  // treat the transparent backdrop as a real prior frame to transition
+  // from — it can just jump straight to the full backdrop with no fade,
+  // only on that first open. A double rAF guarantees a full style+paint
+  // pass happens in between.
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => { examineOverlay.style.opacity = '1'; });
+    requestAnimationFrame(() => { examineOverlay.style.backgroundColor = EXAMINE_BACKDROP; });
   });
   // "No scrolling behind the puzzle" used to be document/body
   // overflow:hidden, but that turned out to be the actual cause of the
@@ -920,15 +928,16 @@ window.addEventListener('resize', () => {
   if (examineOverlay.classList.contains('open')) nudgeBrowserChrome();
 });
 
-// Fades #examineOverlay in/out over the CSS opacity transition (0.3s).
-// `after` (close only) runs once fully closed — callers use it for whatever
+// Fades #examineOverlay's backdrop in/out over its CSS background-color
+// transition (0.3s) — see the CSS for why that, not opacity. `after`
+// (close only) runs once fully closed — callers use it for whatever
 // should happen next (transit through a door, etc).
 function fadeCloseExamine(after) {
   if (!examineOverlay.classList.contains('open')) { if (after) after(); return; }
-  examineOverlay.style.opacity = '0';
+  examineOverlay.style.backgroundColor = 'rgba(0,0,0,0)';
   setTimeout(() => {
     examineOverlay.classList.remove('open');
-    examineOverlay.style.opacity = '';
+    examineOverlay.style.backgroundColor = '';
     examineFrame.src = '';
     if (after) after();
   }, 300);
