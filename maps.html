@@ -890,18 +890,40 @@ function openExamine(p) {
   for (const k in keys) keys[k] = false;
   activeInteractable = p;
   const baseId = p.id.replace(/s$/, '');
-  examineFrame.src = 'puzzles_curated.html?chunk=' + baseId + (DEV_SKIP ? '&dev=1' : '');
   examineOverlay.classList.add('open');
   examineOverlay.style.backgroundColor = 'rgba(0,0,0,0)';
   examineBox.style.opacity = '0';
-  // The very first time this element ever leaves display:none, a forced
+
+  // Reveal the box only once BOTH the backdrop has had its stage to go
+  // solid AND the puzzle content itself has actually finished loading —
+  // not just after a flat delay. A puzzle that's cache-warm from preloading
+  // opens almost instantly, but a cold one (fonts, images, the chunk's own
+  // builder script) can still be visibly settling into place a beat later;
+  // waiting for it keeps that behind the still-dark backdrop instead of
+  // exposing it right as the box appears. A safety timeout stands in for a
+  // 'load' that, for whatever reason, never fires.
+  let backdropDone = false, contentReady = false;
+  function revealBoxIfReady() {
+    if (backdropDone && contentReady) examineBox.style.opacity = '1';
+  }
+  function markContentReady() {
+    if (contentReady) return;
+    contentReady = true;
+    examineFrame.removeEventListener('load', markContentReady);
+    revealBoxIfReady();
+  }
+  examineFrame.addEventListener('load', markContentReady);
+  setTimeout(markContentReady, 1200);
+  examineFrame.src = 'puzzles_curated.html?chunk=' + baseId + (DEV_SKIP ? '&dev=1' : '');
+
+  // The very first time #examineOverlay ever leaves display:none, a forced
   // reflow (offsetWidth) alone isn't always enough to make the browser
   // treat the transparent backdrop as a real prior frame to transition
   // from — it can just jump straight to the full backdrop with no fade,
   // only on that first open. A double rAF guarantees a full style+paint
   // pass happens in between. #examineBox's own fade doesn't need this same
-  // treatment — by the time it starts (after the backdrop stage below), it's
-  // already had several real painted frames at opacity:0 to transition from.
+  // treatment — by the time it starts, it's already had several real
+  // painted frames at opacity:0 to transition from.
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       examineOverlay.style.backgroundColor = EXAMINE_BACKDROP;
@@ -909,7 +931,7 @@ function openExamine(p) {
       // in — fading both at once would have the box blend with whatever
       // of the map page is still showing through the still-transparent
       // backdrop behind it, which is the exact ghosting this replaced.
-      setTimeout(() => { examineBox.style.opacity = '1'; }, EXAMINE_STAGE_MS);
+      setTimeout(() => { backdropDone = true; revealBoxIfReady(); }, EXAMINE_STAGE_MS);
     });
   });
   // "No scrolling behind the puzzle" used to be document/body
