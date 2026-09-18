@@ -906,14 +906,31 @@ function openExamine(p) {
   function revealBoxIfReady() {
     if (backdropDone && contentReady) examineBox.style.opacity = '1';
   }
-  function markContentReady() {
+  function finishContentReady() {
     if (contentReady) return;
     contentReady = true;
-    examineFrame.removeEventListener('load', markContentReady);
+    examineFrame.removeEventListener('load', onFrameLoad);
     revealBoxIfReady();
   }
-  examineFrame.addEventListener('load', markContentReady);
-  setTimeout(markContentReady, 1200);
+  function onFrameLoad() {
+    // 'load' fires once the document and whatever it referenced up front
+    // have loaded, but NOT once webfonts have actually swapped in — those
+    // load lazily and can still visibly reflow text a moment later. The
+    // puzzle's own ResizeObserver (watching for the parent resizing it)
+    // also always fires once more, asynchronously, right around here as
+    // its required baseline check, which can trigger one more tiny refit.
+    // Give both a beat to settle before treating this as actually ready.
+    let fontsReady = Promise.resolve();
+    try {
+      const doc = examineFrame.contentWindow && examineFrame.contentWindow.document;
+      if (doc && doc.fonts && doc.fonts.ready) fontsReady = doc.fonts.ready;
+    } catch (e) { /* frame already navigated away — just proceed */ }
+    Promise.resolve(fontsReady).catch(() => {}).then(() => {
+      requestAnimationFrame(() => requestAnimationFrame(finishContentReady));
+    });
+  }
+  examineFrame.addEventListener('load', onFrameLoad);
+  setTimeout(finishContentReady, 1200);
   examineFrame.src = 'puzzles_curated.html?chunk=' + baseId + (DEV_SKIP ? '&dev=1' : '');
 
   // The very first time #examineOverlay ever leaves display:none, a forced
