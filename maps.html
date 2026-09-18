@@ -1478,8 +1478,17 @@ function loop(ts) {
   lastTs = ts;
   tickAnimPlays();   // finish door swings (fires their teleport)
   update(dt);
-  updateFade();
-  render();
+  updateFade();   // still runs while a puzzle's open — a solve's map-change
+                   // transition (its tile swap fires at this fade's midpoint)
+                   // plays out entirely behind the examine overlay already
+  // render() draws the whole map every frame — tiles, objects, the player —
+  // for nothing while the examine overlay is open and fully covering it.
+  // Landscape shows that canvas much larger on-screen than portrait does
+  // (same backing-store resolution either way, but far more GPU work to
+  // composite it at the bigger displayed size), so this wasted redraw was
+  // competing with the puzzle's own fade for frame budget specifically in
+  // landscape — exactly the orientation split in the reported clunkiness.
+  if (!examineOverlay.classList.contains('open')) render();
   requestAnimationFrame(loop);
 }
 
