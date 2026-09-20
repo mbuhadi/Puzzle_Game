@@ -213,6 +213,13 @@
     background:var(--panel2); color:var(--ink); border:1px solid var(--line);
     border-radius:5px; padding:5px 8px; font-family:sans-serif; font-size:12px;
   }
+  .tl-chunk-tabs{display:flex; gap:4px; flex-wrap:wrap;}
+  .tl-chunk-tab{
+    background:var(--panel2); color:var(--muted); border:1px solid var(--line); border-radius:5px;
+    padding:5px 9px; font-family:monospace; font-size:11px; cursor:pointer;
+  }
+  .tl-chunk-tab:hover{border-color:var(--gold);}
+  .tl-chunk-tab.active{background:var(--gold); color:#1a1608; font-weight:bold; border-color:var(--gold);}
   .tl-phase-toggle{display:flex; border:1px solid var(--line); border-radius:6px; overflow:hidden;}
   .tl-phase-btn{
     background:var(--panel2); color:var(--muted); border:none; padding:6px 16px;
@@ -306,7 +313,10 @@
        (embedded in the game) — this is an authoring tool only. -->
   <div id="timelinePanel">
     <div class="tl-header">
-      <select id="tlChunkSelect" title="Which interactable this timeline belongs to"></select>
+      <!-- Which interactable this timeline belongs to follows the puzzle
+           picked in the sidebar; this only appears when that puzzle has
+           more than one interactable chunk, to disambiguate among them. -->
+      <div id="tlChunkTabs" class="tl-chunk-tabs"></div>
       <div class="tl-phase-toggle">
         <button class="tl-phase-btn active" data-phase="open">Open</button>
         <button class="tl-phase-btn" data-phase="close">Close</button>
@@ -1550,6 +1560,11 @@ const BUILDERS={tree:buildFamilyTree, windows:buildPuzzleTwo, courtyard:buildCou
 const plist=document.getElementById('plist'), detail=document.getElementById('detail');
 let teardown=null;   // cleanup for the previously-built interactive puzzle
 const CHUNK_PARAM = new URLSearchParams(location.search).get('chunk');
+// Set by the Timeline editor below (once it initializes) so select() can
+// point the Timeline at whichever puzzle is picked in the sidebar, without
+// the Timeline needing its own puzzle picker.
+let tlSelectPuzzleHook = null;
+let lastSelectedPuzzleNum = null;
 
 if (!CHUNK_PARAM) {
   PUZZLES.forEach((p,i)=>{
@@ -1563,6 +1578,8 @@ function select(i){
   if(teardown){ teardown(); teardown=null; }
   [...plist.children].forEach((el,j)=>el.classList.toggle('active',j===i));
   const p=PUZZLES[i];
+  lastSelectedPuzzleNum = +p.num;
+  if (tlSelectPuzzleHook) tlSelectPuzzleHook(lastSelectedPuzzleNum);
   detail.innerHTML=`
     <div class="title-row"><div class="ptitle">${p.name}</div></div>
     <div class="pkicker">${p.loc.toUpperCase()}</div>
@@ -1801,7 +1818,8 @@ if (!CHUNK_PARAM) (function(){
   }
 
   let TIMELINES = {};
-  let editingId = PUZZLE_CHUNKS[0] ? PUZZLE_CHUNKS[0].id : null;
+  let editingPuzzle = null;   // puzzle number, driven by the sidebar's own selection
+  let editingId = null;       // which of that puzzle's chunks the timeline applies to
   let editingPhase = 'open';
   let selectedBlockId = null;
 
@@ -1823,11 +1841,33 @@ if (!CHUNK_PARAM) (function(){
   const tlStatus = document.getElementById('tlStatus');
   const setStatus = msg => { tlStatus.textContent = msg; };
 
-  function populateChunkSelect() {
-    const sel = document.getElementById('tlChunkSelect');
-    sel.innerHTML = PUZZLE_CHUNKS.map(c => `<option value="${c.id}">${c.id}</option>`).join('');
-    if (editingId) sel.value = editingId;
+  const chunksForPuzzle = num => PUZZLE_CHUNKS.filter(c => c.puzzle === num);
+
+  // Shown only when the current puzzle has more than one interactable chunk
+  // — nothing to disambiguate otherwise.
+  function renderChunkTabs() {
+    const box = document.getElementById('tlChunkTabs');
+    const chunks = chunksForPuzzle(editingPuzzle);
+    if (chunks.length <= 1) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.style.display = 'flex';
+    box.innerHTML = chunks.map(c =>
+      `<button type="button" class="tl-chunk-tab${c.id === editingId ? ' active' : ''}" data-id="${c.id}">${c.id}</button>`
+    ).join('');
   }
+
+  // Called on every sidebar puzzle selection (and once at startup for
+  // whichever puzzle is already shown) — points the timeline at that
+  // puzzle's chunks, keeping the previously-edited chunk if it still
+  // belongs to the newly selected puzzle, else defaulting to the first.
+  function setEditingPuzzle(num) {
+    editingPuzzle = num;
+    const chunks = chunksForPuzzle(num);
+    if (!chunks.some(c => c.id === editingId)) editingId = chunks[0] ? chunks[0].id : null;
+    selectedBlockId = null;
+    renderChunkTabs();
+    renderTimeline();
+  }
+  tlSelectPuzzleHook = setEditingPuzzle;
 
   let soundFilesPromise = null;
   function fetchSoundFiles() {
@@ -2018,8 +2058,11 @@ if (!CHUNK_PARAM) (function(){
   });
   document.getElementById('tlTrack').addEventListener('click', () => { selectedBlockId = null; renderTimeline(); });
 
-  document.getElementById('tlChunkSelect').addEventListener('change', e => {
-    editingId = e.target.value; selectedBlockId = null; renderTimeline();
+  document.getElementById('tlChunkTabs').addEventListener('click', e => {
+    const tab = e.target.closest('.tl-chunk-tab');
+    if (!tab) return;
+    editingId = tab.dataset.id; selectedBlockId = null;
+    renderChunkTabs(); renderTimeline();
   });
   document.querySelectorAll('.tl-phase-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -2052,9 +2095,8 @@ if (!CHUNK_PARAM) (function(){
   }
   document.getElementById('tlSaveBtn').addEventListener('click', saveTimelines);
 
-  populateChunkSelect();
+  setEditingPuzzle(lastSelectedPuzzleNum != null ? lastSelectedPuzzleNum : +PUZZLES[0].num);
   populateSoundPalette();
-  renderTimeline();
   fetch('timelines.json', { cache: 'no-store' })
     .then(r => r.ok ? r.json() : {})
     .catch(() => ({}))
