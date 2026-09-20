@@ -829,6 +829,11 @@ window.addEventListener('message', e => {
   const firstSolve = !SOLVED_CHUNKS.has(e.data.chunk);
   SOLVED_CHUNKS.add(e.data.chunk);
   persistSolved();
+  // Plays on the map the instant the puzzle solves, independent of the
+  // puzzle window's own close (which still only happens after the short
+  // beat below) — a chunk with nothing authored for 'solve' schedules
+  // nothing.
+  if (firstSolve) scheduleSceneEffects(getTimeline(e.data.chunk, 'solve'));
   // A removeOnSolve door or Map Change transform in the current room should
   // take effect the instant its puzzle is solved, not wait for the next room
   // load. A Map Change specifically is masked behind the fade transition so
@@ -918,18 +923,22 @@ let bubbleBounds = null;       // world-pixel rect of the nearby interactable, f
 
 const EXAMINE_BACKDROP  = 'rgba(0,0,0,0.88)';
 
-// ── Puzzle open/close scene timelines ───────────────────────────────────────
+// ── Puzzle open/close/solve scene timelines ─────────────────────────────────
 // Authored per-interactable in puzzles_curated.html's Timeline editor and
 // saved to timelines.json (loaded below). Each timeline is an ordered list of
 // effect blocks — {id, type, start, duration, params} with start/duration in
-// ms from the moment the puzzle is interacted with (open) or left/solved
-// (close). type is one of:
-//   'fadeIn' / 'fadeOut' — drives the puzzle window's own reveal/hide (see
-//     openExamine/fadeCloseExamine below) instead of playing like the others
-//   'shake', 'zoom', 'dialog', 'sound' — play on the game map itself
-// A chunk with nothing authored yet falls back to DEFAULT_TIMELINE (shared
-// with the editor — puzzles_curated_data.js), a plain fade matching the
-// game's previous fixed-timing behavior, so nothing regresses unedited.
+// ms from the moment the phase begins — the puzzle being interacted with
+// (open), the puzzle window having just fully closed (close), or the puzzle
+// having just been solved (solve, puzzle chunks only). type is one of
+// 'shake', 'zoom', 'dialog', 'sound' — all of which play on the game map
+// itself, never inside the puzzle window. The puzzle window's own
+// open/close transition is entirely separate from these — see
+// EXAMINE_FADE_MS below — it always waits for the open timeline to run to
+// completion before showing, and always finishes hiding before the close
+// timeline starts, so the two are never visible at the same time. A chunk
+// with nothing authored yet falls back to DEFAULT_TIMELINE (shared with the
+// editor — puzzles_curated_data.js): no effects, so the window just opens/
+// closes on its own with nothing scheduled first.
 let TIMELINES = {};
 fetch('timelines.json', { cache: 'no-store' })
   .then(r => r.ok ? r.json() : {})
@@ -997,52 +1006,54 @@ function playEffectBlock(b) {
   else if (b.type === 'dialog') playDialog(b.duration, p.text, p.rtl);
   else if (b.type === 'sound') playSound(p.src);
 }
-// Schedules every non-fade block in a timeline (fadeIn/fadeOut are handled
-// separately by openExamine/fadeCloseExamine, which need to coordinate them
-// with the puzzle window's own visibility). Returns the timeline's overall
-// duration — the furthest any block's start+duration reaches.
+// Schedules every block in a timeline. Returns the timeline's overall
+// duration — the furthest any block's start+duration reaches — which
+// openExamine/fadeCloseExamine wait out in full before the puzzle window
+// itself opens/closes (see below); the window's own transition is never
+// part of this schedule.
 function scheduleSceneEffects(blocks) {
   let total = 0;
   for (const b of blocks) {
     total = Math.max(total, b.start + (b.duration || 0));
-    if (b.type !== 'fadeIn' && b.type !== 'fadeOut') setTimeout(() => playEffectBlock(b), b.start);
+    setTimeout(() => playEffectBlock(b), b.start);
   }
   return total;
 }
+
+// The puzzle window's own open/close transition — fixed, independent of
+// anything authored on the timeline (see the block comment above).
+const EXAMINE_FADE_MS = 300;
 
 function openExamine(p) {
   for (const k in keys) keys[k] = false;
   activeInteractable = p;
   const baseId = p.id.replace(/s$/, '');
   const timeline = getTimeline(baseId, 'open');
-  const fadeBlock = timeline.find(b => b.type === 'fadeIn');
   const total = scheduleSceneEffects(timeline);
-  const revealAt = fadeBlock ? fadeBlock.start : total;
-  const fadeMs = fadeBlock ? fadeBlock.duration : 0;
 
-  // Reveal the box only once BOTH its scheduled moment on the timeline has
-  // arrived AND the puzzle content itself has actually finished loading —
-  // not just after a flat delay. A puzzle that's cache-warm from preloading
-  // opens almost instantly, but a cold one (fonts, images, the chunk's own
-  // builder script) can still be visibly settling into place a beat later;
-  // waiting for it keeps that behind the still-hidden puzzle instead of
-  // exposing it right as it appears. A safety timeout stands in for a
-  // 'load' that, for whatever reason, never fires. The map itself (and any
-  // shake/zoom/dialog effects scheduled above) keeps rendering normally the
-  // entire time up to this point — see loop()'s render() guard below.
+  // Reveal the box only once BOTH the entire open timeline has finished
+  // playing out on the map AND the puzzle content itself has actually
+  // finished loading — not just after a flat delay. A puzzle that's
+  // cache-warm from preloading opens almost instantly, but a cold one
+  // (fonts, images, the chunk's own builder script) can still be visibly
+  // settling into place a beat later; waiting for it keeps that behind the
+  // still-hidden puzzle instead of exposing it right as it appears. A
+  // safety timeout stands in for a 'load' that, for whatever reason, never
+  // fires. The map itself (and any shake/zoom/dialog effects scheduled
+  // above) keeps rendering normally the entire time up to this point — see
+  // loop()'s render() guard below.
   let timeElapsed = false, contentReady = false;
   function revealIfReady() {
     if (!timeElapsed || !contentReady) return;
     examineOverlay.classList.add('open');
     examineOverlay.style.backgroundColor = 'rgba(0,0,0,0)';
     examineBox.style.opacity = '0';
-    // Split the authored fade in two: the backdrop darkens first, THEN the
-    // box fades in on top of it — never simultaneously. Fading both at once
-    // would let the box (and the puzzle inside it) blend with whatever of
-    // the map is still showing through the still-transparent backdrop —
-    // exactly the ghosting an earlier version of this had to fix. A 0ms
-    // fadeMs (no Fade In block authored) collapses this to an instant pop.
-    const half = fadeMs / 2;
+    // The backdrop darkens first, THEN the box fades in on top of it —
+    // never simultaneously. Fading both at once would let the box (and the
+    // puzzle inside it) blend with whatever of the map is still showing
+    // through the still-transparent backdrop — exactly the ghosting an
+    // earlier version of this had to fix.
+    const half = EXAMINE_FADE_MS / 2;
     examineOverlay.style.transitionDuration = half + 'ms';
     // The very first time #examineOverlay ever leaves display:none, a
     // forced reflow alone isn't always enough to make the browser treat the
@@ -1094,12 +1105,12 @@ function openExamine(p) {
     });
   }
   examineFrame.addEventListener('load', onFrameLoad);
-  setTimeout(finishContentReady, revealAt + 1200);
+  setTimeout(finishContentReady, total + 1200);
   // Starts loading immediately — even while #examineOverlay is still
-  // display:none — so it has the whole timeline's length up to revealAt to
-  // become ready before it's actually shown.
+  // display:none — so it has the whole open timeline's length to become
+  // ready before it's actually shown.
   examineFrame.src = 'puzzles_curated.html?chunk=' + baseId + (DEV_SKIP ? '&dev=1' : '');
-  setTimeout(() => { timeElapsed = true; revealIfReady(); }, revealAt);
+  setTimeout(() => { timeElapsed = true; revealIfReady(); }, total);
 }
 
 // Merely making the page scrollable again (removing overflow:hidden, above)
@@ -1124,46 +1135,39 @@ window.addEventListener('resize', () => {
   if (examineOverlay.classList.contains('open')) nudgeBrowserChrome();
 });
 
-// Plays the current interactable's close timeline: #examineBox fades out,
-// then #examineOverlay's backdrop fades out behind it — the reverse order
-// from opening, so the box is always fading against a still-solid backdrop
-// rather than one that's simultaneously going transparent (which is what
-// let the map page ghost through it before) — at whichever point the
-// timeline's Fade Out block schedules (or instantly, at the very start, if
-// none was authored). The map resumes rendering (loop()'s render() guard)
-// the moment the puzzle is actually gone, so any effects scheduled after
-// that point (zoom back out, a parting line of dialog, a sound) play
-// normally on the now-visible map for the rest of the timeline. `after`
-// (close only) runs once the ENTIRE close timeline has finished — callers
-// use it for whatever should happen next (transit through a door, etc).
+// Closes the puzzle window on its own fixed transition — #examineBox fades
+// out, then #examineOverlay's backdrop fades out behind it, the reverse
+// order from opening so the box is always fading against a still-solid
+// backdrop rather than one that's simultaneously going transparent (which
+// is what let the map page ghost through it before) — and only once it's
+// fully gone does the interactable's close timeline start playing on the
+// now-visible map (loop()'s render() guard resumes drawing it the same
+// instant). `after` (close only) runs once that ENTIRE close timeline has
+// finished — callers use it for whatever should happen next (transit
+// through a door, etc).
 function fadeCloseExamine(after) {
   if (!examineOverlay.classList.contains('open')) { if (after) after(); return; }
   const baseId = activeInteractable ? String(activeInteractable.id).replace(/s$/, '') : null;
-  const timeline = baseId ? getTimeline(baseId, 'close') : [];
-  const fadeBlock = timeline.find(b => b.type === 'fadeOut');
-  const total = scheduleSceneEffects(timeline);
-  const hideAt = fadeBlock ? fadeBlock.start : 0;
-  const fadeMs = fadeBlock ? fadeBlock.duration : 0;
-  const half = fadeMs / 2;
+  const half = EXAMINE_FADE_MS / 2;
 
+  examineBox.style.transitionDuration = half + 'ms';
+  examineBox.style.opacity = '0';
   setTimeout(() => {
-    examineBox.style.transitionDuration = half + 'ms';
-    examineBox.style.opacity = '0';
+    examineOverlay.style.transitionDuration = half + 'ms';
+    examineOverlay.style.backgroundColor = 'rgba(0,0,0,0)';
     setTimeout(() => {
-      examineOverlay.style.transitionDuration = half + 'ms';
-      examineOverlay.style.backgroundColor = 'rgba(0,0,0,0)';
-      setTimeout(() => {
-        examineOverlay.classList.remove('open');
-        examineOverlay.style.backgroundColor = '';
-        examineOverlay.style.transitionDuration = '';
-        examineBox.style.opacity = '';
-        examineBox.style.transitionDuration = '';
-        examineFrame.src = '';
-      }, half);
-    }, half);
-  }, hideAt);
+      examineOverlay.classList.remove('open');
+      examineOverlay.style.backgroundColor = '';
+      examineOverlay.style.transitionDuration = '';
+      examineBox.style.opacity = '';
+      examineBox.style.transitionDuration = '';
+      examineFrame.src = '';
 
-  setTimeout(() => { if (after) after(); }, Math.max(total, hideAt + fadeMs));
+      const timeline = baseId ? getTimeline(baseId, 'close') : [];
+      const total = scheduleSceneEffects(timeline);
+      setTimeout(() => { if (after) after(); }, total);
+    }, half);
+  }, half);
 }
 
 function closeExamine() {

@@ -320,13 +320,14 @@
       <div class="tl-phase-toggle">
         <button class="tl-phase-btn active" data-phase="open">Open</button>
         <button class="tl-phase-btn" data-phase="close">Close</button>
+        <!-- Only shown for a chunk that's an actual solvable puzzle (see
+             isPuzzleChunk) — a narrative "given" chunk never solves. -->
+        <button class="tl-phase-btn" data-phase="solve" id="tlSolveBtn">On Solve</button>
       </div>
       <div class="tl-palette" id="tlPalette">
         <div class="tl-chip" draggable="true" data-type="shake">📳 Shake</div>
         <div class="tl-chip" draggable="true" data-type="zoom">🔍 Zoom</div>
         <div class="tl-chip" draggable="true" data-type="dialog">💬 Dialog</div>
-        <div class="tl-chip" draggable="true" data-type="fadeIn">🌒 Fade In</div>
-        <div class="tl-chip" draggable="true" data-type="fadeOut">🌓 Fade Out</div>
         <span class="tl-palette-sep">|</span>
         <!-- Dropdown lists every file in assets/sounds/ (see fetchSoundFiles);
              dragging the chip places a Sound block pointed at whichever file
@@ -1783,13 +1784,19 @@ if (!CHUNK_PARAM) (function(){
     shake:   { duration: 400,  params: { intensity: 6 } },
     zoom:    { duration: 800,  params: { scale: 1.6 } },
     dialog:  { duration: 1200, params: { text: '', rtl: false } },
-    fadeIn:  { duration: 300,  params: {} },
-    fadeOut: { duration: 300,  params: {} },
   };
+  // fadeIn/fadeOut are no longer offered in the palette — the puzzle
+  // window's own open/close transition is fixed and independent of the
+  // timeline now (see maps.html's EXAMINE_FADE_MS) — but the label stays so
+  // a chunk with one left over from before still renders sensibly.
   const EFFECT_LABELS = {
-    sound: '🔊 Sound', shake: '📳 Shake', zoom: '🔍 Zoom',
-    dialog: '💬 Dialog', fadeIn: '🌒 Fade In', fadeOut: '🌓 Fade Out',
+    sound: '🔊 Sound', shake: '📳 Shake', zoom: '🔍 Zoom', dialog: '💬 Dialog',
+    fadeIn: '🌒 Fade In', fadeOut: '🌓 Fade Out',
   };
+  // Only a "problem" chunk (p<puzzle>p<n>, e.g. p1p1) is an actual solvable
+  // puzzle that can ever fire a 'solve' timeline — a "given" chunk
+  // (p<puzzle>g<n>) is narrative-only and never calls notifyPuzzleSolved().
+  const isPuzzleChunk = id => /^p\d+p\d+$/.test(id || '');
   const PX_PER_MS = 0.15;
   const msToPx = ms => ms * PX_PER_MS;
   const pxToMs = px => px / PX_PER_MS;
@@ -1824,8 +1831,12 @@ if (!CHUNK_PARAM) (function(){
   let selectedBlockId = null;
 
   function ensureEntry(chunkId) {
-    if (!chunkId) return { open: [], close: [] };
-    if (!TIMELINES[chunkId]) TIMELINES[chunkId] = { open: clone(DEFAULT_TIMELINE.open), close: clone(DEFAULT_TIMELINE.close) };
+    if (!chunkId) return { open: [], close: [], solve: [] };
+    if (!TIMELINES[chunkId]) {
+      TIMELINES[chunkId] = { open: clone(DEFAULT_TIMELINE.open), close: clone(DEFAULT_TIMELINE.close), solve: clone(DEFAULT_TIMELINE.solve) };
+    }
+    // A timeline saved before 'solve' existed won't have the key yet.
+    if (!TIMELINES[chunkId].solve) TIMELINES[chunkId].solve = [];
     return TIMELINES[chunkId];
   }
   const getBlocks = () => ensureEntry(editingId)[editingPhase];
@@ -1855,6 +1866,20 @@ if (!CHUNK_PARAM) (function(){
     ).join('');
   }
 
+  // The "On Solve" phase only makes sense for a chunk that's an actual
+  // puzzle — falls back to "open" if the currently-selected chunk changed
+  // out from under an active "On Solve" view (e.g. switching from a p1p1
+  // puzzle chunk to its sibling p1g1 narrative chunk).
+  function updateSolveTabVisibility() {
+    const btn = document.getElementById('tlSolveBtn');
+    const supported = isPuzzleChunk(editingId);
+    btn.style.display = supported ? '' : 'none';
+    if (!supported && editingPhase === 'solve') {
+      editingPhase = 'open';
+      document.querySelectorAll('.tl-phase-btn').forEach(b => b.classList.toggle('active', b.dataset.phase === 'open'));
+    }
+  }
+
   // Called on every sidebar puzzle selection (and once at startup for
   // whichever puzzle is already shown) — points the timeline at that
   // puzzle's chunks, keeping the previously-edited chunk if it still
@@ -1865,6 +1890,7 @@ if (!CHUNK_PARAM) (function(){
     if (!chunks.some(c => c.id === editingId)) editingId = chunks[0] ? chunks[0].id : null;
     selectedBlockId = null;
     renderChunkTabs();
+    updateSolveTabVisibility();
     renderTimeline();
   }
   tlSelectPuzzleHook = setEditingPuzzle;
@@ -2065,7 +2091,7 @@ if (!CHUNK_PARAM) (function(){
     const tab = e.target.closest('.tl-chunk-tab');
     if (!tab) return;
     editingId = tab.dataset.id; selectedBlockId = null;
-    renderChunkTabs(); renderTimeline();
+    renderChunkTabs(); updateSolveTabVisibility(); renderTimeline();
   });
   document.querySelectorAll('.tl-phase-btn').forEach(btn => {
     btn.addEventListener('click', () => {
