@@ -927,13 +927,10 @@ const EXAMINE_BACKDROP  = 'rgba(0,0,0,0.88)';
 //   'fadeIn' / 'fadeOut' — drives the puzzle window's own reveal/hide (see
 //     openExamine/fadeCloseExamine below) instead of playing like the others
 //   'shake', 'zoom', 'dialog', 'sound' — play on the game map itself
-// A chunk with nothing authored yet falls back to a plain fade, matching the
+// A chunk with nothing authored yet falls back to DEFAULT_TIMELINE (shared
+// with the editor — puzzles_curated_data.js), a plain fade matching the
 // game's previous fixed-timing behavior, so nothing regresses unedited.
 let TIMELINES = {};
-const DEFAULT_TIMELINE = {
-  open:  [{ id: 'default', type: 'fadeIn',  start: 0, duration: 300, params: {} }],
-  close: [{ id: 'default', type: 'fadeOut', start: 0, duration: 300, params: {} }],
-};
 fetch('timelines.json', { cache: 'no-store' })
   .then(r => r.ok ? r.json() : {})
   .catch(() => ({}))
