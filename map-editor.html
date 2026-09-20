@@ -2657,6 +2657,36 @@ canvas.addEventListener('wheel', e => {
 
 canvas.addEventListener('mouseleave', () => { hoverCell = hoverCellF = null; render(); });
 
+// ── Touch panning ─────────────────────────────────────────────────────────────
+// A two-finger drag pans the view, reusing the same isPanning/panAnchor state
+// as space+drag / middle-mouse — the touch equivalent of a modifier key or
+// extra mouse button neither exists for on a touchscreen. A single finger is
+// left completely alone so it doesn't interfere with painting/placing tools.
+function touchMidpoint(touches) {
+  return { x: (touches[0].clientX + touches[1].clientX) / 2, y: (touches[0].clientY + touches[1].clientY) / 2 };
+}
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length !== 2) return;
+  e.preventDefault();
+  const mid = touchMidpoint(e.touches);
+  isPanning = true;
+  panAnchor = { mx: mid.x, my: mid.y, px: panX, py: panY };
+  updateCursor();
+}, { passive: false });
+canvas.addEventListener('touchmove', e => {
+  if (!isPanning || e.touches.length !== 2) return;
+  e.preventDefault();
+  const mid = touchMidpoint(e.touches);
+  panX = panAnchor.px + (mid.x - panAnchor.mx);
+  panY = panAnchor.py + (mid.y - panAnchor.my);
+  render();
+}, { passive: false });
+function endTouchPan(e) {
+  if (isPanning && e.touches.length < 2) { isPanning = false; updateCursor(); }
+}
+canvas.addEventListener('touchend', endTouchPan);
+canvas.addEventListener('touchcancel', endTouchPan);
+
 // ── Keyboard ──────────────────────────────────────────────────────────────────
 window.addEventListener('keydown', e => {
   const tag = document.activeElement?.tagName;
