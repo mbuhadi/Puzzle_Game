@@ -225,6 +225,10 @@
     padding:6px 10px; font-size:12px; cursor:grab; user-select:none; white-space:nowrap;
   }
   .tl-chip:hover{border-color:var(--gold);}
+  .tl-palette-sep{color:var(--line); align-self:center;}
+  .tl-sound-chips{display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
+  .tl-chip[data-type="sound"]{border-color:#3a5a68;}
+  .tl-chip[data-type="sound"]:hover{border-color:#8fc9e0;}
   .tl-actions{display:flex; align-items:center; gap:10px; margin-left:auto;}
   #tlStatus{font-size:11px; color:var(--dim);}
   .tl-btn{
@@ -305,12 +309,17 @@
         <button class="tl-phase-btn" data-phase="close">Close</button>
       </div>
       <div class="tl-palette" id="tlPalette">
-        <div class="tl-chip" draggable="true" data-type="sound">🔊 Sound</div>
         <div class="tl-chip" draggable="true" data-type="shake">📳 Shake</div>
         <div class="tl-chip" draggable="true" data-type="zoom">🔍 Zoom</div>
         <div class="tl-chip" draggable="true" data-type="dialog">💬 Dialog</div>
         <div class="tl-chip" draggable="true" data-type="fadeIn">🌒 Fade In</div>
         <div class="tl-chip" draggable="true" data-type="fadeOut">🌓 Fade Out</div>
+        <span class="tl-palette-sep">|</span>
+        <!-- One chip per file in assets/sounds/, populated once the list loads
+             (see fetchSoundFiles) — dragging a specific one places a Sound
+             block already pointed at that file, no separate pick-a-file step
+             needed afterward. -->
+        <div id="tlSoundChips" class="tl-sound-chips"><span class="hint-text">loading sounds…</span></div>
       </div>
       <div class="tl-actions">
         <span class="hint-text" id="tlStatus"></span>
@@ -1821,6 +1830,20 @@ if (!CHUNK_PARAM) (function(){
       .then(files => files.filter(f => f.type === 'file').map(f => 'assets/sounds/' + f.name))
       .catch(() => []);
   }
+  // One draggable chip per file in assets/sounds/ — dragging a specific one
+  // onto the timeline places a Sound block already pointed at that file, so
+  // picking which sound plays happens as part of the drag, not a separate
+  // step afterward (the side panel's dropdown still lets you change it later).
+  function populateSoundPalette() {
+    const box = document.getElementById('tlSoundChips');
+    fetchSoundFiles().then(files => {
+      if (!files.length) { box.innerHTML = '<span class="hint-text">no sounds uploaded yet — add files to assets/sounds/ in the repo</span>'; return; }
+      box.innerHTML = files.map(f => {
+        const name = f.split('/').pop().replace(/\.[^.]+$/, '');
+        return `<div class="tl-chip" draggable="true" data-type="sound" data-src="${f}" title="${f}">🔊 ${name}</div>`;
+      }).join('');
+    });
+  }
 
   function timelineExtentMs() {
     const maxEnd = getBlocks().reduce((m, b) => Math.max(m, b.start + b.duration), 0);
@@ -1942,9 +1965,13 @@ if (!CHUNK_PARAM) (function(){
     renderBlockEditor();
   }
 
-  // Palette → track drag-and-drop
-  document.querySelectorAll('.tl-chip').forEach(chip => {
-    chip.addEventListener('dragstart', e => e.dataTransfer.setData('text/plain', chip.dataset.type));
+  // Palette → track drag-and-drop. Delegated on the palette container (not
+  // wired per-chip) so the sound chips — added later, once the file list
+  // loads — are draggable with no extra wiring once they exist.
+  document.getElementById('tlPalette').addEventListener('dragstart', e => {
+    const chip = e.target.closest('.tl-chip');
+    if (!chip) return;
+    e.dataTransfer.setData('text/plain', JSON.stringify({ type: chip.dataset.type, src: chip.dataset.src || '' }));
   });
   document.querySelectorAll('.tl-lane').forEach(lane => {
     lane.addEventListener('dragover', e => { e.preventDefault(); lane.classList.add('dragover'); });
@@ -1952,14 +1979,17 @@ if (!CHUNK_PARAM) (function(){
     lane.addEventListener('drop', e => {
       e.preventDefault();
       lane.classList.remove('dragover');
-      const type = e.dataTransfer.getData('text/plain');
-      const def = EFFECT_DEFAULTS[type];
+      let payload;
+      try { payload = JSON.parse(e.dataTransfer.getData('text/plain')); } catch (err) { return; }
+      const def = EFFECT_DEFAULTS[payload.type];
       if (!def) return;
       const rect = lane.getBoundingClientRect();
+      const params = clone(def.params);
+      if (payload.type === 'sound' && payload.src) params.src = payload.src;
       const block = {
         id: 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-        type, start: snap(pxToMs(e.clientX - rect.left)), duration: def.duration,
-        lane: +lane.dataset.lane, params: clone(def.params),
+        type: payload.type, start: snap(pxToMs(e.clientX - rect.left)), duration: def.duration,
+        lane: +lane.dataset.lane, params,
       };
       if (!canPlace(block)) { setStatus('Only two effects may overlap at once — try a different spot.'); return; }
       getBlocks().push(block);
@@ -2005,6 +2035,7 @@ if (!CHUNK_PARAM) (function(){
   document.getElementById('tlSaveBtn').addEventListener('click', saveTimelines);
 
   populateChunkSelect();
+  populateSoundPalette();
   renderTimeline();
   fetch('timelines.json', { cache: 'no-store' })
     .then(r => r.ok ? r.json() : {})
