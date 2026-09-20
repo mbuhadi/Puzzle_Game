@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Map 1 — Puzzle Game</title>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
@@ -44,6 +44,14 @@
   }
   .bar-btn:hover { background: #1e1c18; border-color: #c8a84b; }
 
+  #canvasWrap {
+    position: relative;
+    max-width: 100%;
+    /* Effects (zoom/shake) transform #mapCanvas itself; keeping the
+       transform scoped to the canvas — not this wrapper — means
+       #sceneDialog, positioned relative to this wrapper, stays put and
+       readable instead of zooming/shaking along with the world. */
+  }
   #mapCanvas {
     display: block;
     image-rendering: pixelated;
@@ -56,6 +64,28 @@
   }
   #mapCanvas:focus { border-color: #c8a84b; }
   .hint { font-family: monospace; font-size: 11px; color: #3a3530; }
+
+  /* ── Scene dialog (a timeline "Dialog" effect) ─────────────────────── */
+  #sceneDialog {
+    display: none;
+    position: absolute;
+    transform: translate(-50%, -100%);
+    max-width: min(70%, 340px);
+    background: #14120e;
+    border: 1.5px solid #c8a84b;
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #e8dfc8;
+    font-family: 'Cinzel', serif;
+    font-size: 13px;
+    line-height: 1.5;
+    text-align: center;
+    pointer-events: none;
+    z-index: 50;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+  }
+  #sceneDialog.open { display: block; }
+  #sceneDialog.rtl { font-family: 'Amiri', serif; direction: rtl; }
 
   .panel-title {
     font-family: monospace;
@@ -222,7 +252,10 @@
   <button class="bar-btn" id="btnRandomize">Randomize</button>
 </div>
 
-<canvas id="mapCanvas" tabindex="0"></canvas>
+<div id="canvasWrap">
+  <canvas id="mapCanvas" tabindex="0"></canvas>
+  <div id="sceneDialog"></div>
+</div>
 <div class="hint">WASD / Arrows &nbsp;·&nbsp; E to examine &nbsp;·&nbsp; joystick on touch</div>
 
 <div class="maps-lib">
@@ -884,33 +917,164 @@ let nearbyInteractable = null; // updated each frame; drives the interact highli
 let bubbleBounds = null;       // world-pixel rect of the nearby interactable, for touch tap hit-test
 
 const EXAMINE_BACKDROP  = 'rgba(0,0,0,0.88)';
-const EXAMINE_STAGE_MS  = 150;   // each stage's duration — backdrop then box on open, box then backdrop on close
+
+// ── Puzzle open/close scene timelines ───────────────────────────────────────
+// Authored per-interactable in puzzles_curated.html's Timeline editor and
+// saved to timelines.json (loaded below). Each timeline is an ordered list of
+// effect blocks — {id, type, start, duration, params} with start/duration in
+// ms from the moment the puzzle is interacted with (open) or left/solved
+// (close). type is one of:
+//   'fadeIn' / 'fadeOut' — drives the puzzle window's own reveal/hide (see
+//     openExamine/fadeCloseExamine below) instead of playing like the others
+//   'shake', 'zoom', 'dialog', 'sound' — play on the game map itself
+// A chunk with nothing authored yet falls back to DEFAULT_TIMELINE (shared
+// with the editor — puzzles_curated_data.js), a plain fade matching the
+// game's previous fixed-timing behavior, so nothing regresses unedited.
+let TIMELINES = {};
+fetch('timelines.json', { cache: 'no-store' })
+  .then(r => r.ok ? r.json() : {})
+  .catch(() => ({}))
+  .then(data => { TIMELINES = data || {}; });
+function getTimeline(chunkId, phase) {
+  const t = TIMELINES[chunkId] && TIMELINES[chunkId][phase];
+  return Array.isArray(t) ? t : DEFAULT_TIMELINE[phase];
+}
+
+// ── Scene effects (shake / zoom / dialog / sound) ───────────────────────────
+// Shake and zoom both transform #mapCanvas — their state is combined and
+// reapplied together on every change instead of each independently
+// overwriting style.transform, which would just cancel one another out when
+// they overlap (the timeline explicitly allows up to two effects to overlap).
+const sceneFx = { shake: null, zoom: null };
+function applySceneTransform() {
+  const parts = [];
+  if (sceneFx.shake) parts.push(`translate(${sceneFx.shake.dx}px, ${sceneFx.shake.dy}px)`);
+  if (sceneFx.zoom)  parts.push(`scale(${sceneFx.zoom.scale})`);
+  canvas.style.transformOrigin = sceneFx.zoom ? sceneFx.zoom.origin : '50% 50%';
+  canvas.style.transform = parts.join(' ') || 'none';
+}
+function playShake(duration, intensity) {
+  const end = performance.now() + duration;
+  (function tick() {
+    if (performance.now() >= end) { sceneFx.shake = null; applySceneTransform(); return; }
+    sceneFx.shake = { dx: (Math.random() * 2 - 1) * intensity, dy: (Math.random() * 2 - 1) * intensity };
+    applySceneTransform();
+    requestAnimationFrame(tick);
+  })();
+}
+function playZoom(duration, scale) {
+  const ease = Math.min(250, duration * 0.3);
+  const cam = getCamera();
+  const origin = `${((player.x * TILE_PX - cam.x) / VIEWPORT_W) * 100}% ${((player.y * TILE_PX - cam.y) / VIEWPORT_H) * 100}%`;
+  sceneFx.zoom = { scale, origin };
+  canvas.style.transition = `transform ${ease}ms ease`;
+  applySceneTransform();
+  setTimeout(() => {
+    sceneFx.zoom = null;
+    canvas.style.transition = `transform ${ease}ms ease`;
+    applySceneTransform();
+  }, Math.max(0, duration - ease));
+}
+const sceneDialog = document.getElementById('sceneDialog');
+function playDialog(duration, text, rtl) {
+  const cam = getCamera();
+  const scaleX = canvas.getBoundingClientRect().width / VIEWPORT_W;
+  sceneDialog.textContent = text || '';
+  sceneDialog.classList.toggle('rtl', !!rtl);
+  sceneDialog.style.left = ((player.x * TILE_PX - cam.x) * scaleX) + 'px';
+  sceneDialog.style.top  = ((player.y * TILE_PX - cam.y - TILE_PX * 0.9) * scaleX) + 'px';
+  sceneDialog.classList.add('open');
+  setTimeout(() => sceneDialog.classList.remove('open'), duration);
+}
+function playSound(src) {
+  if (!src) return;
+  try { new Audio(src).play().catch(() => {}); } catch (e) { /* unsupported/blocked — silently skip */ }
+}
+function playEffectBlock(b) {
+  const p = b.params || {};
+  if (b.type === 'shake') playShake(b.duration, p.intensity || 6);
+  else if (b.type === 'zoom') playZoom(b.duration, p.scale || 1.6);
+  else if (b.type === 'dialog') playDialog(b.duration, p.text, p.rtl);
+  else if (b.type === 'sound') playSound(p.src);
+}
+// Schedules every non-fade block in a timeline (fadeIn/fadeOut are handled
+// separately by openExamine/fadeCloseExamine, which need to coordinate them
+// with the puzzle window's own visibility). Returns the timeline's overall
+// duration — the furthest any block's start+duration reaches.
+function scheduleSceneEffects(blocks) {
+  let total = 0;
+  for (const b of blocks) {
+    total = Math.max(total, b.start + (b.duration || 0));
+    if (b.type !== 'fadeIn' && b.type !== 'fadeOut') setTimeout(() => playEffectBlock(b), b.start);
+  }
+  return total;
+}
 
 function openExamine(p) {
   for (const k in keys) keys[k] = false;
   activeInteractable = p;
   const baseId = p.id.replace(/s$/, '');
-  examineOverlay.classList.add('open');
-  examineOverlay.style.backgroundColor = 'rgba(0,0,0,0)';
-  examineBox.style.opacity = '0';
+  const timeline = getTimeline(baseId, 'open');
+  const fadeBlock = timeline.find(b => b.type === 'fadeIn');
+  const total = scheduleSceneEffects(timeline);
+  const revealAt = fadeBlock ? fadeBlock.start : total;
+  const fadeMs = fadeBlock ? fadeBlock.duration : 0;
 
-  // Reveal the box only once BOTH the backdrop has had its stage to go
-  // solid AND the puzzle content itself has actually finished loading —
+  // Reveal the box only once BOTH its scheduled moment on the timeline has
+  // arrived AND the puzzle content itself has actually finished loading —
   // not just after a flat delay. A puzzle that's cache-warm from preloading
   // opens almost instantly, but a cold one (fonts, images, the chunk's own
   // builder script) can still be visibly settling into place a beat later;
-  // waiting for it keeps that behind the still-dark backdrop instead of
-  // exposing it right as the box appears. A safety timeout stands in for a
-  // 'load' that, for whatever reason, never fires.
-  let backdropDone = false, contentReady = false;
-  function revealBoxIfReady() {
-    if (backdropDone && contentReady) examineBox.style.opacity = '1';
+  // waiting for it keeps that behind the still-hidden puzzle instead of
+  // exposing it right as it appears. A safety timeout stands in for a
+  // 'load' that, for whatever reason, never fires. The map itself (and any
+  // shake/zoom/dialog effects scheduled above) keeps rendering normally the
+  // entire time up to this point — see loop()'s render() guard below.
+  let timeElapsed = false, contentReady = false;
+  function revealIfReady() {
+    if (!timeElapsed || !contentReady) return;
+    examineOverlay.classList.add('open');
+    examineOverlay.style.backgroundColor = 'rgba(0,0,0,0)';
+    examineBox.style.opacity = '0';
+    // Split the authored fade in two: the backdrop darkens first, THEN the
+    // box fades in on top of it — never simultaneously. Fading both at once
+    // would let the box (and the puzzle inside it) blend with whatever of
+    // the map is still showing through the still-transparent backdrop —
+    // exactly the ghosting an earlier version of this had to fix. A 0ms
+    // fadeMs (no Fade In block authored) collapses this to an instant pop.
+    const half = fadeMs / 2;
+    examineOverlay.style.transitionDuration = half + 'ms';
+    // The very first time #examineOverlay ever leaves display:none, a
+    // forced reflow alone isn't always enough to make the browser treat the
+    // transparent backdrop as a real prior frame to transition from — it
+    // can just jump straight to the full backdrop with no fade, only on
+    // that first open. A double rAF guarantees a full style+paint pass
+    // happens in between.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        examineOverlay.style.backgroundColor = EXAMINE_BACKDROP;
+        setTimeout(() => {
+          examineBox.style.transitionDuration = half + 'ms';
+          examineBox.style.opacity = '1';
+        }, half);
+      });
+    });
+    // "No scrolling behind the puzzle" used to be document/body
+    // overflow:hidden, but that turned out to be the actual cause of the
+    // black-bar-after-rotation bug: it left the page with zero scroll play,
+    // and mobile browsers re-show their own address bar on rotation and
+    // rely on the page being scrollable to let them auto-hide it again —
+    // with none available, their toolbar was staying parked on top of the
+    // puzzle, eating taps itself, looking exactly like a stuck black bar.
+    // #examineOverlay's own touch-action:none now blocks scroll-through the
+    // same way without taking away the page's scrollability.
+    nudgeBrowserChrome();
   }
   function finishContentReady() {
     if (contentReady) return;
     contentReady = true;
     examineFrame.removeEventListener('load', onFrameLoad);
-    revealBoxIfReady();
+    revealIfReady();
   }
   function onFrameLoad() {
     // 'load' fires once the document and whatever it referenced up front
@@ -930,37 +1094,12 @@ function openExamine(p) {
     });
   }
   examineFrame.addEventListener('load', onFrameLoad);
-  setTimeout(finishContentReady, 1200);
+  setTimeout(finishContentReady, revealAt + 1200);
+  // Starts loading immediately — even while #examineOverlay is still
+  // display:none — so it has the whole timeline's length up to revealAt to
+  // become ready before it's actually shown.
   examineFrame.src = 'puzzles_curated.html?chunk=' + baseId + (DEV_SKIP ? '&dev=1' : '');
-
-  // The very first time #examineOverlay ever leaves display:none, a forced
-  // reflow (offsetWidth) alone isn't always enough to make the browser
-  // treat the transparent backdrop as a real prior frame to transition
-  // from — it can just jump straight to the full backdrop with no fade,
-  // only on that first open. A double rAF guarantees a full style+paint
-  // pass happens in between. #examineBox's own fade doesn't need this same
-  // treatment — by the time it starts, it's already had several real
-  // painted frames at opacity:0 to transition from.
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      examineOverlay.style.backgroundColor = EXAMINE_BACKDROP;
-      // Wait for the backdrop to actually be solid before fading the box
-      // in — fading both at once would have the box blend with whatever
-      // of the map page is still showing through the still-transparent
-      // backdrop behind it, which is the exact ghosting this replaced.
-      setTimeout(() => { backdropDone = true; revealBoxIfReady(); }, EXAMINE_STAGE_MS);
-    });
-  });
-  // "No scrolling behind the puzzle" used to be document/body
-  // overflow:hidden, but that turned out to be the actual cause of the
-  // black-bar-after-rotation bug: it left the page with zero scroll play,
-  // and mobile browsers re-show their own address bar on rotation and rely
-  // on the page being scrollable to let them auto-hide it again — with
-  // none available, their toolbar was staying parked on top of the puzzle,
-  // eating taps itself, looking exactly like a stuck black bar. #examineOverlay's
-  // own touch-action:none now blocks scroll-through the same way without
-  // taking away the page's scrollability.
-  nudgeBrowserChrome();
+  setTimeout(() => { timeElapsed = true; revealIfReady(); }, revealAt);
 }
 
 // Merely making the page scrollable again (removing overflow:hidden, above)
@@ -985,25 +1124,46 @@ window.addEventListener('resize', () => {
   if (examineOverlay.classList.contains('open')) nudgeBrowserChrome();
 });
 
-// Fades #examineBox out, then #examineOverlay's backdrop out behind it —
-// the reverse order from opening, so the box is always fading against a
-// still-solid backdrop rather than one that's simultaneously going
-// transparent (which is what let the map page ghost through it before).
-// `after` (close only) runs once fully closed — callers use it for
-// whatever should happen next (transit through a door, etc).
+// Plays the current interactable's close timeline: #examineBox fades out,
+// then #examineOverlay's backdrop fades out behind it — the reverse order
+// from opening, so the box is always fading against a still-solid backdrop
+// rather than one that's simultaneously going transparent (which is what
+// let the map page ghost through it before) — at whichever point the
+// timeline's Fade Out block schedules (or instantly, at the very start, if
+// none was authored). The map resumes rendering (loop()'s render() guard)
+// the moment the puzzle is actually gone, so any effects scheduled after
+// that point (zoom back out, a parting line of dialog, a sound) play
+// normally on the now-visible map for the rest of the timeline. `after`
+// (close only) runs once the ENTIRE close timeline has finished — callers
+// use it for whatever should happen next (transit through a door, etc).
 function fadeCloseExamine(after) {
   if (!examineOverlay.classList.contains('open')) { if (after) after(); return; }
-  examineBox.style.opacity = '0';
+  const baseId = activeInteractable ? String(activeInteractable.id).replace(/s$/, '') : null;
+  const timeline = baseId ? getTimeline(baseId, 'close') : [];
+  const fadeBlock = timeline.find(b => b.type === 'fadeOut');
+  const total = scheduleSceneEffects(timeline);
+  const hideAt = fadeBlock ? fadeBlock.start : 0;
+  const fadeMs = fadeBlock ? fadeBlock.duration : 0;
+  const half = fadeMs / 2;
+
   setTimeout(() => {
-    examineOverlay.style.backgroundColor = 'rgba(0,0,0,0)';
+    examineBox.style.transitionDuration = half + 'ms';
+    examineBox.style.opacity = '0';
     setTimeout(() => {
-      examineOverlay.classList.remove('open');
-      examineOverlay.style.backgroundColor = '';
-      examineBox.style.opacity = '';
-      examineFrame.src = '';
-      if (after) after();
-    }, EXAMINE_STAGE_MS);
-  }, EXAMINE_STAGE_MS);
+      examineOverlay.style.transitionDuration = half + 'ms';
+      examineOverlay.style.backgroundColor = 'rgba(0,0,0,0)';
+      setTimeout(() => {
+        examineOverlay.classList.remove('open');
+        examineOverlay.style.backgroundColor = '';
+        examineOverlay.style.transitionDuration = '';
+        examineBox.style.opacity = '';
+        examineBox.style.transitionDuration = '';
+        examineFrame.src = '';
+      }, half);
+    }, half);
+  }, hideAt);
+
+  setTimeout(() => { if (after) after(); }, Math.max(total, hideAt + fadeMs));
 }
 
 function closeExamine() {
