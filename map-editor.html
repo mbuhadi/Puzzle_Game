@@ -451,7 +451,9 @@ select:focus { outline: none; border-color: var(--gold-dim); }
         <button id="btnPView" onclick="togglePView()" style="width:100%;margin-bottom:5px"
                 title="Show the area the game camera displays around the player — follows the cursor, or sits on the spawn point">Player View: Off</button>
         <div class="zoom-row">
+          <button onclick="zoomStep(-1)" title="Zoom out (or scroll)">−</button>
           <span id="zoomLabel">12px</span>
+          <button onclick="zoomStep(1)" title="Zoom in (or scroll)">+</button>
         </div>
       </div>
 
@@ -1505,6 +1507,14 @@ function togglePView() {
   render();
 }
 
+// dir > 0 zooms in, dir < 0 zooms out — same step size as one wheel/trackpad
+// tick, centered on the current view instead of a cursor position, for
+// devices with no wheel to Ctrl+scroll with (touchscreens, tablets).
+function zoomStep(dir) {
+  const W = canvas.width || wrap.clientWidth;
+  const H = canvas.height || wrap.clientHeight;
+  zoomAt(W / 2, H / 2, dir > 0 ? 1.333 : 0.75);
+}
 function zoomAt(cx, cy, factor) {
   const raw     = zoom * factor;
   const newZoom = Math.max(4, Math.min(48, raw < zoom ? Math.floor(raw) : Math.ceil(raw)));
