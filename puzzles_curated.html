@@ -1933,6 +1933,15 @@ if (!CHUNK_PARAM) (function(){
 
   function selectBlock(id) { selectedBlockId = id; renderTimeline(); }
 
+  function deleteBlock(id) {
+    const blocks = getBlocks();
+    const idx = blocks.findIndex(b => b.id === id);
+    if (idx < 0) return;
+    blocks.splice(idx, 1);
+    if (selectedBlockId === id) selectedBlockId = null;
+    renderTimeline();
+  }
+
   function renderBlockEditor() {
     const panel = document.getElementById('tlBlockEditor');
     const block = getBlocks().find(b => b.id === selectedBlockId);
@@ -1962,13 +1971,7 @@ if (!CHUNK_PARAM) (function(){
     });
     onTimeChange('tlfStart', 'start', 0);
     onTimeChange('tlfDuration', 'duration', 0);
-    document.getElementById('tlfDelete').addEventListener('click', () => {
-      const blocks = getBlocks();
-      const idx = blocks.findIndex(b => b.id === block.id);
-      if (idx >= 0) blocks.splice(idx, 1);
-      selectedBlockId = null;
-      renderTimeline();
-    });
+    document.getElementById('tlfDelete').addEventListener('click', () => deleteBlock(block.id));
     if (block.type === 'sound') {
       const sel = document.getElementById('tlfSrc');
       fetchSoundFiles().then(files => {
@@ -2103,6 +2106,19 @@ if (!CHUNK_PARAM) (function(){
       e.preventDefault();
       if (!document.getElementById('tlSaveBtn').disabled) saveTimelines();
     }
+  });
+
+  // Delete/Backspace removes the selected block, unless the keystroke is
+  // meant for a text field in the block editor (start/duration/dialog text)
+  // or elsewhere on the page — Backspace there must keep editing the text,
+  // not delete the block behind it.
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+    if (!selectedBlockId) return;
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable) return;
+    e.preventDefault();
+    deleteBlock(selectedBlockId);
   });
 
   setEditingPuzzle(lastSelectedPuzzleNum != null ? lastSelectedPuzzleNum : +PUZZLES[0].num);
