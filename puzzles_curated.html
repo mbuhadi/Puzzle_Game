@@ -2095,6 +2095,16 @@ if (!CHUNK_PARAM) (function(){
   }
   document.getElementById('tlSaveBtn').addEventListener('click', saveTimelines);
 
+  // Ctrl+S (Cmd+S on Mac) saves the timeline instead of triggering the
+  // browser's own "save page" dialog — this whole module only runs in the
+  // multi-puzzle editing page, so no extra scoping is needed.
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      if (!document.getElementById('tlSaveBtn').disabled) saveTimelines();
+    }
+  });
+
   setEditingPuzzle(lastSelectedPuzzleNum != null ? lastSelectedPuzzleNum : +PUZZLES[0].num);
   populateSoundPalette();
   fetch('timelines.json', { cache: 'no-store' })
