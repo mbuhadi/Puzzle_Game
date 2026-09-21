@@ -27,6 +27,17 @@
         "params": {
           "scale": 3.9
         }
+      },
+      {
+        "id": "bmuayr2p8s636",
+        "type": "dialog",
+        "start": 1600,
+        "duration": 1200,
+        "lane": 0,
+        "params": {
+          "text": "في شاشة صغيرة على الباب ... تقول لازم تعرف اهلك! ",
+          "rtl": true
+        }
       }
     ],
     "close": [
@@ -59,5 +70,15 @@
         "params": {}
       }
     ]
+  },
+  "p2g2": {
+    "open": [],
+    "close": [],
+    "solve": []
+  },
+  "p4g1": {
+    "open": [],
+    "close": [],
+    "solve": []
   }
 }
