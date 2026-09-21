@@ -13,15 +13,7 @@
     "solve": []
   },
   "p1p1": {
-    "open": [
-      {
-        "id": "default",
-        "type": "fadeIn",
-        "start": 0,
-        "duration": 300,
-        "params": {}
-      }
-    ],
+    "open": [],
     "close": [
       {
         "id": "default",
@@ -30,7 +22,8 @@
         "duration": 300,
         "params": {}
       }
-    ]
+    ],
+    "solve": []
   },
   "p2g2": {
     "open": [],
