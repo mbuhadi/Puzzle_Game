@@ -433,12 +433,26 @@ function buildFamilyTree(){
   });
   stage.appendChild(banner);
   document.addEventListener('click',closeDD);
+  // Shrinks the tree to fit a narrow phone browser viewing this page
+  // directly (no ?chunk= — see below). When embedded in the game's examine
+  // iframe instead, this runs while #examineOverlay is still display:none
+  // so the puzzle can preload before it's shown (see maps.html's
+  // openExamine) — detail.clientWidth reads 0 in a hidden ancestor, which
+  // used to make `avail` negative and `sc` a negative scale, flipping the
+  // whole tree upside down once fitChunkToViewport later blew the
+  // now-tiny-and-mirrored box back up to fill the screen. Skipping the
+  // scale entirely whenever there's nothing real to measure yet leaves the
+  // tree at its natural size — fitChunkToViewport (only present in that
+  // embedded mode) fits it to the screen correctly on its own once the box
+  // actually becomes visible and sized.
   if(window.innerWidth<=640){
     const avail=detail.clientWidth-36;
-    const sc=Math.min(1,avail/565);
-    stage.style.transform='scale('+sc+')';
-    stage.style.transformOrigin='top left';
-    stage.style.marginBottom=((sc-1)*515)+'px';
+    if(avail>0){
+      const sc=Math.min(1,avail/565);
+      stage.style.transform='scale('+sc+')';
+      stage.style.transformOrigin='top left';
+      stage.style.marginBottom=((sc-1)*515)+'px';
+    }
   }
 }
 
