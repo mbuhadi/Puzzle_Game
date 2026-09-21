@@ -243,13 +243,3 @@ const PUZZLES = [
 const PUZZLE_CHUNKS = PUZZLES.flatMap(p =>
   [...((p.given || '') + (p.problem || '')).matchAll(/class="clabel">([^<]+)</g)]
     .map(m => ({ id: m[1], puzzle: +p.num })));
-
-/* Fallback scene timeline for any interactable with nothing authored yet in
-   the Timeline editor (puzzles_curated.html) / saved to timelines.json — no
-   effects at all, so the puzzle window just opens/closes on its own fixed
-   transition (see maps.html's EXAMINE_FADE_MS) with nothing scheduled on the
-   map first. 'solve' only ever fires for a chunk with an actual puzzle to
-   solve (see isPuzzleChunk in the editor). See maps.html's
-   playEffectBlock/openExamine/fadeCloseExamine for how a timeline's blocks
-   actually get played. */
-const DEFAULT_TIMELINE = { open: [], close: [], solve: [] };

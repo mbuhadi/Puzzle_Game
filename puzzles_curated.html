@@ -195,103 +195,38 @@
     .shape-item svg{width:100%; height:auto;}
   }
 
-  /* ── Timeline editor ─────────────────────────────────────────────────
-     A docked footer panel — a very simplified video-editor timeline for
-     authoring a puzzle's open/close "scene": drag effect chips from the
-     palette onto one of two lanes (up to two effects may overlap in time),
-     drag a placed block to move it, drag its right edge to resize it. */
-  #timelinePanel{
-    flex-shrink:0; height:230px; background:var(--panel);
-    border-top:1px solid var(--line); display:flex; flex-direction:column;
-    font-family:sans-serif;
+  /* ── Interactable sounds ────────────────────────────────────────────
+     A docked footer panel — one sound file each for On Open/On Close/On
+     Solve on whichever chunk is selected in the sidebar. The puzzle
+     window's own open/close fade is fixed and uniform for every
+     interactable (see maps.html's EXAMINE_FADE_MS) — not authored here. */
+  #soundsPanel{
+    flex-shrink:0; background:var(--panel);
+    border-top:1px solid var(--line); display:flex; align-items:center;
+    flex-wrap:wrap; gap:14px; padding:10px 14px; font-family:sans-serif;
   }
-  .tl-header{
-    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
-    padding:8px 14px; border-bottom:1px solid var(--line);
-  }
-  .tl-header select{
+  #soundsPanel select{
     background:var(--panel2); color:var(--ink); border:1px solid var(--line);
     border-radius:5px; padding:5px 8px; font-family:sans-serif; font-size:12px;
   }
-  .tl-chunk-tabs{display:flex; gap:4px; flex-wrap:wrap;}
-  .tl-chunk-tab{
+  .snd-chunk-tabs{display:flex; gap:4px; flex-wrap:wrap;}
+  .snd-chunk-tab{
     background:var(--panel2); color:var(--muted); border:1px solid var(--line); border-radius:5px;
     padding:5px 9px; font-family:monospace; font-size:11px; cursor:pointer;
   }
-  .tl-chunk-tab:hover{border-color:var(--gold);}
-  .tl-chunk-tab.active{background:var(--gold); color:#1a1608; font-weight:bold; border-color:var(--gold);}
-  .tl-phase-toggle{display:flex; border:1px solid var(--line); border-radius:6px; overflow:hidden;}
-  .tl-phase-btn{
-    background:var(--panel2); color:var(--muted); border:none; padding:6px 16px;
-    font-family:sans-serif; font-size:12px; letter-spacing:1px; cursor:pointer;
-  }
-  .tl-phase-btn.active{background:var(--gold); color:#1a1608; font-weight:bold;}
-  .tl-palette{display:flex; gap:6px; flex-wrap:wrap;}
-  .tl-chip{
-    background:var(--panel2); border:1px solid var(--line); border-radius:6px;
-    padding:6px 10px; font-size:12px; cursor:grab; user-select:none; white-space:nowrap;
-  }
-  .tl-chip:hover{border-color:var(--gold);}
-  .tl-palette-sep{color:var(--line); align-self:center;}
-  .tl-sound-picker{display:flex; gap:6px; align-items:center;}
-  #tlSoundSelect{max-width:160px;}
-  .tl-chip[data-type="sound"]{border-color:#3a5a68;}
-  .tl-chip[data-type="sound"]:hover{border-color:#8fc9e0;}
-  .tl-chip[data-type="sound"]:disabled,
-  .tl-chip[data-type="sound"].disabled{opacity:0.4; cursor:default;}
-  .tl-actions{display:flex; align-items:center; gap:10px; margin-left:auto;}
-  #tlStatus{font-size:11px; color:var(--dim);}
-  .tl-btn{
+  .snd-chunk-tab:hover{border-color:var(--gold);}
+  .snd-chunk-tab.active{background:var(--gold); color:#1a1608; font-weight:bold; border-color:var(--gold);}
+  .snd-field{display:flex; align-items:center; gap:6px;}
+  .snd-field label{font-size:11px; color:var(--dim); letter-spacing:0.5px; text-transform:uppercase;}
+  .snd-field select{max-width:170px;}
+  #soundsActions{display:flex; align-items:center; gap:10px; margin-left:auto;}
+  #sndStatus{font-size:11px; color:var(--dim);}
+  #sndSaveBtn{
     background:none; color:var(--gold); border:1px solid var(--line); border-radius:5px;
     padding:6px 14px; font-family:sans-serif; font-size:12px; cursor:pointer;
   }
-  .tl-btn:hover{border-color:var(--gold); background:#1e1b14;}
-  .tl-btn:disabled{opacity:0.4; cursor:default;}
-
-  .tl-body{flex:1; display:flex; min-height:0;}
-  .tl-scroll{flex:1; overflow-x:auto; overflow-y:hidden; position:relative;}
-  .tl-ruler{
-    height:20px; position:relative; border-bottom:1px solid var(--line);
-    font-family:monospace; font-size:9px; color:var(--dim);
-  }
-  .tl-tick{position:absolute; top:2px; border-left:1px solid var(--line); padding-left:3px; white-space:nowrap;}
-  .tl-track{position:relative; height:calc(100% - 20px);}
-  .tl-lane{
-    position:relative; height:50%; border-bottom:1px dashed var(--line);
-  }
-  .tl-lane.dragover{background:rgba(200,168,75,0.08);}
-  .tl-block{
-    position:absolute; top:4px; bottom:4px; border-radius:5px; cursor:grab;
-    font-size:11px; color:#1a1608; display:flex; align-items:center;
-    padding:0 6px; overflow:hidden; white-space:nowrap; border:1.5px solid rgba(0,0,0,0.25);
-  }
-  .tl-block.selected{outline:2px solid var(--gold-bright); outline-offset:1px;}
-  .tl-block .tl-resize{
-    position:absolute; right:0; top:0; bottom:0; width:8px; cursor:ew-resize;
-  }
-  .tl-block[data-type="sound"]{background:#8fc9e0;}
-  .tl-block[data-type="shake"]{background:#e0a870;}
-  .tl-block[data-type="zoom"]{background:#c8a0e0;}
-  .tl-block[data-type="dialog"]{background:#a8d888;}
-  .tl-block[data-type="fadeIn"], .tl-block[data-type="fadeOut"]{background:#e0e0a0;}
-
-  #tlBlockEditor{
-    width:230px; flex-shrink:0; border-left:1px solid var(--line);
-    padding:10px 12px; overflow-y:auto; font-size:12px; color:var(--muted);
-  }
-  #tlBlockEditor .tl-field{margin-bottom:8px;}
-  #tlBlockEditor label{display:block; margin-bottom:3px; color:var(--dim); font-size:10px; letter-spacing:0.5px; text-transform:uppercase;}
-  #tlBlockEditor input[type="text"], #tlBlockEditor input[type="number"],
-  #tlBlockEditor select, #tlBlockEditor textarea{
-    width:100%; background:var(--panel2); color:var(--ink); border:1px solid var(--line);
-    border-radius:4px; padding:5px 7px; font-family:sans-serif; font-size:12px;
-  }
-  #tlBlockEditor textarea{resize:vertical; min-height:50px;}
-  #tlBlockEditor .tl-delete{
-    background:none; color:var(--red); border:1px solid #5a2a20; border-radius:5px;
-    padding:5px 10px; font-size:11px; cursor:pointer; margin-top:6px;
-  }
-  #tlBlockEditor .tl-delete:hover{background:#2a1410;}
+  #sndSaveBtn:hover{border-color:var(--gold); background:#1e1b14;}
+  #sndSaveBtn:disabled{opacity:0.4; cursor:default;}
 </style>
 </head>
 <body>
@@ -304,55 +239,37 @@
     <main id="detail"></main>
   </div>
 
-  <!-- ── Timeline editor ──────────────────────────────────────────────────
-       Authors the open/close "scene" (sound, screen shake/fade/zoom, a
-       dialog line) that plays on the map when a player interacts with —
-       or leaves/solves — the currently-selected interactable. Saved to
-       timelines.json (Save to Website, same GitHub flow as Map Studio) and
-       read at runtime by maps.html. Hidden entirely in single-chunk mode
-       (embedded in the game) — this is an authoring tool only. -->
-  <div id="timelinePanel">
-    <div class="tl-header">
-      <!-- Which interactable this timeline belongs to follows the puzzle
-           picked in the sidebar; this only appears when that puzzle has
-           more than one interactable chunk, to disambiguate among them. -->
-      <div id="tlChunkTabs" class="tl-chunk-tabs"></div>
-      <div class="tl-phase-toggle">
-        <button class="tl-phase-btn active" data-phase="open">Open</button>
-        <button class="tl-phase-btn" data-phase="close">Close</button>
-        <!-- Only shown for a chunk that's an actual solvable puzzle (see
-             isPuzzleChunk) — a narrative "given" chunk never solves. -->
-        <button class="tl-phase-btn" data-phase="solve" id="tlSolveBtn">On Solve</button>
-      </div>
-      <div class="tl-palette" id="tlPalette">
-        <div class="tl-chip" draggable="true" data-type="shake">📳 Shake</div>
-        <div class="tl-chip" draggable="true" data-type="zoom">🔍 Zoom</div>
-        <div class="tl-chip" draggable="true" data-type="dialog">💬 Dialog</div>
-        <span class="tl-palette-sep">|</span>
-        <!-- Dropdown lists every file in assets/sounds/ (see fetchSoundFiles);
-             dragging the chip places a Sound block pointed at whichever file
-             is currently selected, so choosing which sound plays happens
-             right in the palette without cluttering it with one chip per
-             file as the sound library grows. -->
-        <div class="tl-sound-picker">
-          <select id="tlSoundSelect" title="Which sound the chip below will drag"><option>loading…</option></select>
-          <div class="tl-chip" draggable="true" data-type="sound" id="tlSoundChip">🔊 Sound</div>
-        </div>
-      </div>
-      <div class="tl-actions">
-        <span class="hint-text" id="tlStatus"></span>
-        <button class="tl-btn" id="tlSaveBtn">Save to Website</button>
-      </div>
+  <!-- ── Interactable sounds ─────────────────────────────────────────────
+       One sound file each for On Open / On Close / On Solve on whichever
+       interactable is selected. The puzzle window's own open/close fade is
+       fixed and uniform for every interactable (see maps.html's
+       EXAMINE_FADE_MS) — not authored here. Saved to
+       interactableSounds.json (Save to Website, same GitHub flow as Map
+       Studio) and read at runtime by maps.html. Hidden entirely in
+       single-chunk mode (embedded in the game) — this is an authoring tool
+       only. -->
+  <div id="soundsPanel">
+    <!-- Which interactable this belongs to follows the puzzle picked in the
+         sidebar; this only appears when that puzzle has more than one
+         interactable chunk, to disambiguate among them. -->
+    <div id="sndChunkTabs" class="snd-chunk-tabs"></div>
+    <div class="snd-field">
+      <label for="sndOpenSelect">On Open</label>
+      <select id="sndOpenSelect"><option value="">loading…</option></select>
     </div>
-    <div class="tl-body">
-      <div class="tl-scroll" id="tlScroll">
-        <div class="tl-ruler" id="tlRuler"></div>
-        <div class="tl-track" id="tlTrack">
-          <div class="tl-lane" data-lane="0"></div>
-          <div class="tl-lane" data-lane="1"></div>
-        </div>
-      </div>
-      <div id="tlBlockEditor"></div>
+    <div class="snd-field">
+      <label for="sndCloseSelect">On Close</label>
+      <select id="sndCloseSelect"><option value="">loading…</option></select>
+    </div>
+    <!-- Only shown for a chunk that's an actual solvable puzzle (see
+         isPuzzleChunk) — a narrative "given" chunk never solves. -->
+    <div class="snd-field" id="sndSolveField">
+      <label for="sndSolveSelect">On Solve</label>
+      <select id="sndSolveSelect"><option value="">loading…</option></select>
+    </div>
+    <div id="soundsActions">
+      <span class="hint-text" id="sndStatus"></span>
+      <button id="sndSaveBtn">Save to Website</button>
     </div>
   </div>
 
@@ -433,12 +350,26 @@ function buildFamilyTree(){
   });
   stage.appendChild(banner);
   document.addEventListener('click',closeDD);
+  // Shrinks the tree to fit a narrow phone browser viewing this page
+  // directly (no ?chunk= — see below). When embedded in the game's examine
+  // iframe instead, this runs while #examineOverlay is still display:none
+  // so the puzzle can preload before it's shown (see maps.html's
+  // openExamine) — detail.clientWidth reads 0 in a hidden ancestor, which
+  // used to make `avail` negative and `sc` a negative scale, flipping the
+  // whole tree upside down once fitChunkToViewport later blew the
+  // now-tiny-and-mirrored box back up to fill the screen. Skipping the
+  // scale entirely whenever there's nothing real to measure yet leaves the
+  // tree at its natural size — fitChunkToViewport (only present in that
+  // embedded mode) fits it to the screen correctly on its own once the box
+  // actually becomes visible and sized.
   if(window.innerWidth<=640){
     const avail=detail.clientWidth-36;
-    const sc=Math.min(1,avail/565);
-    stage.style.transform='scale('+sc+')';
-    stage.style.transformOrigin='top left';
-    stage.style.marginBottom=((sc-1)*515)+'px';
+    if(avail>0){
+      const sc=Math.min(1,avail/565);
+      stage.style.transform='scale('+sc+')';
+      stage.style.transformOrigin='top left';
+      stage.style.marginBottom=((sc-1)*515)+'px';
+    }
   }
 }
 
@@ -1561,10 +1492,10 @@ const BUILDERS={tree:buildFamilyTree, windows:buildPuzzleTwo, courtyard:buildCou
 const plist=document.getElementById('plist'), detail=document.getElementById('detail');
 let teardown=null;   // cleanup for the previously-built interactive puzzle
 const CHUNK_PARAM = new URLSearchParams(location.search).get('chunk');
-// Set by the Timeline editor below (once it initializes) so select() can
-// point the Timeline at whichever puzzle is picked in the sidebar, without
-// the Timeline needing its own puzzle picker.
-let tlSelectPuzzleHook = null;
+// Set by the sounds panel below (once it initializes) so select() can point
+// it at whichever puzzle is picked in the sidebar, without it needing its
+// own puzzle picker.
+let sndSelectPuzzleHook = null;
 let lastSelectedPuzzleNum = null;
 
 if (!CHUNK_PARAM) {
@@ -1580,7 +1511,7 @@ function select(i){
   [...plist.children].forEach((el,j)=>el.classList.toggle('active',j===i));
   const p=PUZZLES[i];
   lastSelectedPuzzleNum = +p.num;
-  if (tlSelectPuzzleHook) tlSelectPuzzleHook(lastSelectedPuzzleNum);
+  if (sndSelectPuzzleHook) sndSelectPuzzleHook(lastSelectedPuzzleNum);
   detail.innerHTML=`
     <div class="title-row"><div class="ptitle">${p.name}</div></div>
     <div class="pkicker">${p.loc.toUpperCase()}</div>
@@ -1624,13 +1555,13 @@ if (!CHUNK_PARAM) {
 
     if (!chunkHTML) return;
 
-    // Hide sidebar and all nav chrome — the Timeline editor is an
-    // authoring tool for this page's normal (multi-puzzle) mode only, not
-    // for when a chunk is embedded in the game's examine iframe.
+    // Hide sidebar and all nav chrome — the sounds panel is an authoring
+    // tool for this page's normal (multi-puzzle) mode only, not for when a
+    // chunk is embedded in the game's examine iframe.
     document.getElementById('sidebar').style.display = 'none';
     document.getElementById('menuBtn').style.display = 'none';
     document.getElementById('menuOverlay').style.display = 'none';
-    document.getElementById('timelinePanel').style.display = 'none';
+    document.getElementById('soundsPanel').style.display = 'none';
 
     // Played inside maps.html's examine iframe, phone held sideways
     // (landscape): the chunk fills the frame exactly, centered, with no
@@ -1774,347 +1705,134 @@ if (!CHUNK_PARAM) {
   });
 })();
 
-/* ── Timeline editor ─────────────────────────────────────────────────────────
-   Authors each interactable's open/close scene timeline (see maps.html's
-   playEffectBlock/openExamine/fadeCloseExamine for how it's played back).
+/* ── Interactable sounds ──────────────────────────────────────────────────
+   One sound file each for On Open / On Close / On Solve, per interactable.
+   The puzzle window's own open/close fade is fixed and uniform for every
+   interactable (see maps.html's EXAMINE_FADE_MS) — not authored here.
    Not shown in single-chunk (embedded-in-game) mode. */
 if (!CHUNK_PARAM) (function(){
-  const EFFECT_DEFAULTS = {
-    sound:   { duration: 0,    params: { src: '' } },
-    shake:   { duration: 400,  params: { intensity: 6 } },
-    zoom:    { duration: 800,  params: { scale: 1.6 } },
-    dialog:  { duration: 1200, params: { text: '', rtl: false } },
-  };
-  // fadeIn/fadeOut are no longer offered in the palette — the puzzle
-  // window's own open/close transition is fixed and independent of the
-  // timeline now (see maps.html's EXAMINE_FADE_MS) — but the label stays so
-  // a chunk with one left over from before still renders sensibly.
-  const EFFECT_LABELS = {
-    sound: '🔊 Sound', shake: '📳 Shake', zoom: '🔍 Zoom', dialog: '💬 Dialog',
-    fadeIn: '🌒 Fade In', fadeOut: '🌓 Fade Out',
-  };
   // Only a "problem" chunk (p<puzzle>p<n>, e.g. p1p1) is an actual solvable
-  // puzzle that can ever fire a 'solve' timeline — a "given" chunk
+  // puzzle that can ever fire an On Solve sound — a "given" chunk
   // (p<puzzle>g<n>) is narrative-only and never calls notifyPuzzleSolved().
   const isPuzzleChunk = id => /^p\d+p\d+$/.test(id || '');
-  const PX_PER_MS = 0.15;
-  const msToPx = ms => ms * PX_PER_MS;
-  const pxToMs = px => px / PX_PER_MS;
-  const snap = ms => Math.max(0, Math.round(ms / 50) * 50);
-  const clone = v => JSON.parse(JSON.stringify(v));
+  const PHASES = ['open', 'close', 'solve'];
+  const selectId = phase => 'snd' + phase[0].toUpperCase() + phase.slice(1) + 'Select';
 
-  // ── timelines.json load/save — same GitHub token (localStorage 'ghToken')
-  // and Contents-API flow Map Studio uses for maps/, so a token connected
-  // there already works here with no extra setup.
-  const TL_GH = { owner: 'mbuhadi', repo: 'Puzzle_Game' };
-  const tlGhToken = () => localStorage.getItem('ghToken') || '';
-  const tlGhApi = path => `https://api.github.com/repos/${TL_GH.owner}/${TL_GH.repo}/contents/${path}`;
-  function tlGhHeaders() {
+  // ── interactableSounds.json load/save — same GitHub token (localStorage
+  // 'ghToken') and Contents-API flow Map Studio uses for maps/, so a token
+  // connected there already works here with no extra setup.
+  const SND_GH = { owner: 'mbuhadi', repo: 'Puzzle_Game' };
+  const sndGhToken = () => localStorage.getItem('ghToken') || '';
+  const sndGhApi = path => `https://api.github.com/repos/${SND_GH.owner}/${SND_GH.repo}/contents/${path}`;
+  function sndGhHeaders() {
     const h = { Accept: 'application/vnd.github+json' };
-    if (tlGhToken()) h.Authorization = 'Bearer ' + tlGhToken();
+    if (sndGhToken()) h.Authorization = 'Bearer ' + sndGhToken();
     return h;
   }
-  async function tlGhErrMsg(resp) {
+  async function sndGhErrMsg(resp) {
     try { return (await resp.json()).message || resp.statusText; }
     catch (e) { return resp.statusText || ('HTTP ' + resp.status); }
   }
-  const tlB64EncodeUtf8 = str => btoa(unescape(encodeURIComponent(str)));
-  async function tlGhSha(path) {
-    const r = await fetch(tlGhApi(path), { headers: tlGhHeaders(), cache: 'no-store' });
+  const sndB64EncodeUtf8 = str => btoa(unescape(encodeURIComponent(str)));
+  async function sndGhSha(path) {
+    const r = await fetch(sndGhApi(path), { headers: sndGhHeaders(), cache: 'no-store' });
     return r.ok ? (await r.json()).sha : null;
   }
 
-  let TIMELINES = {};
+  let SOUNDS = {};
   let editingPuzzle = null;   // puzzle number, driven by the sidebar's own selection
-  let editingId = null;       // which of that puzzle's chunks the timeline applies to
-  let editingPhase = 'open';
-  let selectedBlockId = null;
-
-  function ensureEntry(chunkId) {
-    if (!chunkId) return { open: [], close: [], solve: [] };
-    if (!TIMELINES[chunkId]) {
-      TIMELINES[chunkId] = { open: clone(DEFAULT_TIMELINE.open), close: clone(DEFAULT_TIMELINE.close), solve: clone(DEFAULT_TIMELINE.solve) };
-    }
-    // A timeline saved before 'solve' existed won't have the key yet.
-    if (!TIMELINES[chunkId].solve) TIMELINES[chunkId].solve = [];
-    return TIMELINES[chunkId];
-  }
-  const getBlocks = () => ensureEntry(editingId)[editingPhase];
-
-  function overlaps(a, b) { return a.start < b.start + b.duration && b.start < a.start + a.duration; }
-  // At most one OTHER block may overlap a given block — i.e. at most two
-  // effects active at any instant, per how many can visually share the
-  // timeline's two lanes.
-  function canPlace(candidate) {
-    return getBlocks().filter(b => b.id !== candidate.id && overlaps(b, candidate)).length <= 1;
-  }
-
-  const tlStatus = document.getElementById('tlStatus');
-  const setStatus = msg => { tlStatus.textContent = msg; };
+  let editingId = null;       // which of that puzzle's chunks the sounds apply to
 
   const chunksForPuzzle = num => PUZZLE_CHUNKS.filter(c => c.puzzle === num);
+  const ensureEntry = chunkId => chunkId ? (SOUNDS[chunkId] || (SOUNDS[chunkId] = {})) : {};
+
+  const sndStatus = document.getElementById('sndStatus');
+  const setStatus = msg => { sndStatus.textContent = msg; };
 
   // Shown only when the current puzzle has more than one interactable chunk
   // — nothing to disambiguate otherwise.
   function renderChunkTabs() {
-    const box = document.getElementById('tlChunkTabs');
+    const box = document.getElementById('sndChunkTabs');
     const chunks = chunksForPuzzle(editingPuzzle);
     if (chunks.length <= 1) { box.style.display = 'none'; box.innerHTML = ''; return; }
     box.style.display = 'flex';
     box.innerHTML = chunks.map(c =>
-      `<button type="button" class="tl-chunk-tab${c.id === editingId ? ' active' : ''}" data-id="${c.id}">${c.id}</button>`
+      `<button type="button" class="snd-chunk-tab${c.id === editingId ? ' active' : ''}" data-id="${c.id}">${c.id}</button>`
     ).join('');
   }
 
-  // The "On Solve" phase only makes sense for a chunk that's an actual
-  // puzzle — falls back to "open" if the currently-selected chunk changed
-  // out from under an active "On Solve" view (e.g. switching from a p1p1
-  // puzzle chunk to its sibling p1g1 narrative chunk).
-  function updateSolveTabVisibility() {
-    const btn = document.getElementById('tlSolveBtn');
-    const supported = isPuzzleChunk(editingId);
-    btn.style.display = supported ? '' : 'none';
-    if (!supported && editingPhase === 'solve') {
-      editingPhase = 'open';
-      document.querySelectorAll('.tl-phase-btn').forEach(b => b.classList.toggle('active', b.dataset.phase === 'open'));
-    }
+  // The On Solve field only makes sense for a chunk that's an actual puzzle.
+  function updateSolveFieldVisibility() {
+    document.getElementById('sndSolveField').style.display = isPuzzleChunk(editingId) ? '' : 'none';
   }
-
-  // Called on every sidebar puzzle selection (and once at startup for
-  // whichever puzzle is already shown) — points the timeline at that
-  // puzzle's chunks, keeping the previously-edited chunk if it still
-  // belongs to the newly selected puzzle, else defaulting to the first.
-  function setEditingPuzzle(num) {
-    editingPuzzle = num;
-    const chunks = chunksForPuzzle(num);
-    if (!chunks.some(c => c.id === editingId)) editingId = chunks[0] ? chunks[0].id : null;
-    selectedBlockId = null;
-    renderChunkTabs();
-    updateSolveTabVisibility();
-    renderTimeline();
-  }
-  tlSelectPuzzleHook = setEditingPuzzle;
 
   let soundFilesPromise = null;
   function fetchSoundFiles() {
     if (soundFilesPromise) return soundFilesPromise;
-    return soundFilesPromise = fetch(tlGhApi('assets/sounds'), { headers: tlGhHeaders(), cache: 'no-store' })
+    return soundFilesPromise = fetch(sndGhApi('assets/sounds'), { headers: sndGhHeaders(), cache: 'no-store' })
       .then(r => r.ok ? r.json() : [])
       .then(files => files.filter(f => f.type === 'file').map(f => 'assets/sounds/' + f.name))
       .catch(() => []);
   }
-  // Fills the sound dropdown from assets/sounds/ — the chip next to it drags
-  // whichever file is currently selected (see the tlPalette dragstart
-  // handler), so a growing sound library stays a single dropdown instead of
-  // one chip per file.
-  function populateSoundPalette() {
-    const sel = document.getElementById('tlSoundSelect');
-    const chip = document.getElementById('tlSoundChip');
+
+  // Fills all three dropdowns from assets/sounds/ and sets each to whatever
+  // is currently saved for editingId (or "— none —").
+  function renderFields() {
+    const entry = ensureEntry(editingId);
     fetchSoundFiles().then(files => {
-      if (!files.length) {
-        sel.innerHTML = '<option value="">no sounds uploaded</option>';
-        chip.draggable = false;
-        chip.classList.add('disabled');
-        chip.title = 'Add files to assets/sounds/ in the repo first';
-        return;
-      }
-      sel.innerHTML = files.map(f => {
+      const options = '<option value="">— none —</option>' + files.map(f => {
         const name = f.split('/').pop().replace(/\.[^.]+$/, '');
         return `<option value="${f}">${name}</option>`;
       }).join('');
-    });
-  }
-
-  function timelineExtentMs() {
-    const maxEnd = getBlocks().reduce((m, b) => Math.max(m, b.start + b.duration), 0);
-    return Math.max(3000, maxEnd + 800);
-  }
-
-  function wireBlockDrag(el, block, resizeHandle) {
-    let mode = null, startX = 0, origStart = 0, origDuration = 0;
-    function begin(e, m) {
-      e.stopPropagation();
-      mode = m; startX = e.clientX; origStart = block.start; origDuration = block.duration;
-      el.setPointerCapture(e.pointerId);
-      document.addEventListener('pointermove', move);
-      document.addEventListener('pointerup', end);
-    }
-    function move(e) {
-      const dMs = pxToMs(e.clientX - startX);
-      const trial = { ...block };
-      if (mode === 'move') trial.start = snap(Math.max(0, origStart + dMs));
-      else trial.duration = Math.max(50, snap(origDuration + dMs));
-      if (canPlace(trial)) {
-        if (mode === 'move') block.start = trial.start; else block.duration = trial.duration;
-        renderTimeline();
+      for (const phase of PHASES) {
+        const sel = document.getElementById(selectId(phase));
+        sel.innerHTML = options;
+        sel.value = entry[phase] || '';
       }
-    }
-    function end() {
-      document.removeEventListener('pointermove', move);
-      document.removeEventListener('pointerup', end);
-    }
-    el.addEventListener('pointerdown', e => { if (e.target !== resizeHandle) begin(e, 'move'); });
-    resizeHandle.addEventListener('pointerdown', e => begin(e, 'resize'));
-  }
-
-  function selectBlock(id) { selectedBlockId = id; renderTimeline(); }
-
-  function deleteBlock(id) {
-    const blocks = getBlocks();
-    const idx = blocks.findIndex(b => b.id === id);
-    if (idx < 0) return;
-    blocks.splice(idx, 1);
-    if (selectedBlockId === id) selectedBlockId = null;
-    renderTimeline();
-  }
-
-  function renderBlockEditor() {
-    const panel = document.getElementById('tlBlockEditor');
-    const block = getBlocks().find(b => b.id === selectedBlockId);
-    if (!block) { panel.innerHTML = '<div class="hint-text">Select a block to edit it, or drag one in from the palette above.</div>'; return; }
-    const p = block.params || (block.params = {});
-    let html = `<div class="tl-field"><label>Type</label><div>${EFFECT_LABELS[block.type] || block.type}</div></div>
-      <div class="tl-field"><label>Start (ms)</label><input type="number" id="tlfStart" value="${block.start}" step="50" min="0"></div>
-      <div class="tl-field"><label>Duration (ms)</label><input type="number" id="tlfDuration" value="${block.duration}" step="50" min="0"></div>`;
-    if (block.type === 'sound') {
-      html += `<div class="tl-field"><label>Sound file</label><select id="tlfSrc"><option value="">loading…</option></select></div>`;
-    } else if (block.type === 'shake') {
-      html += `<div class="tl-field"><label>Intensity (px)</label><input type="number" id="tlfIntensity" value="${p.intensity ?? 6}" min="1" max="30"></div>`;
-    } else if (block.type === 'zoom') {
-      html += `<div class="tl-field"><label>Zoom scale</label><input type="number" id="tlfScale" value="${p.scale ?? 1.6}" step="0.1" min="1" max="4"></div>`;
-    } else if (block.type === 'dialog') {
-      html += `<div class="tl-field"><label>Text</label><textarea id="tlfText">${(p.text || '').replace(/</g,'&lt;')}</textarea></div>
-        <div class="tl-field"><label style="display:flex;align-items:center;gap:6px;text-transform:none;font-size:11px;"><input type="checkbox" id="tlfRtl" ${p.rtl ? 'checked' : ''} style="width:auto"> Right-to-left (Arabic)</label></div>`;
-    }
-    html += `<button class="tl-delete" id="tlfDelete">Delete block</button>`;
-    panel.innerHTML = html;
-
-    const onTimeChange = (field, key, min) => document.getElementById(field).addEventListener('change', e => {
-      const val = Math.max(min, +e.target.value || 0);
-      const trial = { ...block, [key]: key === 'start' ? snap(val) : val };
-      if (canPlace(trial)) { block[key] = trial[key]; setStatus(''); renderTimeline(); }
-      else { setStatus('Only two effects may overlap at once — try a different time.'); renderBlockEditor(); }
     });
-    onTimeChange('tlfStart', 'start', 0);
-    onTimeChange('tlfDuration', 'duration', 0);
-    document.getElementById('tlfDelete').addEventListener('click', () => deleteBlock(block.id));
-    if (block.type === 'sound') {
-      const sel = document.getElementById('tlfSrc');
-      fetchSoundFiles().then(files => {
-        sel.innerHTML = '<option value="">— choose —</option>' + files.map(f => `<option value="${f}">${f.split('/').pop()}</option>`).join('');
-        sel.value = p.src || '';
-      });
-      sel.addEventListener('change', e => { p.src = e.target.value; });
-    }
-    if (block.type === 'shake') document.getElementById('tlfIntensity').addEventListener('change', e => { p.intensity = +e.target.value; });
-    if (block.type === 'zoom') document.getElementById('tlfScale').addEventListener('change', e => { p.scale = +e.target.value; });
-    if (block.type === 'dialog') {
-      document.getElementById('tlfText').addEventListener('input', e => { p.text = e.target.value; });
-      document.getElementById('tlfRtl').addEventListener('change', e => { p.rtl = e.target.checked; });
-    }
   }
 
-  function renderTimeline() {
-    const blocks = getBlocks();
-    const widthPx = msToPx(timelineExtentMs());
-    const ruler = document.getElementById('tlRuler');
-    const track = document.getElementById('tlTrack');
-    ruler.style.width = track.style.width = widthPx + 'px';
-    ruler.innerHTML = '';
-    for (let t = 0; t <= timelineExtentMs(); t += 500) {
-      const tick = document.createElement('div');
-      tick.className = 'tl-tick';
-      tick.style.left = msToPx(t) + 'px';
-      tick.textContent = (t / 1000).toFixed(1) + 's';
-      ruler.appendChild(tick);
-    }
-    const lanes = [track.querySelector('[data-lane="0"]'), track.querySelector('[data-lane="1"]')];
-    lanes.forEach(l => { l.innerHTML = ''; l.style.width = widthPx + 'px'; });
-    for (const b of blocks) {
-      const lane = lanes[b.lane || 0] || lanes[0];
-      const el = document.createElement('div');
-      el.className = 'tl-block' + (b.id === selectedBlockId ? ' selected' : '');
-      el.dataset.type = b.type;
-      el.style.left = msToPx(b.start) + 'px';
-      el.style.width = Math.max(24, msToPx(b.duration)) + 'px';
-      el.textContent = EFFECT_LABELS[b.type] || b.type;
-      const rz = document.createElement('div');
-      rz.className = 'tl-resize';
-      el.appendChild(rz);
-      el.addEventListener('click', e => { e.stopPropagation(); selectBlock(b.id); });
-      wireBlockDrag(el, b, rz);
-      lane.appendChild(el);
-    }
-    renderBlockEditor();
+  // Called on every sidebar puzzle selection (and once at startup for
+  // whichever puzzle is already shown) — points the panel at that puzzle's
+  // chunks, keeping the previously-edited chunk if it still belongs to the
+  // newly selected puzzle, else defaulting to the first.
+  function setEditingPuzzle(num) {
+    editingPuzzle = num;
+    const chunks = chunksForPuzzle(num);
+    if (!chunks.some(c => c.id === editingId)) editingId = chunks[0] ? chunks[0].id : null;
+    renderChunkTabs();
+    updateSolveFieldVisibility();
+    renderFields();
   }
+  sndSelectPuzzleHook = setEditingPuzzle;
 
-  // Palette → track drag-and-drop. Delegated on the palette container (not
-  // wired per-chip) so it keeps working once the sound select is populated
-  // asynchronously. The sound chip has no fixed data-src — it reads whatever
-  // the dropdown next to it is currently set to at the moment of the drag.
-  document.getElementById('tlPalette').addEventListener('dragstart', e => {
-    const chip = e.target.closest('.tl-chip');
-    if (!chip) return;
-    const src = chip.dataset.type === 'sound'
-      ? (document.getElementById('tlSoundSelect').value || '')
-      : (chip.dataset.src || '');
-    e.dataTransfer.setData('text/plain', JSON.stringify({ type: chip.dataset.type, src }));
-  });
-  document.querySelectorAll('.tl-lane').forEach(lane => {
-    lane.addEventListener('dragover', e => { e.preventDefault(); lane.classList.add('dragover'); });
-    lane.addEventListener('dragleave', () => lane.classList.remove('dragover'));
-    lane.addEventListener('drop', e => {
-      e.preventDefault();
-      lane.classList.remove('dragover');
-      let payload;
-      try { payload = JSON.parse(e.dataTransfer.getData('text/plain')); } catch (err) { return; }
-      const def = EFFECT_DEFAULTS[payload.type];
-      if (!def) return;
-      const rect = lane.getBoundingClientRect();
-      const params = clone(def.params);
-      if (payload.type === 'sound' && payload.src) params.src = payload.src;
-      const block = {
-        id: 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-        type: payload.type, start: snap(pxToMs(e.clientX - rect.left)), duration: def.duration,
-        lane: +lane.dataset.lane, params,
-      };
-      if (!canPlace(block)) { setStatus('Only two effects may overlap at once — try a different spot.'); return; }
-      getBlocks().push(block);
-      selectedBlockId = block.id;
-      setStatus('');
-      renderTimeline();
-    });
-  });
-  document.getElementById('tlTrack').addEventListener('click', () => { selectedBlockId = null; renderTimeline(); });
-
-  document.getElementById('tlChunkTabs').addEventListener('click', e => {
-    const tab = e.target.closest('.tl-chunk-tab');
+  document.getElementById('sndChunkTabs').addEventListener('click', e => {
+    const tab = e.target.closest('.snd-chunk-tab');
     if (!tab) return;
-    editingId = tab.dataset.id; selectedBlockId = null;
-    renderChunkTabs(); updateSolveTabVisibility(); renderTimeline();
-  });
-  document.querySelectorAll('.tl-phase-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.tl-phase-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      editingPhase = btn.dataset.phase;
-      selectedBlockId = null;
-      renderTimeline();
-    });
+    editingId = tab.dataset.id;
+    renderChunkTabs(); updateSolveFieldVisibility(); renderFields();
   });
 
-  async function saveTimelines() {
-    const btn = document.getElementById('tlSaveBtn');
-    if (!tlGhToken()) { setStatus('Connect a GitHub token in Map Studio first — saving needs it.'); return; }
+  for (const phase of PHASES) {
+    document.getElementById(selectId(phase)).addEventListener('change', e => {
+      const entry = ensureEntry(editingId);
+      if (e.target.value) entry[phase] = e.target.value; else delete entry[phase];
+      setStatus('');
+    });
+  }
+
+  async function saveSounds() {
+    const btn = document.getElementById('sndSaveBtn');
+    if (!sndGhToken()) { setStatus('Connect a GitHub token in Map Studio first — saving needs it.'); return; }
     btn.disabled = true;
     setStatus('Saving…');
     try {
-      const path = 'timelines.json';
-      const sha = await tlGhSha(path);
-      const body = { message: 'Update puzzle timelines', content: tlB64EncodeUtf8(JSON.stringify(TIMELINES, null, 2)) };
+      const path = 'interactableSounds.json';
+      const sha = await sndGhSha(path);
+      const body = { message: 'Update interactable sounds', content: sndB64EncodeUtf8(JSON.stringify(SOUNDS, null, 2)) };
       if (sha) body.sha = sha;
-      const r = await fetch(tlGhApi(path), { method: 'PUT', headers: tlGhHeaders(), body: JSON.stringify(body) });
-      if (!r.ok) throw new Error(await tlGhErrMsg(r));
+      const r = await fetch(sndGhApi(path), { method: 'PUT', headers: sndGhHeaders(), body: JSON.stringify(body) });
+      if (!r.ok) throw new Error(await sndGhErrMsg(r));
       setStatus('Saved ✓');
     } catch (e) {
       setStatus('Error: ' + e.message);
@@ -2122,37 +1840,23 @@ if (!CHUNK_PARAM) (function(){
       btn.disabled = false;
     }
   }
-  document.getElementById('tlSaveBtn').addEventListener('click', saveTimelines);
+  document.getElementById('sndSaveBtn').addEventListener('click', saveSounds);
 
-  // Ctrl+S (Cmd+S on Mac) saves the timeline instead of triggering the
-  // browser's own "save page" dialog — this whole module only runs in the
-  // multi-puzzle editing page, so no extra scoping is needed.
+  // Ctrl+S (Cmd+S on Mac) saves instead of triggering the browser's own
+  // "save page" dialog — this whole module only runs in the multi-puzzle
+  // editing page, so no extra scoping is needed.
   document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
       e.preventDefault();
-      if (!document.getElementById('tlSaveBtn').disabled) saveTimelines();
+      if (!document.getElementById('sndSaveBtn').disabled) saveSounds();
     }
   });
 
-  // Delete/Backspace removes the selected block, unless the keystroke is
-  // meant for a text field in the block editor (start/duration/dialog text)
-  // or elsewhere on the page — Backspace there must keep editing the text,
-  // not delete the block behind it.
-  document.addEventListener('keydown', e => {
-    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
-    if (!selectedBlockId) return;
-    const tag = (e.target.tagName || '').toLowerCase();
-    if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable) return;
-    e.preventDefault();
-    deleteBlock(selectedBlockId);
-  });
-
   setEditingPuzzle(lastSelectedPuzzleNum != null ? lastSelectedPuzzleNum : +PUZZLES[0].num);
-  populateSoundPalette();
-  fetch('timelines.json', { cache: 'no-store' })
+  fetch('interactableSounds.json', { cache: 'no-store' })
     .then(r => r.ok ? r.json() : {})
     .catch(() => ({}))
-    .then(data => { TIMELINES = data || {}; renderTimeline(); });
+    .then(data => { SOUNDS = data || {}; renderFields(); });
 })();
 </script>
 </body>

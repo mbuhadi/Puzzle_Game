@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Map 1 — Puzzle Game</title>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
@@ -47,10 +47,6 @@
   #canvasWrap {
     position: relative;
     max-width: 100%;
-    /* Effects (zoom/shake) transform #mapCanvas itself; keeping the
-       transform scoped to the canvas — not this wrapper — means
-       #sceneDialog, positioned relative to this wrapper, stays put and
-       readable instead of zooming/shaking along with the world. */
   }
   #mapCanvas {
     display: block;
@@ -64,28 +60,6 @@
   }
   #mapCanvas:focus { border-color: #c8a84b; }
   .hint { font-family: monospace; font-size: 11px; color: #3a3530; }
-
-  /* ── Scene dialog (a timeline "Dialog" effect) ─────────────────────── */
-  #sceneDialog {
-    display: none;
-    position: absolute;
-    transform: translate(-50%, -100%);
-    max-width: min(70%, 340px);
-    background: #14120e;
-    border: 1.5px solid #c8a84b;
-    border-radius: 8px;
-    padding: 10px 14px;
-    color: #e8dfc8;
-    font-family: 'Cinzel', serif;
-    font-size: 13px;
-    line-height: 1.5;
-    text-align: center;
-    pointer-events: none;
-    z-index: 50;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
-  }
-  #sceneDialog.open { display: block; }
-  #sceneDialog.rtl { font-family: 'Amiri', serif; direction: rtl; }
 
   .panel-title {
     font-family: monospace;
@@ -254,7 +228,6 @@
 
 <div id="canvasWrap">
   <canvas id="mapCanvas" tabindex="0"></canvas>
-  <div id="sceneDialog"></div>
 </div>
 <div class="hint">WASD / Arrows &nbsp;·&nbsp; E to examine &nbsp;·&nbsp; joystick on touch</div>
 
@@ -829,11 +802,10 @@ window.addEventListener('message', e => {
   const firstSolve = !SOLVED_CHUNKS.has(e.data.chunk);
   SOLVED_CHUNKS.add(e.data.chunk);
   persistSolved();
-  // Plays on the map the instant the puzzle solves, independent of the
-  // puzzle window's own close (which still only happens after the short
-  // beat below) — a chunk with nothing authored for 'solve' schedules
-  // nothing.
-  if (firstSolve) scheduleSceneEffects(getTimeline(e.data.chunk, 'solve'));
+  // Plays the instant the puzzle solves, independent of the puzzle window's
+  // own close (which still only happens after the short beat below) — a
+  // chunk with nothing authored for 'solve' stays silent.
+  if (firstSolve) playSound(getSound(e.data.chunk, 'solve'));
   // A removeOnSolve door or Map Change transform in the current room should
   // take effect the instant its puzzle is solved, not wait for the next room
   // load. A Map Change specifically is masked behind the fade transition so
@@ -923,128 +895,50 @@ let bubbleBounds = null;       // world-pixel rect of the nearby interactable, f
 
 const EXAMINE_BACKDROP  = 'rgba(0,0,0,0.88)';
 
-// ── Puzzle open/close/solve scene timelines ─────────────────────────────────
-// Authored per-interactable in puzzles_curated.html's Timeline editor and
-// saved to timelines.json (loaded below). Each timeline is an ordered list of
-// effect blocks — {id, type, start, duration, params} with start/duration in
-// ms from the moment the phase begins — the puzzle being interacted with
-// (open), the puzzle window having just fully closed (close), or the puzzle
-// having just been solved (solve, puzzle chunks only). type is one of
-// 'shake', 'zoom', 'dialog', 'sound' — all of which play on the game map
-// itself, never inside the puzzle window. The puzzle window's own
-// open/close transition is entirely separate from these — see
-// EXAMINE_FADE_MS below — it always waits for the open timeline to run to
-// completion before showing, and always finishes hiding before the close
-// timeline starts, so the two are never visible at the same time. A chunk
-// with nothing authored yet falls back to DEFAULT_TIMELINE (shared with the
-// editor — puzzles_curated_data.js): no effects, so the window just opens/
-// closes on its own with nothing scheduled first.
-let TIMELINES = {};
-fetch('timelines.json', { cache: 'no-store' })
+// ── Per-interactable sounds ──────────────────────────────────────────────────
+// Authored per-interactable in puzzles_curated.html and saved to
+// interactableSounds.json (loaded below): at most one sound file each for
+// 'open' (the puzzle being interacted with), 'close' (the window having
+// just closed), and 'solve' (the puzzle having just been solved — puzzle
+// chunks only). A chunk with nothing authored for a phase just stays
+// silent. The puzzle window's own open/close transition is a fixed,
+// uniform fade (EXAMINE_FADE_MS below) for every interactable — entirely
+// separate from these sounds, never authored per-chunk.
+let SOUNDS = {};
+fetch('interactableSounds.json', { cache: 'no-store' })
   .then(r => r.ok ? r.json() : {})
   .catch(() => ({}))
-  .then(data => { TIMELINES = data || {}; });
-function getTimeline(chunkId, phase) {
-  const t = TIMELINES[chunkId] && TIMELINES[chunkId][phase];
-  return Array.isArray(t) ? t : DEFAULT_TIMELINE[phase];
-}
-
-// ── Scene effects (shake / zoom / dialog / sound) ───────────────────────────
-// Shake and zoom both transform #mapCanvas — their state is combined and
-// reapplied together on every change instead of each independently
-// overwriting style.transform, which would just cancel one another out when
-// they overlap (the timeline explicitly allows up to two effects to overlap).
-const sceneFx = { shake: null, zoom: null };
-function applySceneTransform() {
-  const parts = [];
-  if (sceneFx.shake) parts.push(`translate(${sceneFx.shake.dx}px, ${sceneFx.shake.dy}px)`);
-  if (sceneFx.zoom)  parts.push(`scale(${sceneFx.zoom.scale})`);
-  canvas.style.transformOrigin = sceneFx.zoom ? sceneFx.zoom.origin : '50% 50%';
-  canvas.style.transform = parts.join(' ') || 'none';
-}
-function playShake(duration, intensity) {
-  const end = performance.now() + duration;
-  (function tick() {
-    if (performance.now() >= end) { sceneFx.shake = null; applySceneTransform(); return; }
-    sceneFx.shake = { dx: (Math.random() * 2 - 1) * intensity, dy: (Math.random() * 2 - 1) * intensity };
-    applySceneTransform();
-    requestAnimationFrame(tick);
-  })();
-}
-function playZoom(duration, scale) {
-  const ease = Math.min(250, duration * 0.3);
-  const cam = getCamera();
-  const origin = `${((player.x * TILE_PX - cam.x) / VIEWPORT_W) * 100}% ${((player.y * TILE_PX - cam.y) / VIEWPORT_H) * 100}%`;
-  sceneFx.zoom = { scale, origin };
-  canvas.style.transition = `transform ${ease}ms ease`;
-  applySceneTransform();
-  setTimeout(() => {
-    sceneFx.zoom = null;
-    canvas.style.transition = `transform ${ease}ms ease`;
-    applySceneTransform();
-  }, Math.max(0, duration - ease));
-}
-const sceneDialog = document.getElementById('sceneDialog');
-function playDialog(duration, text, rtl) {
-  const cam = getCamera();
-  const scaleX = canvas.getBoundingClientRect().width / VIEWPORT_W;
-  sceneDialog.textContent = text || '';
-  sceneDialog.classList.toggle('rtl', !!rtl);
-  sceneDialog.style.left = ((player.x * TILE_PX - cam.x) * scaleX) + 'px';
-  sceneDialog.style.top  = ((player.y * TILE_PX - cam.y - TILE_PX * 0.9) * scaleX) + 'px';
-  sceneDialog.classList.add('open');
-  setTimeout(() => sceneDialog.classList.remove('open'), duration);
+  .then(data => { SOUNDS = data || {}; });
+function getSound(chunkId, phase) {
+  return (SOUNDS[chunkId] && SOUNDS[chunkId][phase]) || '';
 }
 function playSound(src) {
   if (!src) return;
   try { new Audio(src).play().catch(() => {}); } catch (e) { /* unsupported/blocked — silently skip */ }
 }
-function playEffectBlock(b) {
-  const p = b.params || {};
-  if (b.type === 'shake') playShake(b.duration, p.intensity || 6);
-  else if (b.type === 'zoom') playZoom(b.duration, p.scale || 1.6);
-  else if (b.type === 'dialog') playDialog(b.duration, p.text, p.rtl);
-  else if (b.type === 'sound') playSound(p.src);
-}
-// Schedules every block in a timeline. Returns the timeline's overall
-// duration — the furthest any block's start+duration reaches — which
-// openExamine/fadeCloseExamine wait out in full before the puzzle window
-// itself opens/closes (see below); the window's own transition is never
-// part of this schedule.
-function scheduleSceneEffects(blocks) {
-  let total = 0;
-  for (const b of blocks) {
-    total = Math.max(total, b.start + (b.duration || 0));
-    setTimeout(() => playEffectBlock(b), b.start);
-  }
-  return total;
-}
 
-// The puzzle window's own open/close transition — fixed, independent of
-// anything authored on the timeline (see the block comment above).
+// The puzzle window's own open/close transition — fixed and uniform for
+// every interactable, independent of anything authored above.
 const EXAMINE_FADE_MS = 300;
 
 function openExamine(p) {
   for (const k in keys) keys[k] = false;
   activeInteractable = p;
   const baseId = p.id.replace(/s$/, '');
-  const timeline = getTimeline(baseId, 'open');
-  const total = scheduleSceneEffects(timeline);
+  playSound(getSound(baseId, 'open'));
 
-  // Reveal the box only once BOTH the entire open timeline has finished
-  // playing out on the map AND the puzzle content itself has actually
+  // Reveal the box only once the puzzle content itself has actually
   // finished loading — not just after a flat delay. A puzzle that's
   // cache-warm from preloading opens almost instantly, but a cold one
   // (fonts, images, the chunk's own builder script) can still be visibly
   // settling into place a beat later; waiting for it keeps that behind the
   // still-hidden puzzle instead of exposing it right as it appears. A
   // safety timeout stands in for a 'load' that, for whatever reason, never
-  // fires. The map itself (and any shake/zoom/dialog effects scheduled
-  // above) keeps rendering normally the entire time up to this point — see
-  // loop()'s render() guard below.
-  let timeElapsed = false, contentReady = false;
+  // fires. The map itself keeps rendering normally the entire time up to
+  // this point — see loop()'s render() guard below.
+  let contentReady = false;
   function revealIfReady() {
-    if (!timeElapsed || !contentReady) return;
+    if (!contentReady) return;
     examineOverlay.classList.add('open');
     examineOverlay.style.backgroundColor = 'rgba(0,0,0,0)';
     examineBox.style.opacity = '0';
@@ -1105,12 +999,8 @@ function openExamine(p) {
     });
   }
   examineFrame.addEventListener('load', onFrameLoad);
-  setTimeout(finishContentReady, total + 1200);
-  // Starts loading immediately — even while #examineOverlay is still
-  // display:none — so it has the whole open timeline's length to become
-  // ready before it's actually shown.
+  setTimeout(finishContentReady, 1200);
   examineFrame.src = 'puzzles_curated.html?chunk=' + baseId + (DEV_SKIP ? '&dev=1' : '');
-  setTimeout(() => { timeElapsed = true; revealIfReady(); }, total);
 }
 
 // Merely making the page scrollable again (removing overflow:hidden, above)
@@ -1139,12 +1029,9 @@ window.addEventListener('resize', () => {
 // out, then #examineOverlay's backdrop fades out behind it, the reverse
 // order from opening so the box is always fading against a still-solid
 // backdrop rather than one that's simultaneously going transparent (which
-// is what let the map page ghost through it before) — and only once it's
-// fully gone does the interactable's close timeline start playing on the
-// now-visible map (loop()'s render() guard resumes drawing it the same
-// instant). `after` (close only) runs once that ENTIRE close timeline has
-// finished — callers use it for whatever should happen next (transit
-// through a door, etc).
+// is what let the map page ghost through it before). The close sound plays
+// once it's fully gone. `after` (close only) — callers use it for whatever
+// should happen next (transit through a door, etc).
 function fadeCloseExamine(after) {
   if (!examineOverlay.classList.contains('open')) { if (after) after(); return; }
   const baseId = activeInteractable ? String(activeInteractable.id).replace(/s$/, '') : null;
@@ -1163,9 +1050,8 @@ function fadeCloseExamine(after) {
       examineBox.style.transitionDuration = '';
       examineFrame.src = '';
 
-      const timeline = baseId ? getTimeline(baseId, 'close') : [];
-      const total = scheduleSceneEffects(timeline);
-      setTimeout(() => { if (after) after(); }, total);
+      if (baseId) playSound(getSound(baseId, 'close'));
+      if (after) after();
     }, half);
   }, half);
 }
