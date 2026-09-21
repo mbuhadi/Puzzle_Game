@@ -8,23 +8,31 @@
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html, body { height: 100%; }
+  /* --vvh is the real visible viewport height in px — kept in sync with
+     window.visualViewport by updateViewportVars() (see the JS below),
+     which is more reliable than the vh/dvh units it starts out as: on some
+     mobile browsers vh (and even dvh, right after a rotation) can still
+     report more height than is actually visible once the address bar has
+     settled, leaving the page needing a scroll it shouldn't. The dvh tier
+     is just what's shown for the instant before that first JS write. */
+  :root { --vvh: 100vh; }
+  @supports (height: 100dvh) {
+    :root { --vvh: 100dvh; }
+  }
   body {
     background: #14120e;
     color: #e8dfc8;
     font-family: 'Cinzel', serif;
-    /* +2px over the viewport guarantees a sliver of real scroll room even
-       when the page's own content would otherwise exactly fill the
-       viewport — needed so the scroll-nudge trick below always has
-       somewhere to scroll to, in any orientation. The page holds nothing
-       but the map itself now, so this is also what keeps the map from
-       ever needing to scroll on its own — see the mapCanvas rule below. */
-    min-height: calc(100vh + 2px);
+    /* +2px over the real viewport guarantees a sliver of scroll room even
+       when the page's own content would otherwise exactly fill it —
+       needed so the scroll-nudge trick below always has somewhere to
+       scroll to, in any orientation. The page holds nothing but the map
+       itself now, so this is also what keeps the map from ever needing to
+       scroll on its own — see the mapCanvas rule below. */
+    min-height: calc(var(--vvh) + 2px);
     display: flex;
     align-items: center;
     justify-content: center;
-  }
-  @supports (height: 100dvh) {
-    body { min-height: calc(100dvh + 2px); }
   }
 
   #canvasWrap {
@@ -37,19 +45,18 @@
     border: 2px solid #2e2a1e;
     border-radius: 4px;
     outline: none;
-    max-width: 100%;
     /* Caps the canvas to whichever of width/height the viewport constrains
-       first: max-width shrinks it to fit narrow screens (phone upright),
-       max-height shrinks it to fit short ones (phone on its side, where
-       the 800×520 canvas is otherwise taller than the landscape viewport)
-       — height:auto lets either cap drive the other via the aspect ratio
-       instead of the canvas overflowing and creating scroll room. */
-    max-height: 100vh;
+       first, while keeping its 800:520 aspect ratio intact either way: the
+       first min() term shrinks it to fit narrow screens (phone upright);
+       the second — the width a full-height canvas would need at that same
+       ratio — is what actually constrains it on short screens (phone on
+       its side). A plain max-height alone would clamp the box without
+       shrinking its width to match, squashing the picture instead of
+       properly resizing it. height:auto derives the other dimension from
+       whichever value wins. */
+    max-width: min(100%, calc(var(--vvh) * 800 / 520));
     height: auto;
     touch-action: none;
-  }
-  @supports (height: 100dvh) {
-    #mapCanvas { max-height: 100dvh; }
   }
   #mapCanvas:focus { border-color: #c8a84b; }
 
@@ -197,6 +204,29 @@
 <script src="assets/custom_tiles.js"></script>
 <script src="puzzles_curated_data.js"></script>
 <script>
+// ── Real viewport height tracking ───────────────────────────────────────────────
+// Keeps --vvh (used by the body/mapCanvas CSS above) in sync with the actually
+// visible viewport, via the Visual Viewport API — more reliable across mobile
+// browsers than the vh/dvh units it falls back to before this first runs, since
+// address-bar show/hide can otherwise leave vh/dvh reporting more height than
+// is currently visible. Run as early as possible (before the rest of this
+// script's heavier init) so the page never paints with the wrong value for long.
+function updateViewportVars() {
+  const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  document.documentElement.style.setProperty('--vvh', h + 'px');
+}
+updateViewportVars();
+window.addEventListener('resize', updateViewportVars);
+window.addEventListener('orientationchange', updateViewportVars);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', updateViewportVars);
+// The rotation reflow can still be settling when the first of the events above
+// fires — a couple of delayed follow-ups catch the browser once it has, same
+// pattern as nudgeBrowserChrome below.
+window.addEventListener('orientationchange', () => {
+  setTimeout(updateViewportVars, 150);
+  setTimeout(updateViewportVars, 400);
+});
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 const TILE_PX       = 32;
 const SPEED         = 8.5;
