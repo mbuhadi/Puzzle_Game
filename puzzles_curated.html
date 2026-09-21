@@ -1583,10 +1583,16 @@ if (!CHUNK_PARAM) {
     document.documentElement.style.height   = '100%';
     document.body.style.overflow  = 'hidden';
     document.body.style.height    = '100%';
-    document.body.style.alignItems     = 'center';
-    document.body.style.justifyContent = 'center';
     document.body.style.padding = '0';
     document.body.style.touchAction = 'none';
+    // No align-items/justify-content:center here — fitChunkToViewport()
+    // below centers the content itself via its own transform, and setting
+    // them on body made #mainRow a shrink-to-fit flex container instead of
+    // one that stretches to the full viewport width. That left #detail's
+    // own width:100% resolving against an indeterminate container width —
+    // a classic circular flexbox sizing case — which on top of a CSS scale
+    // transform made Chromium visibly mis-render (truncate/overflow) RTL
+    // Arabic text, even though every measured layout number looked correct.
 
     detail.style.flex    = 'none';
     detail.style.padding = '0';
