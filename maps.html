@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height: 100%; }
   body {
     background: #14120e;
     color: #e8dfc8;
@@ -14,35 +15,17 @@
     /* +2px over the viewport guarantees a sliver of real scroll room even
        when the page's own content would otherwise exactly fill the
        viewport — needed so the scroll-nudge trick below always has
-       somewhere to scroll to, in any orientation. */
+       somewhere to scroll to, in any orientation. The page holds nothing
+       but the map itself now, so this is also what keeps the map from
+       ever needing to scroll on its own — see the mapCanvas rule below. */
     min-height: calc(100vh + 2px);
     display: flex;
-    flex-direction: column;
     align-items: center;
-    padding: 24px 20px 48px;
-    gap: 16px;
+    justify-content: center;
   }
-  h1 { font-size: 26px; color: #c8a84b; letter-spacing: 3px; }
-
-  .top-bar {
-    display: flex; align-items: center; gap: 12px;
-    flex-wrap: wrap; justify-content: center;
+  @supports (height: 100dvh) {
+    body { min-height: calc(100dvh + 2px); }
   }
-  .meta { font-family: monospace; font-size: 12px; color: #6e695f; }
-  .meta span { color: #a09070; }
-
-  .bar-btn {
-    background: none;
-    border: 1px solid #3a3020;
-    color: #c8a84b;
-    font-family: 'Cinzel', serif;
-    font-size: 11px;
-    padding: 5px 16px;
-    border-radius: 4px;
-    cursor: pointer;
-    letter-spacing: 1px;
-  }
-  .bar-btn:hover { background: #1e1c18; border-color: #c8a84b; }
 
   #canvasWrap {
     position: relative;
@@ -55,23 +38,20 @@
     border-radius: 4px;
     outline: none;
     max-width: 100%;
-    height: auto;   /* scale down proportionally instead of squashing when narrower than 800px (e.g. phone held upright) */
+    /* Caps the canvas to whichever of width/height the viewport constrains
+       first: max-width shrinks it to fit narrow screens (phone upright),
+       max-height shrinks it to fit short ones (phone on its side, where
+       the 800×520 canvas is otherwise taller than the landscape viewport)
+       — height:auto lets either cap drive the other via the aspect ratio
+       instead of the canvas overflowing and creating scroll room. */
+    max-height: 100vh;
+    height: auto;
     touch-action: none;
   }
+  @supports (height: 100dvh) {
+    #mapCanvas { max-height: 100dvh; }
+  }
   #mapCanvas:focus { border-color: #c8a84b; }
-  .hint { font-family: monospace; font-size: 11px; color: #3a3530; }
-
-  .panel-title {
-    font-family: monospace;
-    font-size: 10px;
-    color: #4a4540;
-    letter-spacing: 1.5px;
-    margin-bottom: 10px;
-  }
-  .panel-foot {
-    font-family: monospace; font-size: 9px; color: #2a2520;
-    text-align: center; margin-top: 10px; letter-spacing: 0.5px;
-  }
 
   /* ── Examine overlay ─────────────────────────────────────────────── */
   #examineOverlay {
@@ -189,58 +169,13 @@
   }
   #examineDebugPanel.open { display: block; }
 
-  a { font-size: 12px; color: #4a4540; font-family: sans-serif; text-decoration: none; margin-top: 4px; }
-  a:hover { color: #c8a84b; }
-
-  /* ── My Maps library ─────────────────────────────────────────────── */
-  .maps-lib {
-    width: 100%; max-width: 820px;
-    background: #0e0d0a; border: 1px solid #2e2a1e; border-radius: 8px;
-    padding: 12px 14px;
-  }
-  .lib-row {
-    display: flex; align-items: center; gap: 10px;
-    padding: 7px 4px; border-bottom: 1px solid #1a1814;
-  }
-  .lib-row:last-child { border-bottom: none; }
-  .lib-name {
-    font-family: 'Cinzel', serif; font-size: 13px; color: #c8a84b;
-    flex: 1; cursor: pointer; letter-spacing: 1px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .lib-name:hover { color: #e8c860; }
-  .lib-btn { padding: 3px 10px; font-size: 10px; flex-shrink: 0; }
-  .lib-msg { font-family: monospace; font-size: 10px; color: #4a4540; padding: 6px 4px; }
 </style>
 </head>
 <body>
 
-<h1>Map 1</h1>
-
-<div class="top-bar">
-  <div class="meta">
-    Scale: <span>1 tile = 10 sq ft</span>
-    &nbsp;|&nbsp; Speed: <span>8.5 tiles / sec</span>
-    &nbsp;|&nbsp; Area: <span id="sqftLabel">…</span>
-  </div>
-  <button class="bar-btn" id="btnRandomize">Randomize</button>
-</div>
-
 <div id="canvasWrap">
   <canvas id="mapCanvas" tabindex="0"></canvas>
 </div>
-<div class="hint">WASD / Arrows &nbsp;·&nbsp; E to examine &nbsp;·&nbsp; joystick on touch</div>
-
-<div class="maps-lib">
-  <div class="panel-title">MY MAPS — saved on the website (maps/ folder in the repo)</div>
-  <div id="libList"></div>
-  <div class="panel-foot" id="libEmpty" style="display:none">
-    no maps on the website yet — create one in Map Studio and hit “Save to Website”
-  </div>
-</div>
-
-<a href="index.html">← Back to Home</a>
-<div style="font-family:monospace;font-size:10px;color:#3a3530;">art: Modern Interiors &amp; Modern Exteriors by LimeZu (limezu.itch.io)</div>
 
 <div id="examineOverlay">
   <div id="examineBox">
@@ -264,7 +199,6 @@
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────────
 const TILE_PX       = 32;
-const SQFT_PER_TILE = 10;
 const SPEED         = 8.5;
 const HITBOX        = 0.28;
 const VIEWPORT_W    = 800;
@@ -1656,33 +1590,10 @@ function applyMap(result, seed) {
   mapGrid  = result.grid;
   player.x = result.start.x;
   player.y = result.start.y;
-  document.getElementById('sqftLabel').textContent =
-    `~${(result.floorCount * SQFT_PER_TILE).toLocaleString()} sq ft`;
 }
 
 // ── Playing custom maps (from the editor draft or My Maps) ────────────────────
 let currentMapData = null;   // snapshot of the map being played, for library saves
-let _customUiDone = false;
-
-function enterCustomUI() {
-  if (_customUiDone) return;
-  _customUiDone = true;
-  document.getElementById('btnRandomize').style.display = 'none';
-  const _back = document.createElement('a');
-  _back.href = 'map-editor.html';
-  _back.textContent = '← Back to Editor';
-  _back.style.cssText = 'font-size:11px;color:#7a6030;font-family:monospace;text-decoration:none;';
-  _back.onmouseover  = () => _back.style.color = '#c8a84b';
-  _back.onmouseout   = () => _back.style.color = '#7a6030';
-  document.querySelector('.top-bar').appendChild(_back);
-  if (DEV_SKIP) {
-    const _flag = document.createElement('span');
-    _flag.textContent = 'DEV SKIP';
-    _flag.style.cssText = 'font-family:monospace;font-size:10px;color:#e0b050;' +
-      'border:1px solid #7a5a20;border-radius:3px;padding:2px 6px;letter-spacing:1px;';
-    document.querySelector('.top-bar').appendChild(_flag);
-  }
-}
 
 // Per-cell collision overrides set from Map Studio's TILE COLLISION panel
 function sanitizeTileColl(raw) {
@@ -1789,10 +1700,6 @@ function enterRoom(idx, px, py) {
   for (const o of roomObjectsWithTransforms(rm)) OBJECTS.push(o);
   rebuildObjSolid();
   player.x = px; player.y = py;
-  const fc = rm.grid.flat().filter(t => t === T.FLOOR || t === T.COURTYARD).length;
-  document.getElementById('sqftLabel').textContent =
-    (ROOMS.length > 1 ? rm.name + ' · ' : '') +
-    `~${(fc * SQFT_PER_TILE).toLocaleString()} sq ft`;
 }
 
 // resume=true (page refresh) keeps the playthrough's solved puzzles
@@ -1844,8 +1751,6 @@ function loadCustomData(_data, resume) {
     spawn: { col: +sp.col, row: +sp.row },
     name: (typeof _data.name === 'string' && _data.name.trim()) ? _data.name.trim() : 'Custom Map',
   };
-  document.querySelector('h1').textContent = currentMapData.name;
-  enterCustomUI();
   return true;
 }
 
@@ -1863,83 +1768,6 @@ function loadProcedural(seed, resume) {
   };
 }
 
-// ── My Maps — read from the website's maps/ folder in the GitHub repo ─────────
-// Maps are saved there by Map Studio ("Save to Website"). Reading a public
-// repo through the GitHub API needs no login; saving/deleting lives in the
-// editor, which holds the token.
-const GH = { owner: 'mbuhadi', repo: 'Puzzle_Game', dir: 'maps' };
-
-function ghApi(path) {
-  return `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${path}`;
-}
-// UTF-8-safe base64 decode (the GitHub API returns file content as base64)
-function b64DecodeUtf8(b64) { return decodeURIComponent(escape(atob(b64.replace(/\s/g, '')))); }
-
-async function fetchCloudMap(fileName) {
-  const r = await fetch(ghApi(GH.dir + '/' + fileName),
-    { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store' });
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  const parsed = JSON.parse(b64DecodeUtf8((await r.json()).content));
-  return parsed.data || parsed;   // Map Studio wraps the map in {updated, data}
-}
-
-async function renderLibrary() {
-  const list  = document.getElementById('libList');
-  const empty = document.getElementById('libEmpty');
-  empty.style.display = 'none';
-  list.innerHTML = '<div class="lib-msg">loading maps from the website…</div>';
-  let files = [];
-  try {
-    const r = await fetch(ghApi(GH.dir),
-      { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store' });
-    if (r.ok) files = (await r.json()).filter(f => f.type === 'file' && f.name.endsWith('.json'));
-    else if (r.status !== 404) throw new Error('HTTP ' + r.status);
-    // 404 just means the maps/ folder doesn't exist yet — no maps saved
-  } catch (e) {
-    list.innerHTML = `<div class="lib-msg">couldn’t load maps from the website (${e.message})</div>`;
-    return;
-  }
-  list.innerHTML = '';
-  empty.style.display = files.length ? 'none' : 'block';
-  for (const f of files) {
-    const row = document.createElement('div');
-    row.className = 'lib-row';
-    const nameEl = document.createElement('span');
-    nameEl.className = 'lib-name';
-    nameEl.textContent = f.name.replace(/\.json$/, '');
-    nameEl.title = 'Play this map';
-    nameEl.onclick = () => playCloud(f.name);
-    row.appendChild(nameEl);
-    const mkBtn = (label, fn) => {
-      const b = document.createElement('button');
-      b.className = 'bar-btn lib-btn';
-      b.textContent = label;
-      b.onclick = fn;
-      row.appendChild(b);
-    };
-    mkBtn('Play', () => playCloud(f.name));
-    mkBtn('Edit', () => editCloud(f.name));
-    list.appendChild(row);
-  }
-}
-
-async function playCloud(fileName) {
-  try {
-    if (!loadCustomData(await fetchCloudMap(fileName)))
-      alert('This saved map is corrupted or has the wrong grid size.');
-  } catch (e) { alert('Couldn’t load the map from the website: ' + e.message); }
-  canvas.focus();
-}
-
-async function editCloud(fileName) {
-  const name = fileName.replace(/\.json$/, '');
-  if (!confirm(`Open "${name}" in Map Studio?\nThis replaces the current editor draft.`)) return;
-  try {
-    localStorage.setItem('editorMap', JSON.stringify(await fetchCloudMap(fileName)));
-    location.href = 'map-editor.html';
-  } catch (e) { alert('Couldn’t load the map from the website: ' + e.message); }
-}
-
 // ── Startup: editor draft (?custom=1) or procedural riad ──────────────────────
 const _urlParams = new URLSearchParams(location.search);
 let _started = false;
@@ -1948,18 +1776,9 @@ if (_urlParams.get('custom') === '1') {
   catch (_e) { /* fall through to normal */ }
 }
 if (!_started) loadProcedural(currentSeed, true);
-renderLibrary();
 canvas.focus();
 requestAnimationFrame(loop);
 preloadPuzzlesInOrder();
-
-document.getElementById('btnRandomize').addEventListener('click', () => {
-  currentSeed = Date.now() | 0;
-  localStorage.setItem('map1seed', currentSeed);
-  loadProcedural(currentSeed);
-  canvas.focus();
-});
-
 </script>
 </body>
 </html>
