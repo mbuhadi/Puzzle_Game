@@ -1,15 +1,7 @@
 {
   "p1g1": {
     "open": [],
-    "close": [
-      {
-        "id": "default",
-        "type": "fadeOut",
-        "start": 0,
-        "duration": 300,
-        "params": {}
-      }
-    ],
+    "close": [],
     "solve": []
   },
   "p1p1": {
