@@ -1109,6 +1109,12 @@ function updateNearby() {
 
 // ── Update ────────────────────────────────────────────────────────────────────
 function update(dt) {
+  // Keys/joystick input can still be "held" from just before a puzzle
+  // opened (e.g. focus moving off the canvas swallows the matching keyup),
+  // so without this guard the player could keep silently moving position
+  // the whole time the puzzle's open, landing somewhere unexpected once it
+  // closes even though nothing was visibly happening on screen.
+  if (examineOverlay.classList.contains('open')) { updateNearby(); return; }
   let dx = JOY.dx, dy = JOY.dy;
   if (keys['ArrowLeft']  || keys['a']) dx -= 1;
   if (keys['ArrowRight'] || keys['d']) dx += 1;
