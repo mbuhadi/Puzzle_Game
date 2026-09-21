@@ -981,7 +981,18 @@ function buildCylinderLock(){
   let combination=[];
   let rotation=0; // continuous rotation in degrees
 
-  const dialSize=Math.min(400,detail.clientWidth-36);
+  // Same hidden-ancestor pitfall as buildFamilyTree's own mobile scale (see
+  // the comment there): this runs while the puzzle is still preloading
+  // inside the examine overlay's display:none, where detail.clientWidth
+  // reads 0 — avail would go negative, baking a negative width/height into
+  // the dial's own DOM (never remeasured afterward, even on redraw) instead
+  // of just the harmless flipped CSS transform the tree case produced.
+  // Falling back to the natural 400px size when there's nothing real yet to
+  // measure keeps the dial sane; fitChunkToViewport (in the embedded game)
+  // or the browser's own layout (viewing the puzzle directly) still fits it
+  // to the screen correctly either way.
+  const avail=detail.clientWidth-36;
+  const dialSize=avail>0?Math.min(400,avail):400;
   const dialRadius=140*dialSize/400;
 
   // Display screen for chosen shapes
