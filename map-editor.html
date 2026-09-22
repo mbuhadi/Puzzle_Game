@@ -172,7 +172,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
 
 /* ── Canvas wrap ─────────────────────────────────────────────────────────── */
 #canvasWrap { flex: 1; overflow: hidden; position: relative; min-width: 0; }
-#editorCanvas { display: block; }
+#editorCanvas { display: block; touch-action: none; }
 
 /* ── Map Change (puzzle transform) editing banner ───────────────────────── */
 #transformBar {
@@ -2410,7 +2410,7 @@ function pasteClipboard(atCursor) {
 // ── Mouse events ──────────────────────────────────────────────────────────────
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-canvas.addEventListener('mousedown', e => {
+function onPointerDown(e) {
   flushNudge();   // arrow-key nudges become one undo step before new edits
   const { col, row } = canvasToCell(e.offsetX, e.offsetY);
   const cellF = canvasToCellF(e.offsetX, e.offsetY);
@@ -2527,9 +2527,10 @@ canvas.addEventListener('mousedown', e => {
     lastCell = { col, row };
     render();
   }
-});
+}
+canvas.addEventListener('mousedown', onPointerDown);
 
-canvas.addEventListener('mousemove', e => {
+function onPointerMove(e) {
   const { col, row } = canvasToCell(e.offsetX, e.offsetY);
   hoverCell  = { col, row };
   hoverCellF = canvasToCellF(e.offsetX, e.offsetY);
@@ -2602,9 +2603,10 @@ canvas.addEventListener('mousemove', e => {
   if (applyTile(col, row, paintErase ? T.VOID : undefined)) strokeMade = true;
   lastCell = { col, row };
   render();
-});
+}
+canvas.addEventListener('mousemove', onPointerMove);
 
-window.addEventListener('mouseup', e => {
+function onPointerUp(e) {
   if (isPanning) {
     isPanning = false;
     updateCursor(); return;
@@ -2648,7 +2650,8 @@ window.addEventListener('mouseup', e => {
 
   if (strokeMade) pushHistory();
   render();
-});
+}
+window.addEventListener('mouseup', onPointerUp);
 
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
@@ -2657,32 +2660,64 @@ canvas.addEventListener('wheel', e => {
 
 canvas.addEventListener('mouseleave', () => { hoverCell = hoverCellF = null; render(); });
 
-// ── Touch panning ─────────────────────────────────────────────────────────────
+// ── Touch input ───────────────────────────────────────────────────────────────
 // A two-finger drag pans the view, reusing the same isPanning/panAnchor state
 // as space+drag / middle-mouse — the touch equivalent of a modifier key or
-// extra mouse button neither exists for on a touchscreen. A single finger is
-// left completely alone so it doesn't interfere with painting/placing tools.
+// extra mouse button neither exists for on a touchscreen. A single finger
+// drives the exact same interactions a left-mouse-button drag would —
+// marquee select, dragging a selection, painting, etc. — by feeding a
+// synthetic pointer event into onPointerDown/onPointerMove/onPointerUp, so
+// tap-and-drag on the select tool marquee-selects just like a mouse drag.
 function touchMidpoint(touches) {
   return { x: (touches[0].clientX + touches[1].clientX) / 2, y: (touches[0].clientY + touches[1].clientY) / 2 };
 }
+function touchPoint(t) {
+  const r = canvas.getBoundingClientRect();
+  return { offsetX: t.clientX - r.left, offsetY: t.clientY - r.top, clientX: t.clientX, clientY: t.clientY };
+}
+let activeTouchId = null;
+function endActiveTouch() {
+  if (activeTouchId === null) return;
+  activeTouchId = null;
+  onPointerUp({});
+}
 canvas.addEventListener('touchstart', e => {
-  if (e.touches.length !== 2) return;
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    endActiveTouch();          // a second finger cancels any in-progress single-touch drag…
+    const mid = touchMidpoint(e.touches);
+    isPanning = true;          // …and switches to two-finger pan
+    panAnchor = { mx: mid.x, my: mid.y, px: panX, py: panY };
+    updateCursor();
+    return;
+  }
+  if (e.touches.length !== 1 || isPanning) return;
   e.preventDefault();
-  const mid = touchMidpoint(e.touches);
-  isPanning = true;
-  panAnchor = { mx: mid.x, my: mid.y, px: panX, py: panY };
-  updateCursor();
+  const t = e.touches[0];
+  activeTouchId = t.identifier;
+  onPointerDown({ ...touchPoint(t), button: 0, shiftKey: false,
+                  preventDefault(){}, stopPropagation(){} });
 }, { passive: false });
 canvas.addEventListener('touchmove', e => {
-  if (!isPanning || e.touches.length !== 2) return;
+  if (isPanning && e.touches.length === 2) {
+    e.preventDefault();
+    const mid = touchMidpoint(e.touches);
+    panX = panAnchor.px + (mid.x - panAnchor.mx);
+    panY = panAnchor.py + (mid.y - panAnchor.my);
+    render();
+    return;
+  }
+  if (activeTouchId === null) return;
+  const t = [...e.touches].find(t => t.identifier === activeTouchId);
+  if (!t) return;
   e.preventDefault();
-  const mid = touchMidpoint(e.touches);
-  panX = panAnchor.px + (mid.x - panAnchor.mx);
-  panY = panAnchor.py + (mid.y - panAnchor.my);
-  render();
+  onPointerMove(touchPoint(t));
 }, { passive: false });
 function endTouchPan(e) {
   if (isPanning && e.touches.length < 2) { isPanning = false; updateCursor(); }
+  if (activeTouchId !== null && ![...e.touches].some(t => t.identifier === activeTouchId)) {
+    endActiveTouch();
+  }
 }
 canvas.addEventListener('touchend', endTouchPan);
 canvas.addEventListener('touchcancel', endTouchPan);
