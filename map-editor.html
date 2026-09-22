@@ -196,6 +196,20 @@ select:focus { outline: none; border-color: var(--gold-dim); }
 
 #fileInput { display: none; }
 
+/* ── Long-press selection menu ────────────────────────────────────────────── */
+.sel-menu {
+  position: fixed; z-index: 600; display: none; flex-direction: column;
+  min-width: 120px; background: var(--bg2); border: 1px solid var(--gold-dim);
+  border-radius: 6px; overflow: hidden; box-shadow: 0 6px 20px rgba(0,0,0,0.55);
+}
+.sel-menu.open { display: flex; }
+.sel-menu button {
+  background: none; border: none; text-align: left; padding: 11px 18px;
+  font-family: 'Cinzel', serif; font-size: 12px; color: var(--text); cursor: pointer;
+}
+.sel-menu button:hover, .sel-menu button:active { color: var(--gold); background: var(--bg3); }
+.sel-menu-sep { height: 1px; background: var(--border); }
+
 /* ── Overlay dialogs (shared by the tileset picker and My Maps) ─────────── */
 .overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.82);
@@ -565,6 +579,13 @@ select:focus { outline: none; border-color: var(--gold-dim); }
     <span id="stZoom">zoom 12×</span>
     <span id="stSpawn">spawn: not set</span>
     <span id="stSel" style="color:var(--gold)"></span>
+  </div>
+
+  <!-- Long-press selection menu (touch: copy/delete the current selection) -->
+  <div id="selMenu" class="sel-menu">
+    <button id="selMenuCopy" type="button">Copy</button>
+    <div class="sel-menu-sep"></div>
+    <button id="selMenuDelete" type="button">Delete</button>
   </div>
 
 </div><!-- /app -->
@@ -2677,10 +2698,36 @@ function touchPoint(t) {
 }
 let activeTouchId = null;
 function endActiveTouch() {
+  clearLongPress();
   if (activeTouchId === null) return;
   activeTouchId = null;
   onPointerUp({});
 }
+
+// A finger held still (within LONG_PRESS_MOVE_TOL) for LONG_PRESS_MS opens the
+// copy/delete menu for whatever onPointerDown already selected at touchdown —
+// the tile/object under the finger, or the existing multi-selection if the
+// finger landed on a tile that was already part of it. Any real movement, a
+// second finger, or lifting early cancels it, so it never fights a drag.
+const LONG_PRESS_MS = 500, LONG_PRESS_MOVE_TOL = 10;
+let longPressTimer = null, longPressStart = null;
+function armLongPress(t) {
+  if (tool !== 'select' || transformMode) return;
+  longPressStart = { x: t.clientX, y: t.clientY };
+  longPressTimer = setTimeout(() => {
+    longPressTimer = null;
+    if (activeTouchId === null || (!selectedObjs.size && !selectedTiles.size)) return;
+    const { x, y } = longPressStart;
+    endActiveTouch();
+    if (navigator.vibrate) navigator.vibrate(15);
+    showSelectionMenu(x, y);
+  }, LONG_PRESS_MS);
+}
+function clearLongPress() {
+  if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+  longPressStart = null;
+}
+
 canvas.addEventListener('touchstart', e => {
   if (e.touches.length === 2) {
     e.preventDefault();
@@ -2693,10 +2740,12 @@ canvas.addEventListener('touchstart', e => {
   }
   if (e.touches.length !== 1 || isPanning) return;
   e.preventDefault();
+  hideSelectionMenu();
   const t = e.touches[0];
   activeTouchId = t.identifier;
   onPointerDown({ ...touchPoint(t), button: 0, shiftKey: false,
                   preventDefault(){}, stopPropagation(){} });
+  armLongPress(t);
 }, { passive: false });
 canvas.addEventListener('touchmove', e => {
   if (isPanning && e.touches.length === 2) {
@@ -2710,6 +2759,10 @@ canvas.addEventListener('touchmove', e => {
   if (activeTouchId === null) return;
   const t = [...e.touches].find(t => t.identifier === activeTouchId);
   if (!t) return;
+  if (longPressStart) {
+    const dx = t.clientX - longPressStart.x, dy = t.clientY - longPressStart.y;
+    if (dx * dx + dy * dy > LONG_PRESS_MOVE_TOL * LONG_PRESS_MOVE_TOL) clearLongPress();
+  }
   e.preventDefault();
   onPointerMove(touchPoint(t));
 }, { passive: false });
@@ -2721,6 +2774,28 @@ function endTouchPan(e) {
 }
 canvas.addEventListener('touchend', endTouchPan);
 canvas.addEventListener('touchcancel', endTouchPan);
+
+// ── Long-press selection menu ────────────────────────────────────────────────
+const selMenu = document.getElementById('selMenu');
+function showSelectionMenu(x, y) {
+  selMenu.classList.add('open');
+  selMenu.style.left = '-9999px'; selMenu.style.top = '-9999px';
+  const r = selMenu.getBoundingClientRect();
+  selMenu.style.left = Math.max(8, Math.min(x - r.width / 2, window.innerWidth - r.width - 8)) + 'px';
+  selMenu.style.top  = Math.max(8, Math.min(y - r.height - 14, window.innerHeight - r.height - 8)) + 'px';
+}
+function hideSelectionMenu() { selMenu.classList.remove('open'); }
+document.getElementById('selMenuCopy').addEventListener('click', () => {
+  hideSelectionMenu();
+  if (selectedObjs.size || selectedTiles.size) { copySelection(); pasteClipboard(false); }
+});
+document.getElementById('selMenuDelete').addEventListener('click', () => {
+  hideSelectionMenu();
+  deleteSelection();
+});
+document.addEventListener('pointerdown', e => {
+  if (selMenu.classList.contains('open') && !selMenu.contains(e.target)) hideSelectionMenu();
+}, true);
 
 // ── Keyboard ──────────────────────────────────────────────────────────────────
 window.addEventListener('keydown', e => {
@@ -2753,6 +2828,7 @@ window.addEventListener('keydown', e => {
     return;
   }
 
+  if (e.key === 'Escape' && selMenu.classList.contains('open')) { hideSelectionMenu(); return; }
   if (e.key === 'Escape' && transformMode) { cancelTransform(); return; }
   if (e.key === 'Escape' && (selectedObjs.size || selectedTiles.size)) { clearSelection(); render(); return; }
   if (e.key === 'Escape' && selSprite) { clearSpriteBrush(); return; }
