@@ -105,7 +105,37 @@ button:disabled:hover { border-color: var(--border); color: var(--text); }
   position: absolute; image-rendering: pixelated; cursor: grab;
   touch-action: none; user-select: none; -webkit-user-select: none;
 }
-.sprite.dragging { cursor: grabbing; outline: 2px solid var(--gold); }
+.sprite.dragging { cursor: grabbing; }
+.sprite.selected { outline: 2px solid var(--gold); outline-offset: 1px; }
+.marquee {
+  position: absolute; pointer-events: none; z-index: 10;
+  border: 2px dashed var(--gold); background: rgba(200,168,75,0.12);
+}
+
+/* ── Long-press menu (touch: copy / paste / delete) ───────────────────────── */
+.sel-menu {
+  position: fixed; z-index: 600; display: none; flex-direction: column;
+  min-width: 120px; background: var(--bg2); border: 1px solid var(--gold-dim);
+  border-radius: 6px; overflow: hidden; box-shadow: 0 6px 20px rgba(0,0,0,0.55);
+}
+.sel-menu.open { display: flex; }
+.sel-menu button {
+  background: none; border: none; border-radius: 0; text-align: left; padding: 11px 18px;
+  font-size: 12px; color: var(--text);
+}
+.sel-menu button:hover, .sel-menu button:active { color: var(--gold); background: var(--bg3); }
+.sel-menu button:disabled { opacity: 0.35; color: var(--text); background: none; }
+.sel-menu-sep { height: 1px; background: var(--border); }
+
+/* ── Load panel ───────────────────────────────────────────────────────────── */
+#loadBox { width: 420px; max-height: 80vh; }
+#loadList { overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.load-item {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 4px; background: var(--bg3);
+}
+.load-item .ln { flex: 1; font-size: 12px; color: var(--text); }
+.load-item .ld { font-family: sans-serif; font-size: 10px; color: var(--dim); }
 
 #statusbar {
   height: 24px; flex-shrink: 0; display: flex; align-items: center; gap: 16px;
@@ -142,6 +172,7 @@ button:disabled:hover { border-color: var(--border); color: var(--text); }
   <div id="topbar">
     <span class="tb-title">PUZZLE STUDIO</span>
     <span id="puzzleLabel"></span>
+    <button onclick="openLoadPanel()" title="Open a puzzle saved from Puzzle Studio to keep editing it">Load</button>
     <button id="saveBtn" onclick="savePuzzle()" title="Save this puzzle to the Puzzle Guide (commits it to the website's GitHub repo)">Save</button>
     <span id="saveFlash"></span>
   </div>
@@ -162,7 +193,25 @@ button:disabled:hover { border-color: var(--border); color: var(--text); }
   <div id="statusbar">
     <span id="stScreen">Problem</span>
     <span id="stCount">0 objects</span>
-    <span>pick from Browse Tileset, then drag it anywhere on the board · + Given adds a given tab</span>
+    <span id="stSel" style="color:var(--gold)"></span>
+    <span>drag on empty space to select · drag selected things to move · long-press or right-click: copy / paste / delete · Delete key removes</span>
+  </div>
+
+  <!-- Long-press menu -->
+  <div id="selMenu" class="sel-menu">
+    <button id="selMenuCopy" type="button">Copy</button>
+    <div class="sel-menu-sep"></div>
+    <button id="selMenuPaste" type="button">Paste</button>
+    <div class="sel-menu-sep"></div>
+    <button id="selMenuDelete" type="button">Delete</button>
+  </div>
+
+  <!-- Load panel -->
+  <div id="loadOverlay" class="overlay">
+    <div id="loadBox" class="overlay-box">
+      <div class="overlay-head">LOAD A PUZZLE STUDIO PUZZLE<button style="margin-left:auto" onclick="closeLoadPanel()">Close</button></div>
+      <div id="loadList"></div>
+    </div>
   </div>
 
 </div>
@@ -177,24 +226,32 @@ button:disabled:hover { border-color: var(--border); color: var(--text); }
 // 1280×720 board in its own tab. Boards are filled from the shared Browse
 // Tileset picker (assets/tileset_picker.js): each pick becomes a sprite on
 // the active tab's board (drawn at 4× — one 16px tile = 64 board px — or
-// shrunk to fit if it's a big picture) that can be dragged anywhere.
+// shrunk to fit if it's a big picture). Sprites are selected, moved, copied,
+// pasted and deleted like objects in Map Studio.
 const BOARD_W = 1280, BOARD_H = 720, PX = 4;
 const stageWrap = document.getElementById('stageWrap');
 let boardScale = 1;
 
 // ── Screens (tabs) ────────────────────────────────────────────────────────────
-const screens = [];   // {kind: 'problem'|'given', board: <div>, sprites: [{el, pick, x, y}]}
+const screens = [];   // {kind: 'problem'|'given', board: <div>, sprites: [{el, pick, x, y, w, h}]}
 let cur = 0;          // index of the active tab
 function curScreen() { return screens[cur]; }
-// The new puzzle continues the Puzzle Guide's numbering: one past the
-// highest puzzle number there (hand-made or saved from here)
-const PUZZLE_NUM = Math.max(0, ...PUZZLES.map(p => +p.num || 0)) + 1;
-document.getElementById('puzzleLabel').textContent = 'Puzzle ' + PUZZLE_NUM;
-document.title = 'Puzzle Studio — Puzzle ' + PUZZLE_NUM;
+
+// A new puzzle continues the Puzzle Guide's numbering: one past the highest
+// puzzle number there (hand-made or saved from here). Load switches it to the
+// loaded puzzle's number, so Save then updates that puzzle.
+let puzzleNum = Math.max(0, ...PUZZLES.map(p => +p.num || 0)) + 1;
+let editingSaved = false;
+function updatePuzzleLabel() {
+  document.getElementById('puzzleLabel').textContent =
+    'Puzzle ' + puzzleNum + (editingSaved ? ' (editing)' : '');
+  document.title = 'Puzzle Studio — Puzzle ' + puzzleNum;
+}
+updatePuzzleLabel();
 
 // Chunk labels match the Puzzle Guide's: p9p1 = problem, p9g1… = givens
 function screenLabel(i) {
-  return screens[i].kind === 'problem' ? `p${PUZZLE_NUM}p1` : `p${PUZZLE_NUM}g${i}`;   // givens follow the problem
+  return screens[i].kind === 'problem' ? `p${puzzleNum}p1` : `p${puzzleNum}g${i}`;   // givens follow the problem
 }
 function screenName(i) {
   return (screens[i].kind === 'problem' ? 'Problem' : 'Given ' + i) + ' · ' + screenLabel(i);
@@ -206,11 +263,13 @@ function makeScreen(kind) {
   stageWrap.appendChild(board);
   const sc = { kind, board, sprites: [] };
   screens.push(sc);
+  wireBoard(sc);
   fitBoard();
   return sc;
 }
 
 function switchScreen(i) {
+  if (i !== cur) clearSelection();
   cur = i;
   screens.forEach((sc, j) => sc.board.classList.toggle('active', j === i));
   renderTabs();
@@ -227,6 +286,7 @@ function deleteGiven(i) {
   if (sc.kind !== 'given') return;
   if (sc.sprites.length &&
       !confirm(`Delete ${screenName(i)} and the ${sc.sprites.length} object(s) on it?`)) return;
+  if (i === cur) clearSelection();
   sc.board.remove();
   screens.splice(i, 1);
   switchScreen(cur === i ? i - 1 : cur > i ? cur - 1 : cur);
@@ -259,6 +319,7 @@ function updateStatus() {
   const n = curScreen().sprites.length;
   document.getElementById('stScreen').textContent = screenName(cur);
   document.getElementById('stCount').textContent = n + (n === 1 ? ' object' : ' objects');
+  document.getElementById('stSel').textContent = selected.size ? selected.size + ' selected' : '';
 }
 
 // Fit the boards inside the stage area, centered
@@ -273,11 +334,7 @@ function fitBoard() {
 }
 new ResizeObserver(fitBoard).observe(stageWrap);
 
-makeScreen('problem');
-switchScreen(0);
-
 // ── Sprites ───────────────────────────────────────────────────────────────────
-
 function sourceOf(pick) {
   if (pick.kind === 'sheet') {
     const u = SHEET_TILE;
@@ -318,63 +375,231 @@ function placeSprite(s) {
   s.el.style.top  = s.y + 'px';
 }
 
-// Called by the picker's "Use Selection" — drop the pick in the center of
-// the active tab's board
-function onTilesetUse(pick) {
+// Default on-board size: pixel art at 4×; anything big (an uploaded
+// picture) shrunk to fit within 60% of the board instead of dwarfing it
+function defaultSize(pick) {
+  const src = sourceOf(pick);
+  const k = Math.min(PX, BOARD_W * 0.6 / src.w, BOARD_H * 0.6 / src.h);
+  return { w: Math.round(src.w * k), h: Math.round(src.h * k) };
+}
+
+const spriteOfEl = new WeakMap();
+function addSprite(sc, pick, x, y, w, h) {
   const src = sourceOf(pick);
   const cv = document.createElement('canvas');
   cv.className = 'sprite';
   cv.width = src.w; cv.height = src.h;
-  // Pixel art shows at 4×; anything big (an uploaded picture) is shrunk to
-  // fit within 60% of the board instead of dwarfing it
-  const k = Math.min(PX, BOARD_W * 0.6 / src.w, BOARD_H * 0.6 / src.h);
-  const w = Math.round(src.w * k), h = Math.round(src.h * k);
   cv.style.width  = w + 'px';
   cv.style.height = h + 'px';
-  const sc = curScreen();
-  const s = { el: cv, pick,
-              x: Math.round((BOARD_W - w) / 2), y: Math.round((BOARD_H - h) / 2) };
+  const s = { el: cv, pick, x: Math.round(x), y: Math.round(y), w, h };
+  spriteOfEl.set(cv, s);
   sc.sprites.push(s);
   sc.board.appendChild(cv);
   placeSprite(s);
   drawSprite(s);
-  enableDrag(s, sc);
-  updateStatus();
+  return s;
 }
 
-// Drag with mouse, pen or finger. Deltas are divided by the board's display
-// scale so the sprite tracks the pointer exactly.
-function enableDrag(s, sc) {
-  let start = null;
-  s.el.addEventListener('pointerdown', e => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    s.el.setPointerCapture(e.pointerId);
-    start = { px: e.clientX, py: e.clientY, x: s.x, y: s.y, id: e.pointerId };
-    s.el.classList.add('dragging');
-    sc.board.appendChild(s.el);   // bring to front while dragging
-    sc.sprites.push(sc.sprites.splice(sc.sprites.indexOf(s), 1)[0]);
-  });
-  s.el.addEventListener('pointermove', e => {
-    if (!start || e.pointerId !== start.id) return;
-    const w = s.el.offsetWidth, h = s.el.offsetHeight;
-    s.x = Math.round(Math.max(-w + 16, Math.min(BOARD_W - 16, start.x + (e.clientX - start.px) / boardScale)));
-    s.y = Math.round(Math.max(-h + 16, Math.min(BOARD_H - 16, start.y + (e.clientY - start.py) / boardScale)));
-    placeSprite(s);
-  });
-  const end = e => {
-    if (!start || e.pointerId !== start.id) return;
-    start = null;
-    s.el.classList.remove('dragging');
-  };
-  s.el.addEventListener('pointerup', end);
-  s.el.addEventListener('pointercancel', end);
+// Called by the picker's "Use Selection" — drop the pick in the center of
+// the active tab's board, selected
+function onTilesetUse(pick) {
+  const { w, h } = defaultSize(pick);
+  const s = addSprite(curScreen(), pick, (BOARD_W - w) / 2, (BOARD_H - h) / 2, w, h);
+  selectOnly([s]);
 }
 
 // Animated picks keep playing on the visible board
 setInterval(() => {
   for (const s of curScreen().sprites) if (sourceOf(s.pick).frames > 1) drawSprite(s);
 }, 60);
+
+// ── Selection ─────────────────────────────────────────────────────────────────
+const selected = new Set();   // sprites of the active tab
+function setSel(s, on) {
+  if (on) selected.add(s); else selected.delete(s);
+  s.el.classList.toggle('selected', on);
+}
+function clearSelection() {
+  for (const s of [...selected]) setSel(s, false);
+  updateStatusSafe();
+}
+function selectOnly(list) {
+  for (const s of [...selected]) setSel(s, false);
+  for (const s of list) setSel(s, true);
+  updateStatus();
+}
+function updateStatusSafe() { if (screens.length) updateStatus(); }
+
+function deleteSelection() {
+  if (!selected.size) return;
+  const sc = curScreen();
+  for (const s of selected) s.el.remove();
+  sc.sprites = sc.sprites.filter(s => !selected.has(s));
+  selected.clear();
+  updateStatus();
+}
+
+// Clipboard: picks + sizes + positions relative to the copied group's
+// top-left, so a paste keeps the arrangement. Survives tab switches, so
+// things can be copied from one given to another.
+let clipboard = null;
+function copySelection() {
+  if (!selected.size) return;
+  const list = curScreen().sprites.filter(s => selected.has(s));   // keep layer order
+  const ox = Math.min(...list.map(s => s.x)), oy = Math.min(...list.map(s => s.y));
+  clipboard = list.map(s => ({ pick: JSON.parse(JSON.stringify(s.pick)),
+                               dx: s.x - ox, dy: s.y - oy, w: s.w, h: s.h }));
+}
+// Paste with the group's top-left at (x, y); defaults to a nudge from center
+function pasteClipboard(x, y) {
+  if (!clipboard || !clipboard.length) return;
+  const sc = curScreen();
+  if (x == null) { x = BOARD_W / 2 - 64; y = BOARD_H / 2 - 64; }
+  const added = clipboard.map(c => addSprite(sc, JSON.parse(JSON.stringify(c.pick)),
+                                             x + c.dx, y + c.dy, c.w, c.h));
+  selectOnly(added);
+}
+
+// ── Pointer input: select / marquee / move / long-press ───────────────────────
+// Pointer events cover mouse, pen and a single finger alike, so tap-and-drag
+// on a tablet does exactly what click-and-drag does with a mouse:
+//  • on a sprite: select it (Shift toggles) and drag the selection to move it
+//  • on empty board: drag a marquee — everything it touches gets selected
+// A finger held still for LONG_PRESS_MS (or a right-click) opens the
+// Copy / Paste / Delete menu; Paste lands where the press was.
+const LONG_PRESS_MS = 500, LONG_PRESS_TOL = 10;
+
+function boardPoint(sc, e) {
+  const r = sc.board.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / boardScale, y: (e.clientY - r.top) / boardScale };
+}
+
+function wireBoard(sc) {
+  const board = sc.board;
+  let g = null;          // current gesture
+  let lpTimer = null;
+
+  const endGesture = () => {
+    clearTimeout(lpTimer); lpTimer = null;
+    if (!g) return;
+    if (g.marquee) g.marquee.remove();
+    for (const s of selected) s.el.classList.remove('dragging');
+    g = null;
+  };
+
+  board.addEventListener('contextmenu', e => e.preventDefault());
+
+  board.addEventListener('pointerdown', e => {
+    if (g) return;                        // a second finger — ignore it
+    hideSelMenu();
+    const p = boardPoint(sc, e);
+    const s = spriteOfEl.get(e.target);
+    if (e.button === 2) {                 // right-click → the menu
+      if (s && !selected.has(s)) selectOnly([s]);
+      showSelMenu(e.clientX, e.clientY, p);
+      return;
+    }
+    if (e.button !== 0) return;
+    e.preventDefault();
+    board.setPointerCapture(e.pointerId);
+    g = { id: e.pointerId, sx: e.clientX, sy: e.clientY, start: p, moved: false };
+    if (s) {
+      if (e.shiftKey) { setSel(s, !selected.has(s)); updateStatus(); g.mode = 'none'; }
+      else {
+        if (!selected.has(s)) selectOnly([s]);
+        g.mode = 'move';
+        g.orig = [...selected].map(t => ({ t, x: t.x, y: t.y }));
+      }
+    } else {
+      g.mode = 'marquee';
+      g.base = e.shiftKey ? new Set(selected) : new Set();
+      if (!e.shiftKey) clearSelection();
+    }
+    if (e.pointerType !== 'mouse') {
+      lpTimer = setTimeout(() => {
+        lpTimer = null;
+        if (!g || g.moved) return;
+        const { sx, sy, start } = g;
+        endGesture();
+        if (navigator.vibrate) navigator.vibrate(15);
+        showSelMenu(sx, sy, start);
+      }, LONG_PRESS_MS);
+    }
+  });
+
+  board.addEventListener('pointermove', e => {
+    if (!g || e.pointerId !== g.id) return;
+    const dxs = e.clientX - g.sx, dys = e.clientY - g.sy;
+    if (!g.moved && dxs * dxs + dys * dys > LONG_PRESS_TOL * LONG_PRESS_TOL) {
+      g.moved = true;
+      clearTimeout(lpTimer); lpTimer = null;
+    }
+    if (!g.moved) return;
+    const p = boardPoint(sc, e);
+    if (g.mode === 'move') {
+      const dx = p.x - g.start.x, dy = p.y - g.start.y;
+      for (const o of g.orig) {
+        o.t.x = Math.round(Math.max(-o.t.w + 16, Math.min(BOARD_W - 16, o.x + dx)));
+        o.t.y = Math.round(Math.max(-o.t.h + 16, Math.min(BOARD_H - 16, o.y + dy)));
+        o.t.el.classList.add('dragging');
+        placeSprite(o.t);
+      }
+    } else if (g.mode === 'marquee') {
+      if (!g.marquee) {
+        g.marquee = document.createElement('div');
+        g.marquee.className = 'marquee';
+        board.appendChild(g.marquee);
+      }
+      const x0 = Math.min(g.start.x, p.x), y0 = Math.min(g.start.y, p.y);
+      const x1 = Math.max(g.start.x, p.x), y1 = Math.max(g.start.y, p.y);
+      Object.assign(g.marquee.style, { left: x0 + 'px', top: y0 + 'px',
+                                       width: (x1 - x0) + 'px', height: (y1 - y0) + 'px' });
+      for (const t of sc.sprites) {
+        const hit = t.x < x1 && t.x + t.w > x0 && t.y < y1 && t.y + t.h > y0;
+        setSel(t, hit || g.base.has(t));
+      }
+      updateStatus();
+    }
+  });
+
+  const up = e => { if (g && e.pointerId === g.id) endGesture(); };
+  board.addEventListener('pointerup', up);
+  board.addEventListener('pointercancel', up);
+}
+
+makeScreen('problem');
+switchScreen(0);
+
+// ── Long-press / right-click menu ─────────────────────────────────────────────
+const selMenu = document.getElementById('selMenu');
+let menuPoint = null;   // board point the menu was opened at — where Paste lands
+function showSelMenu(x, y, boardPt) {
+  menuPoint = boardPt;
+  document.getElementById('selMenuCopy').disabled   = !selected.size;
+  document.getElementById('selMenuDelete').disabled = !selected.size;
+  document.getElementById('selMenuPaste').disabled  = !(clipboard && clipboard.length);
+  selMenu.classList.add('open');
+  selMenu.style.left = '-9999px'; selMenu.style.top = '-9999px';
+  const r = selMenu.getBoundingClientRect();
+  selMenu.style.left = Math.max(8, Math.min(x - r.width / 2, window.innerWidth - r.width - 8)) + 'px';
+  selMenu.style.top  = Math.max(8, Math.min(y - r.height - 14, window.innerHeight - r.height - 8)) + 'px';
+}
+function hideSelMenu() { selMenu.classList.remove('open'); }
+document.getElementById('selMenuCopy').onclick = () => {
+  hideSelMenu();
+  copySelection();   // clipboard only — Paste places it
+  document.getElementById('stSel').textContent = 'copied ' + selected.size + ' ✓';
+  setTimeout(updateStatus, 1500);
+};
+document.getElementById('selMenuPaste').onclick = () => {
+  hideSelMenu();
+  pasteClipboard(menuPoint && menuPoint.x, menuPoint && menuPoint.y);
+};
+document.getElementById('selMenuDelete').onclick = () => { hideSelMenu(); deleteSelection(); };
+document.addEventListener('pointerdown', e => {
+  if (selMenu.classList.contains('open') && !selMenu.contains(e.target) &&
+      !e.target.closest('.board')) hideSelMenu();
+}, true);
 
 // ── Save → Puzzle Guide ───────────────────────────────────────────────────────
 // Puzzles live in puzzles_studio.js (STUDIO_PUZZLES), which the Puzzle Guide,
@@ -390,7 +615,7 @@ function flash(msg, color) {
 
 function puzzleData() {
   return {
-    num: PUZZLE_NUM, name: '؟؟؟', loc: '', updated: Date.now(),
+    num: puzzleNum, name: '؟؟؟', loc: '', updated: Date.now(),
     screens: screens.map((sc, i) => ({
       label: screenLabel(i), kind: sc.kind,
       sprites: sc.sprites.map(s => {
@@ -400,8 +625,8 @@ function puzzleData() {
              : s.pick.kind === 'anim' ? s.pick.anim.src : s.pick.src,
           x: src.x, y: src.y, w: src.w, h: src.h,
           iw: src.img.naturalWidth, ih: src.img.naturalHeight,
-          // style size, not offsetWidth — boards of other tabs are display:none
-          bx: s.x, by: s.y, bw: parseFloat(s.el.style.width), bh: parseFloat(s.el.style.height),
+          bx: s.x, by: s.y, bw: s.w, bh: s.h,
+          pick: s.pick,   // what was picked, so Load restores it exactly (animations too)
         };
       }),
     })),
@@ -416,6 +641,19 @@ const STUDIO_HEADER =
    puzzles_curated_data.js turns them into curated-page chunks. */
 `;
 
+// Current STUDIO_PUZZLES straight from the repo (not the deployed copy, which
+// can lag a minute behind a save). Falls back to the copy this page loaded.
+async function readStudioFile() {
+  const headers = tsGhToken() ? tsGhHeaders() : { Accept: 'application/vnd.github+json' };
+  const r = await fetch(tsGhApi(STUDIO_FILE) + '?ref=' + TS_GH.branch, { headers, cache: 'no-store' });
+  if (r.status === 404) return { list: [], sha: null };
+  if (!r.ok) throw await tsGhFail(r);
+  const j = await r.json();
+  const text = decodeURIComponent(escape(atob(j.content.replace(/\s/g, ''))));
+  const m = text.match(/const STUDIO_PUZZLES = ([\s\S]*);\s*$/);
+  return { list: m ? JSON.parse(m[1]) : [], sha: j.sha };
+}
+
 let saving = false;
 async function savePuzzle() {
   if (saving) return;
@@ -429,30 +667,25 @@ async function savePuzzle() {
   document.getElementById('saveBtn').disabled = true;
   flash('saving…', '#b8a06a');
   try {
-    // Read the current file through the API (not the deployed copy) so a save
-    // a minute ago that hasn't deployed yet isn't lost
-    const r = await fetch(tsGhApi(STUDIO_FILE) + '?ref=' + TS_GH.branch,
-                          { headers: tsGhHeaders(), cache: 'no-store' });
-    let list = [], sha = null;
-    if (r.ok) {
-      const j = await r.json();
-      sha = j.sha;
-      const text = decodeURIComponent(escape(atob(j.content.replace(/\s/g, ''))));
-      const m = text.match(/const STUDIO_PUZZLES = ([\s\S]*);\s*$/);
-      list = m ? JSON.parse(m[1]) : [];
-    } else if (r.status !== 404) throw await tsGhFail(r);
-
+    const { list, sha } = await readStudioFile();
     const data = puzzleData();
-    const i = list.findIndex(p => +p.num === PUZZLE_NUM);
-    if (i >= 0) list[i] = data; else list.push(data);
+    const i = list.findIndex(p => +p.num === puzzleNum);
+    if (i >= 0) {
+      // keep a name/location that was filled in elsewhere
+      data.name = list[i].name || data.name;
+      data.loc  = list[i].loc  || data.loc;
+      list[i] = data;
+    } else list.push(data);
     list.sort((a, b) => a.num - b.num);
     const text = STUDIO_HEADER + 'const STUDIO_PUZZLES = ' + JSON.stringify(list, null, 1) + ';\n';
-    const body = { message: `Save puzzle ${PUZZLE_NUM} from Puzzle Studio`,
+    const body = { message: `Save puzzle ${puzzleNum} from Puzzle Studio`,
                    content: btoa(unescape(encodeURIComponent(text))), branch: TS_GH.branch };
     if (sha) body.sha = sha;
     const w = await fetch(tsGhApi(STUDIO_FILE), { method: 'PUT', headers: tsGhHeaders(), body: JSON.stringify(body) });
     if (!w.ok) throw await tsGhFail(w);
-    flash(`saved puzzle ${PUZZLE_NUM} to the Puzzle Guide ✓`);
+    editingSaved = true;
+    updatePuzzleLabel();
+    flash(`saved puzzle ${puzzleNum} to the Puzzle Guide ✓`);
   } catch (e) {
     if (/bad credentials/i.test(e.message)) localStorage.removeItem('ghToken');
     flash('save failed ✗ ' + e.message, '#cc7070');
@@ -462,23 +695,102 @@ async function savePuzzle() {
   }
 }
 
-// ── Keyboard: the picker's shortcuts (same as Map Studio) ─────────────────────
-window.addEventListener('keydown', e => {
-  if (!tsOverlay.classList.contains('open')) return;
-  const tag = document.activeElement?.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA') {
-    if (e.key === 'Escape') document.activeElement.blur();
+// ── Load (Puzzle Studio puzzles only) ─────────────────────────────────────────
+// Lists the puzzles in puzzles_studio.js — hand-made Puzzle Guide puzzles
+// aren't built from sprites, so they can't be opened here.
+const loadOverlay = document.getElementById('loadOverlay');
+async function openLoadPanel() {
+  loadOverlay.classList.add('open');
+  const box = document.getElementById('loadList');
+  box.innerHTML = '<div class="hint-text">loading…</div>';
+  let list;
+  try { list = (await readStudioFile()).list; }
+  catch (e) { list = typeof STUDIO_PUZZLES !== 'undefined' ? STUDIO_PUZZLES : []; }
+  box.innerHTML = '';
+  if (!list.length) {
+    box.innerHTML = '<div class="hint-text">no Puzzle Studio puzzles saved yet — build one and press Save</div>';
     return;
   }
-  if (e.key === 'Escape') { tsCancel(); e.preventDefault(); return; }
-  if (e.key === 'Enter') {
-    if (!document.getElementById('tsUseBtn').disabled) tsUse();
-    e.preventDefault(); return;
+  for (const p of list) {
+    const row = document.createElement('div');
+    row.className = 'load-item';
+    const givens = p.screens.filter(s => s.kind === 'given').length;
+    const when = p.updated ? new Date(p.updated).toLocaleString() : '';
+    row.innerHTML = `<span class="ln">Puzzle ${p.num}</span>` +
+      `<span class="ld">${givens} given${givens === 1 ? '' : 's'}${when ? ' · ' + when : ''}</span>`;
+    const b = document.createElement('button');
+    b.textContent = 'Load';
+    b.onclick = () => loadPuzzle(p);
+    row.appendChild(b);
+    box.appendChild(row);
   }
-  const arrow = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
-  if (arrow && tsSheet !== 'animated') {
-    tsNudge(arrow[0], arrow[1], e.shiftKey);
-    e.preventDefault();
+}
+function closeLoadPanel() { loadOverlay.classList.remove('open'); }
+
+// A sprite saved before picks were stored comes back as a plain image crop
+function pickFromSaved(sp) {
+  return sp.pick || { kind: 'image', name: '', src: sp.src, x: sp.x, y: sp.y, w: sp.w, h: sp.h,
+                      sw: sp.w / SHEET_TILE, sh: sp.h / SHEET_TILE };
+}
+
+function loadPuzzle(p) {
+  const hasWork = screens.some(sc => sc.sprites.length) || screens.length > 1;
+  if (hasWork && !confirm(`Open Puzzle ${p.num}? What's on the boards now will be replaced.`)) return;
+  closeLoadPanel();
+  clearSelection();
+  for (const sc of screens) sc.board.remove();
+  screens.length = 0;
+  cur = 0;
+  puzzleNum = +p.num;
+  editingSaved = true;
+  const ordered = [...p.screens.filter(s => s.kind === 'problem'), ...p.screens.filter(s => s.kind === 'given')];
+  if (!ordered.length || ordered[0].kind !== 'problem') ordered.unshift({ kind: 'problem', sprites: [] });
+  for (const saved of ordered) {
+    const sc = makeScreen(saved.kind);
+    for (const sp of saved.sprites) addSprite(sc, pickFromSaved(sp), sp.bx, sp.by, sp.bw, sp.bh);
+  }
+  updatePuzzleLabel();
+  switchScreen(0);
+  flash(`opened puzzle ${p.num} — Save updates it`);
+}
+
+// ── Keyboard ──────────────────────────────────────────────────────────────────
+window.addEventListener('keydown', e => {
+  const tag = document.activeElement?.tagName;
+  const typing = tag === 'INPUT' || tag === 'TEXTAREA';
+
+  // The tileset picker's shortcuts (same as Map Studio)
+  if (tsOverlay.classList.contains('open')) {
+    if (typing) { if (e.key === 'Escape') document.activeElement.blur(); return; }
+    if (e.key === 'Escape') { tsCancel(); e.preventDefault(); return; }
+    if (e.key === 'Enter') {
+      if (!document.getElementById('tsUseBtn').disabled) tsUse();
+      e.preventDefault(); return;
+    }
+    const arrow = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    if (arrow && tsSheet !== 'animated') {
+      tsNudge(arrow[0], arrow[1], e.shiftKey);
+      e.preventDefault();
+    }
+    return;
+  }
+  if (loadOverlay.classList.contains('open')) {
+    if (e.key === 'Escape') closeLoadPanel();
+    return;
+  }
+  if (typing) return;
+
+  if (e.key === 'Escape') { hideSelMenu(); clearSelection(); return; }
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (selected.size) { deleteSelection(); e.preventDefault(); }
+    return;
+  }
+  if (e.ctrlKey || e.metaKey) {
+    const k = e.key.toLowerCase();
+    if (k === 'c') { copySelection(); e.preventDefault(); }
+    else if (k === 'v') { pasteClipboard(); e.preventDefault(); }
+    else if (k === 'a') { selectOnly(curScreen().sprites); e.preventDefault(); }
+    else if (k === 's') { savePuzzle(); e.preventDefault(); }
   }
 });
 </script>
