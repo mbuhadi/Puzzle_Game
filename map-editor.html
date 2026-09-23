@@ -349,6 +349,9 @@ select:focus { outline: none; border-color: var(--gold-dim); }
     <span id="saveFlash">saved ✓</span>
     <button onclick="openMapsPanel()" title="Save/load named maps on the website (GitHub repo)">My Maps…</button>
     <div class="tb-sep"></div>
+    <button id="undoBtn" onclick="undo()" title="Undo (Ctrl+Z)" disabled>↶ Undo</button>
+    <button id="redoBtn" onclick="redo()" title="Redo (Ctrl+Y / Ctrl+Shift+Z)" disabled>↷ Redo</button>
+    <div class="tb-sep"></div>
     <button onclick="exportJSON()">Export</button>
     <label class="btn-like">Import<input type="file" id="fileInput" accept=".json" onchange="importJSON(event)"></label>
     <div class="tb-sep"></div>
@@ -843,6 +846,7 @@ function bindRoom(i) {
   transforms = r.transforms || [];
   history = r._hist; histIdx = r._histIdx;
   clearSelection();
+  updateUndoButtons();
 }
 
 // A map has a single spawn point — placing one removes any spawn in the other
@@ -1340,6 +1344,14 @@ function pushHistory() {
   if (history.length > MAX_HIST) history.shift();
   histIdx = history.length - 1;
   syncRoomFromGlobals();
+  updateUndoButtons();
+}
+
+// Grey out the top-bar Undo/Redo buttons when there's nothing to step to
+function updateUndoButtons() {
+  const u = document.getElementById('undoBtn'), r = document.getElementById('redoBtn');
+  if (u) u.disabled = histIdx <= 0;
+  if (r) r.disabled = histIdx >= history.length - 1;
 }
 
 function restoreSnapshot(s) {
@@ -1351,6 +1363,7 @@ function restoreSnapshot(s) {
   clearSelection();   // the selected references were just replaced by clones
   syncRoomFromGlobals();
   updateInterList();
+  updateUndoButtons();
 }
 
 function undo() {
