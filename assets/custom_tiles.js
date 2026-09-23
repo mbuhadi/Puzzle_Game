@@ -667,5 +667,7 @@ window.CUSTOM_TILE_BASE_INDEX = CUSTOM_TILE_BASE_INDEX;
 window.CUSTOM_TILE_CATEGORIES = CUSTOM_TILE_CATEGORIES;
 window.CUSTOM_TILE_LIST = CUSTOM_TILE_LIST;
 window.getCustomTileCanvas = getCustomTileCanvas;
+// Raw lettering bitmaps ('#' = ink), for pages that draw the phrases without the plaster
+window.PHRASE_BITMAPS = { mashallah: MASHALLAH_BITMAP, tawhid: TAWHID_BITMAP };
 
 })();

@@ -1499,24 +1499,26 @@ function buildPuzzleEight(){
   P8_addMashallah(wrap);
 }
 
-// "ما شاء الله" in the upper-left corner — the four Ma Sha Allah wall tiles
-// from Map Studio (assets/custom_tiles.js), drawn in black & white. It
+// "ما شاء الله" in the upper-left corner — the Ma Sha Allah wall tiles
+// lettering from Map Studio (assets/custom_tiles.js), in plain grey with no
+// plaster background. It
 // floats over the corner so the grid itself doesn't move: pinned to the
 // screen in the game's single-puzzle view, to the chunk on the full page.
 function P8_addMashallah(wrap){
   document.getElementById('p8mashallah')?.remove();
-  if(typeof getCustomTileCanvas!=='function')return;
-  const tiles=CUSTOM_TILE_LIST.filter(d=>d.key.startsWith('WALL_MASHALLAH_'));
-  if(tiles.length!==4)return;
+  const bmp=window.PHRASE_BITMAPS&&PHRASE_BITMAPS.mashallah; if(!bmp)return;
+  // crop to the inked pixels so the corner margin is the real margin
+  let x0=99,x1=-1,y0=99,y1=-1;
+  bmp.forEach((row,y)=>[...row].forEach((c,x)=>{ if(c==='#'){ x0=Math.min(x0,x); x1=Math.max(x1,x); y0=Math.min(y0,y); y1=Math.max(y1,y); } }));
   const cv=document.createElement('canvas');
-  cv.id='p8mashallah'; cv.width=64; cv.height=16;
+  cv.id='p8mashallah'; cv.width=x1-x0+1; cv.height=y1-y0+1;
   const g=cv.getContext('2d');
-  tiles.forEach((d,i)=>g.drawImage(getCustomTileCanvas(d.index),i*16,0));
+  g.fillStyle='#9a9a9a';
+  for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) if(bmp[y][x]==='#') g.fillRect(x-x0,y-y0,1,1);
   const solo=new URLSearchParams(location.search).has('chunk');
   cv.style.cssText=(solo?'position:fixed; top:12px; left:12px; z-index:50;'
                          :'position:absolute; top:0; left:0;')+
-    'width:clamp(128px,26vmin,256px); height:auto; image-rendering:pixelated;'+
-    'filter:grayscale(1); border-radius:3px; box-shadow:0 4px 14px rgba(0,0,0,.5); pointer-events:none;';
+    'width:clamp(116px,24vmin,232px); height:auto; image-rendering:pixelated; pointer-events:none;';
   if(solo) document.body.appendChild(cv);
   else { wrap.parentElement.style.position='relative'; wrap.parentElement.appendChild(cv); }
 }
