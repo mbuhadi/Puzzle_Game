@@ -391,6 +391,8 @@ select:focus { outline: none; border-color: var(--gold-dim); }
                   title="Highlight an area of the map and define what it looks like once this puzzle is solved">Highlight Area…</button>
           <button id="btnMapChangeClear" class="danger" onclick="clearMapChange()" style="display:none"
                   title="Delete this puzzle's Map Change">Remove</button>
+          <button id="btnMapChangeArea" onclick="changeMapChangeArea()" style="display:none; grid-column:1/-1"
+                  title="Drag a new rectangle for where this puzzle's change happens — what you built inside the old area is kept where it overlaps">Change Area…</button>
         </div>
       </div>
 
@@ -415,6 +417,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
       <canvas id="editorCanvas"></canvas>
       <div id="transformBar">
         <span id="transformBarText"></span>
+        <button id="transformAreaBtn" onclick="changeMapChangeArea()" title="Drag a new rectangle — your edits are kept where the old and new areas overlap">Change Area</button>
         <button id="transformSaveBtn" class="play" onclick="saveTransformEdit()">Save Change</button>
         <button class="danger" onclick="cancelTransform()">Cancel</button>
       </div>
@@ -1105,6 +1108,22 @@ function render() {
       ctx.fillText('PLAYER VIEW', x + 4, y >= 16 ? y - 4 : y + 15);
       ctx.restore();
     }
+  }
+
+  // Change Area — outline the area being replaced while the new one is dragged
+  if (transformMode === 'pick-rect' && reshapeFrom) {
+    const rr = reshapeFrom.rect;
+    const { x, y } = cellXY(rr.c0, rr.r0);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(224,176,80,0.75)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(x + 1, y + 1, (rr.c1 - rr.c0 + 1) * zoom - 2, (rr.r1 - rr.r0 + 1) * zoom - 2);
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(224,176,80,0.9)';
+    ctx.font = '11px monospace';
+    ctx.fillText('CURRENT AREA', x + 4, y >= 14 ? y - 4 : y + 14);
+    ctx.restore();
   }
 
   // Map Change editing — dim everything outside the highlighted area so
@@ -2542,9 +2561,11 @@ function onPointerUp(e) {
     if (transformMode === 'pick-rect') {
       const rect = marqueeCellBounds(marquee.a, marquee.b);
       const id = transformPuzzleId;
+      const from = reshapeFrom;
       marquee = null;
+      reshapeFrom = null;
       clearSelection();
-      beginTransformEdit(id, rect, null);
+      beginTransformEdit(id, rect, from ? reshapeTransform(from, rect) : null);
       return;
     }
     marquee = null;
@@ -3066,6 +3087,8 @@ let transformPuzzleId = null;  // puzzle id the in-progress edit belongs to
 let transformRect = null;      // {c0,r0,c1,r1} grid coords, inclusive
 let transformBackup = null;    // {grid, objects, tileColl} — the room's true
                                 // "before" state while 'editing' sandboxes the after-look
+let reshapeFrom = null;        // Change Area: the after-look being moved to a new
+                                // rect ({rect, tiles, objects, tileColl}) while picking it
 
 // Cell-rect a marquee drag covers, in grid coords (any corner order) —
 // mirrors tilesInRect()'s rounding so a rect matches what tile selection would
@@ -3109,6 +3132,75 @@ function onMapChangeBtn() {
   if (found && found.room !== rooms[curRoom]) switchRoom(rooms.indexOf(found.room));
   if (found) beginTransformEdit(id, found.t.rect, found.t);
   else beginTransformRectPick(id);
+}
+
+// Change Area: re-pick the rectangle of an existing Map Change (or of the one
+// being edited right now) without losing what was built. The after-look
+// carries over wherever the old and new rects overlap; newly covered cells
+// start as the room's normal "before" look. Nothing is committed until Save.
+function changeMapChangeArea() {
+  let from;
+  if (transformMode === 'editing') {
+    from = captureTransformEdit();          // unsaved edits come along too
+    grid = transformBackup.grid;            // back to the true "before" room
+    objects = transformBackup.objects;
+    tileColl = transformBackup.tileColl;
+    syncRoomFromGlobals();
+    const id = transformPuzzleId;
+    exitTransformMode();
+    transformPuzzleId = id;
+  } else if (!transformMode) {
+    const id = activePuzzleId();
+    const found = id && findTransform(id);
+    if (!found) return;
+    if (found.room !== rooms[curRoom]) switchRoom(rooms.indexOf(found.room));
+    from = cloneTransform(found.t);
+    transformPuzzleId = id;
+  } else return;
+  reshapeFrom = from;
+  beginTransformRectPick(transformPuzzleId);
+  render();
+}
+
+// The after-look currently painted inside transformRect (unsaved edit state)
+function captureTransformEdit() {
+  const rect = transformRect;
+  const tiles = [];
+  for (let r = rect.r0; r <= rect.r1; r++) tiles.push(grid[r].slice(rect.c0, rect.c1 + 1));
+  const objs = objects.filter(o => objInTransformRect(o, rect)).map(o => ({ ...o }));
+  const tc = {};
+  for (let r = rect.r0; r <= rect.r1; r++)
+    for (let c = rect.c0; c <= rect.c1; c++) {
+      const key = c + ',' + r;
+      if (tileColl[key] !== undefined) tc[key] = tileColl[key];
+    }
+  return { rect: { ...rect }, tiles, objects: objs, tileColl: tc };
+}
+
+// An after-look for `rect` built from `from` (an after-look for another
+// rect): overlapping cells/objects keep the after-look, the rest is the live
+// room's current "before" look — which is what the new area shows until edited
+function reshapeTransform(from, rect) {
+  const inOld = (c, r) => c >= from.rect.c0 && c <= from.rect.c1 && r >= from.rect.r0 && r <= from.rect.r1;
+  const tiles = [];
+  for (let r = rect.r0; r <= rect.r1; r++) {
+    const row = [];
+    for (let c = rect.c0; c <= rect.c1; c++)
+      row.push(inOld(c, r) ? from.tiles[r - from.rect.r0][c - from.rect.c0] : grid[r][c]);
+    tiles.push(row);
+  }
+  const objs = [
+    ...from.objects.filter(o => objInTransformRect(o, rect)),
+    ...objects.filter(o => objInTransformRect(o, rect) && !objInTransformRect(o, from.rect)),
+  ].map(o => ({ ...o }));
+  const tc = {};
+  for (let r = rect.r0; r <= rect.r1; r++)
+    for (let c = rect.c0; c <= rect.c1; c++) {
+      const key = c + ',' + r;
+      const v = inOld(c, r) ? (from.tileColl || {})[key] : tileColl[key];
+      if (v !== undefined) tc[key] = v;
+    }
+  return { tiles, objects: objs, tileColl: tc };
 }
 
 function beginTransformRectPick(id) {
@@ -3202,6 +3294,7 @@ function clearMapChange() {
 }
 
 function exitTransformMode() {
+  reshapeFrom = null;
   transformMode = null;
   transformPuzzleId = null;
   transformRect = null;
@@ -3216,12 +3309,16 @@ function updateTransformUI() {
   const saveBtn = document.getElementById('transformSaveBtn');
   if (transformMode === 'pick-rect') {
     bar.style.display = 'flex';
-    text.innerHTML = `Drag a rectangle over the map to highlight the area <b>${transformPuzzleId}</b> changes`;
+    text.innerHTML = reshapeFrom
+      ? `Drag the <b>new</b> area for <b>${transformPuzzleId}</b>'s change — what you built is kept where it overlaps the old one (dashed)`
+      : `Drag a rectangle over the map to highlight the area <b>${transformPuzzleId}</b> changes`;
     saveBtn.style.display = 'none';
+    document.getElementById('transformAreaBtn').style.display = 'none';
   } else if (transformMode === 'editing') {
     bar.style.display = 'flex';
     text.innerHTML = `Editing what changes after <b>${transformPuzzleId}</b> is solved — paint tiles / add or remove objects inside the highlighted box`;
     saveBtn.style.display = '';
+    document.getElementById('transformAreaBtn').style.display = '';
   } else {
     bar.style.display = 'none';
   }
@@ -3240,10 +3337,13 @@ function updateMapChangeStatus() {
   const statusEl = document.getElementById('mapChangeStatus');
   const btn = document.getElementById('btnMapChange');
   const clearBtn = document.getElementById('btnMapChangeClear');
+  const areaBtn = document.getElementById('btnMapChangeArea');
   btn.disabled = transformMode !== null || !id;
+  areaBtn.disabled = transformMode !== null;
   if (!id) {
     statusEl.textContent = 'Pick a puzzle above first';
     clearBtn.style.display = 'none';
+    areaBtn.style.display = 'none';
     return;
   }
   const found = findTransform(id);
@@ -3252,10 +3352,12 @@ function updateMapChangeStatus() {
     statusEl.textContent = `${w}×${h} area` + (found.room !== rooms[curRoom] ? ` in ${found.room.name}` : '');
     btn.textContent = 'Edit Area…';
     clearBtn.style.display = '';
+    areaBtn.style.display = '';
   } else {
     statusEl.textContent = 'No change defined';
     btn.textContent = 'Highlight Area…';
     clearBtn.style.display = 'none';
+    areaBtn.style.display = 'none';
   }
 }
 
