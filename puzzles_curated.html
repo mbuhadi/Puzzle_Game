@@ -1672,13 +1672,32 @@ if (!CHUNK_PARAM) {
     // narrow puzzle would be scaled as if it were 900px wide and end up
     // small and off-center. Recomputed on resize/orientation change
     // (rotating the phone, the browser chrome showing/hiding, etc).
-    // px of breathing room so nothing touches the edge — except a Puzzle
-    // Studio screen, which is built to the puzzle window's exact size and
-    // fills it edge to edge
+    const FIT_MARGIN = 10;   // px of breathing room so nothing touches the edge
+
+    // A Puzzle Studio screen is laid out the way commercial games handle
+    // every screen shape: a SAFE area (always fully visible) inside a bigger
+    // board whose extra BLEED is shown or cropped depending on the screen.
+    // It's scaled so the safe area just fits the window, centered, and the
+    // board fills the rest — no bars on anything from 4:3 tablets to 21:9
+    // phones; only the bleed edges differ between screens.
     const studioBoard = detail.querySelector(':scope > .studio-board');
-    if (studioBoard) studioBoard.style.borderRadius = '0';
-    const FIT_MARGIN = studioBoard ? 0 : 10;
+    if (studioBoard) {
+      Object.assign(studioBoard.style, { position: 'fixed', margin: '0', borderRadius: '0' });
+      document.body.style.background = '#000';
+    }
+    function fitStudioBoard() {
+      const d = studioBoard.dataset;
+      const W = +d.w, H = +d.h, SW = +d.sw || W, SH = +d.sh || H;
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const s = Math.min(vw / SW, vh / SH);
+      Object.assign(studioBoard.style, {
+        width: W * s + 'px', height: H * s + 'px',
+        left: (vw - W * s) / 2 + 'px', top: (vh - H * s) / 2 + 'px',
+      });
+    }
+
     function fitChunkToViewport() {
+      if (studioBoard) { fitStudioBoard(); return; }
       detail.style.transform = 'none';
       detail.style.transformOrigin = '0 0';
       const detailRect = detail.getBoundingClientRect();

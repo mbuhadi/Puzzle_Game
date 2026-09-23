@@ -92,8 +92,9 @@ button:disabled:hover { border-color: var(--border); color: var(--text); }
   flex: 1; min-width: 0; position: relative; overflow: hidden;
   background: repeating-conic-gradient(var(--check1) 0% 25%, var(--check2) 0% 50%) 0 0 / 32px 32px;
 }
-/* A puzzle "screen" — the game's puzzle window, scaled to fit the space. One
-   per tab (the Problem and each Given); only the active tab's board is shown. */
+/* A puzzle "screen" — safe area + bleed (see the script), scaled to fit the
+   space. One per tab (the Problem and each Given); only the active tab's
+   board is shown. */
 .board {
   position: absolute; left: 0; top: 0;   /* width/height = the puzzle window, set in JS */
   transform-origin: 0 0; background: #080705;
@@ -107,6 +108,15 @@ button:disabled:hover { border-color: var(--border); color: var(--text); }
 }
 .sprite.dragging { cursor: grabbing; }
 .sprite.selected { outline: 2px solid var(--gold); outline-offset: 1px; }
+.guides { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+.guide-safe, .guide-device { position: absolute; }
+.guide-safe { border: 2px dashed rgba(200,168,75,0.8); }
+.guide-device { border: 1px solid rgba(160,190,220,0.35); }
+.guide-safe span, .guide-device span {
+  position: absolute; left: 6px; top: 4px; font-family: monospace; font-size: 14px;
+  letter-spacing: 1px; color: rgba(200,168,75,0.8); white-space: nowrap;
+}
+.guide-device span { color: rgba(160,190,220,0.55); font-size: 12px; }
 .marquee {
   position: absolute; pointer-events: none; z-index: 10;
   border: 2px dashed var(--gold); background: rgba(200,168,75,0.12);
@@ -193,7 +203,7 @@ button:disabled:hover { border-color: var(--border); color: var(--text); }
   <div id="statusbar">
     <span id="stScreen">Problem</span>
     <span id="stCount">0 objects</span>
-    <span id="stBoard" title="The game's puzzle window size — the board matches it exactly"></span>
+    <span id="stBoard" title="Everything inside the safe area shows on every screen; the board around it is extra that wide or tall screens also show"></span>
     <span id="stSel" style="color:var(--gold)"></span>
     <span>drag on empty space to select · drag selected things to move · long-press or right-click: copy / paste / delete · Delete key removes</span>
   </div>
@@ -224,25 +234,37 @@ button:disabled:hover { border-color: var(--border); color: var(--text); }
 <script>
 // ── Puzzle Studio ─────────────────────────────────────────────────────────────
 // A puzzle is its Problem screen plus any number of Given screens, each a
-// board the size of the game's puzzle window, in its own tab. Boards are filled from the shared Browse
+// board (safe area + bleed, see below) in its own tab. Boards are filled from the shared Browse
 // Tileset picker (assets/tileset_picker.js): each pick becomes a sprite on
 // the active tab's board (drawn at 4× — one 16px tile = 64 board px — or
 // shrunk to fit if it's a big picture). Sprites are selected, moved, copied,
 // pasted and deleted like objects in Map Studio.
 const PX = 4;
 
-// The board is exactly the game's puzzle window: maps.html shows a puzzle in
-// #examineBox — 96% × 94% of the screen (landscape), minus its 2px border —
-// and a Puzzle Studio screen fills that window edge to edge. So a new
-// puzzle's board is that window's size on the device Puzzle Studio is open
-// on (in landscape, whichever way the device is held right now). The size is
-// saved with the puzzle, so loading it elsewhere keeps the same layout.
-function puzzleWindowSize() {
-  const vw = Math.max(window.innerWidth, window.innerHeight);
-  const vh = Math.min(window.innerWidth, window.innerHeight);
-  return { w: Math.round(vw * 0.96) - 4, h: Math.round(vh * 0.94) - 4 };
+// Every screen shape, the way commercial games do it: a SAFE area that every
+// screen shows in full, centered in a bigger board whose BLEED is shown or
+// cropped depending on the screen. In the game the board is scaled so the
+// safe area just fits the puzzle window; a wide phone then also shows bleed
+// at the left/right, a squarer tablet at the top/bottom.
+//   safe  1280×720 (16:9)  — put everything the player needs in here
+//   board 1728×960         — 1728 = 720 × 2.4 (21:9 phones), 960 = 1280 ÷ 4:3
+//                            (iPads), so no landscape screen from 4:3 to 21:9
+//                            ever shows past the board's edge
+const SAFE_W = 1280, SAFE_H = 720;
+let BOARD_W = 1728, BOARD_H = 960;
+let safeW = SAFE_W, safeH = SAFE_H;   // a loaded older puzzle may differ
+
+// What a screen of aspect `a` (the puzzle window's width ÷ height) shows
+const DEVICE_GUIDES = [
+  { a: 4 / 3,   label: '4:3 tablet' },
+  { a: 16 / 10, label: '16:10 tablet' },
+  { a: 20 / 9,  label: '20:9 phone' },
+];
+function visibleRect(a) {
+  const w = a >= safeW / safeH ? safeH * a : safeW;
+  const h = a >= safeW / safeH ? safeH : safeW / a;
+  return { x: (BOARD_W - w) / 2, y: (BOARD_H - h) / 2, w, h };
 }
-let { w: BOARD_W, h: BOARD_H } = puzzleWindowSize();
 const stageWrap = document.getElementById('stageWrap');
 let boardScale = 1;
 
@@ -276,12 +298,31 @@ function makeScreen(kind) {
   board.className = 'board';
   board.style.width  = BOARD_W + 'px';
   board.style.height = BOARD_H + 'px';
+  board.appendChild(makeGuides());
   stageWrap.appendChild(board);
   const sc = { kind, board, sprites: [] };
   screens.push(sc);
   wireBoard(sc);
   fitBoard();
   return sc;
+}
+
+// Safe-area outline + what each kind of screen shows (non-interactive overlay)
+function makeGuides() {
+  const g = document.createElement('div');
+  g.className = 'guides';
+  const box = (r, cls, label) => {
+    const el = document.createElement('div');
+    el.className = cls;
+    Object.assign(el.style, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' });
+    if (label) { const t = document.createElement('span'); t.textContent = label; el.appendChild(t); }
+    g.appendChild(el);
+  };
+  if (BOARD_W > safeW || BOARD_H > safeH)
+    for (const d of DEVICE_GUIDES) box(visibleRect(d.a), 'guide-device', d.label);
+  box({ x: (BOARD_W - safeW) / 2, y: (BOARD_H - safeH) / 2, w: safeW, h: safeH },
+      'guide-safe', 'SAFE AREA — visible on every screen');
+  return g;
 }
 
 function switchScreen(i) {
@@ -336,7 +377,7 @@ function updateStatus() {
   document.getElementById('stScreen').textContent = screenName(cur);
   document.getElementById('stCount').textContent = n + (n === 1 ? ' object' : ' objects');
   document.getElementById('stSel').textContent = selected.size ? selected.size + ' selected' : '';
-  document.getElementById('stBoard').textContent = `board ${BOARD_W}×${BOARD_H}`;
+  document.getElementById('stBoard').textContent = `safe ${safeW}×${safeH} · board ${BOARD_W}×${BOARD_H}`;
 }
 
 // Fit the boards inside the stage area, centered
@@ -393,10 +434,10 @@ function placeSprite(s) {
 }
 
 // Default on-board size: pixel art at 4×; anything big (an uploaded
-// picture) shrunk to fit within 60% of the board instead of dwarfing it
+// picture) shrunk to fit within 60% of the safe area instead of dwarfing it
 function defaultSize(pick) {
   const src = sourceOf(pick);
-  const k = Math.min(PX, BOARD_W * 0.6 / src.w, BOARD_H * 0.6 / src.h);
+  const k = Math.min(PX, safeW * 0.6 / src.w, safeH * 0.6 / src.h);
   return { w: Math.round(src.w * k), h: Math.round(src.h * k) };
 }
 
@@ -633,7 +674,7 @@ function flash(msg, color) {
 function puzzleData() {
   return {
     num: puzzleNum, name: '؟؟؟', loc: '', updated: Date.now(),
-    board: { w: BOARD_W, h: BOARD_H },
+    board: { w: BOARD_W, h: BOARD_H, safe: { w: safeW, h: safeH } },
     screens: screens.map((sc, i) => ({
       label: screenLabel(i), kind: sc.kind,
       sprites: sc.sprites.map(s => {
@@ -763,6 +804,8 @@ function loadPuzzle(p) {
   editingSaved = true;
   BOARD_W = (p.board && +p.board.w) || 1280;
   BOARD_H = (p.board && +p.board.h) || 720;
+  safeW = (p.board && p.board.safe && +p.board.safe.w) || BOARD_W;
+  safeH = (p.board && p.board.safe && +p.board.safe.h) || BOARD_H;
   const ordered = [...p.screens.filter(s => s.kind === 'problem'), ...p.screens.filter(s => s.kind === 'given')];
   if (!ordered.length || ordered[0].kind !== 'problem') ordered.unshift({ kind: 'problem', sprites: [] });
   for (const saved of ordered) {

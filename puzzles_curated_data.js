@@ -256,12 +256,16 @@ const PUZZLES = [
 
 /* Puzzles built in Puzzle Studio (puzzles_studio.js, loaded before this file)
    join the list as ordinary puzzles. Each screen becomes one chunk: a board
-   with the puzzle's saved size/shape (sp.board — the game's puzzle window;
-   1280×720 for early saves) and its sprites positioned in percentages so it
-   scales to any width. A sprite is a crop (x,y,w,h) of image src (iw×ih px)
+   of the puzzle's saved size (sp.board, 1728×960) holding a centered safe
+   area (sp.board.safe, 1280×720) that every screen shows in full — the game
+   scales by the safe area and shows as much of the bleed around it as the
+   screen's shape allows (see puzzles_curated.html). Sprites are positioned
+   in percentages so the board scales to any width. A sprite is a crop (x,y,w,h) of image src (iw×ih px)
    placed at bx,by with size bw×bh on the board — a scaled background crop. */
 function studioScreenHTML(sc, board) {
   const W = (board && +board.w) || 1280, H = (board && +board.h) || 720;
+  const SW = (board && board.safe && +board.safe.w) || W;
+  const SH = (board && board.safe && +board.safe.h) || H;
   const pct = v => +v.toFixed(4) + '%';
   const sprites = sc.sprites.map(s => {
     const px = s.iw === s.w ? 0 : s.x / (s.iw - s.w) * 100;
@@ -272,7 +276,7 @@ function studioScreenHTML(sc, board) {
       ` image-rendering:pixelated;"></div>`;
   }).join('');
   return `<div class="chunk"><span class="clabel">${sc.label}</span>` +
-    `<div class="studio-board" style="position:relative; width:min(${W}px,100%); aspect-ratio:${W}/${H}; background:#080705;` +
+    `<div class="studio-board" data-w="${W}" data-h="${H}" data-sw="${SW}" data-sh="${SH}" style="position:relative; width:min(${W}px,100%); aspect-ratio:${W}/${H}; background:#080705;` +
     ` border-radius:6px; overflow:hidden; margin:16px 0;">${sprites}</div></div>`;
 }
 if (typeof STUDIO_PUZZLES !== 'undefined') {
