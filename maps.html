@@ -835,7 +835,31 @@ const CELESTIAL_KEY_OF = {};
 for (const k of new Set(CELESTIAL_SOLVE.sequence)) CELESTIAL_KEY_OF[T[k]] = k;
 let celestialSteps = [];
 let lastStepCell = null;
-function resetCelestialSteps() { celestialSteps = []; lastStepCell = null; }
+function resetCelestialSteps() { celestialSteps = []; lastStepCell = null; STEP_GLOWS.length = 0; }
+
+// A very faint moonlit glow that blooms on a celestial tile as it's stepped
+// on and fades away — quiet feedback that the step registered
+const STEP_GLOWS = [];          // {c, r, t0}
+const STEP_GLOW_MS = 1300;
+function drawStepGlows() {
+  const now = performance.now();
+  for (let i = STEP_GLOWS.length - 1; i >= 0; i--)
+    if (now - STEP_GLOWS[i].t0 > STEP_GLOW_MS) STEP_GLOWS.splice(i, 1);
+  if (!STEP_GLOWS.length) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const g of STEP_GLOWS) {
+    const t = (now - g.t0) / STEP_GLOW_MS;
+    const a = 0.16 * (t < 0.12 ? t / 0.12 : 1 - (t - 0.12) / 0.88);   // quick rise, slow fade
+    const cx = (g.c + 0.5) * TILE_PX, cy = (g.r + 0.5) * TILE_PX, rad = TILE_PX * 0.95;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+    grad.addColorStop(0, `rgba(255,246,215,${a})`);
+    grad.addColorStop(1, 'rgba(255,246,215,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(cx - rad, cy - rad, rad * 2, rad * 2);
+  }
+  ctx.restore();
+}
 function trackCelestialStep() {
   const col = Math.floor(player.x), row = Math.floor(player.y);
   const cell = col + ',' + row;
@@ -843,6 +867,7 @@ function trackCelestialStep() {
   lastStepCell = cell;
   const key = mapGrid && mapGrid[row] ? CELESTIAL_KEY_OF[mapGrid[row][col]] : undefined;
   if (!key) return;
+  STEP_GLOWS.push({ c: col, r: row, t0: performance.now() });
   const seq = CELESTIAL_SOLVE.sequence;
   celestialSteps.push(key);
   if (celestialSteps.length > seq.length) celestialSteps.shift();
@@ -1502,6 +1527,7 @@ function render() {
   for (let r = r0; r < r1; r++)
     for (let c = c0; c < c1; c++)
       drawTile(mapGrid[r][c], c*TILE_PX, r*TILE_PX);
+  drawStepGlows();   // celestial floor tiles lighting up as they're stepped on
 
   // Objects layer (above tiles, below interactables and player);
   // walk-under objects are held back and drawn over the player instead
