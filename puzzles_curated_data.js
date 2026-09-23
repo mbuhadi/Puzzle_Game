@@ -18,6 +18,20 @@ const TV_HTML=`
     </table>
   </div></div>`;
 
+// Same reference as the TV, handwritten on a scrap of notebook paper (p3g6)
+const PAPER_HTML=`
+  <div class="paper-wrap"><div class="paper">
+    <div class="paper-title">Morse Code Reference</div>
+    <table class="paper-table">
+      <tr><td class="d">Digit</td><td class="d">Morse</td><td class="gap"></td><td class="d">Digit</td><td class="d">Morse</td></tr>
+      <tr><td>0:</td><td class="m">-----</td><td></td><td>5:</td><td class="m"><i class="dt">.</i><i class="dt">.</i><i class="dt">.</i><i class="dt">.</i><i class="dt">.</i></td></tr>
+      <tr><td>1:</td><td class="m"><i class="dt">.</i>----</td><td></td><td>6:</td><td class="m">-<i class="dt">.</i><i class="dt">.</i><i class="dt">.</i><i class="dt">.</i></td></tr>
+      <tr><td>2:</td><td class="m"><i class="dt">.</i><i class="dt">.</i>---</td><td></td><td>7:</td><td class="m">--<i class="dt">.</i><i class="dt">.</i><i class="dt">.</i></td></tr>
+      <tr><td>3:</td><td class="m"><i class="dt">.</i><i class="dt">.</i><i class="dt">.</i>--</td><td></td><td>8:</td><td class="m">---<i class="dt">.</i><i class="dt">.</i></td></tr>
+      <tr><td>4:</td><td class="m"><i class="dt">.</i><i class="dt">.</i><i class="dt">.</i><i class="dt">.</i>-</td><td></td><td>9:</td><td class="m">----<i class="dt">.</i></td></tr>
+    </table>
+  </div></div>`;
+
 const PUZZLES = [
   {
     num:'1', name:'عائلتنا الكريمة', loc:'At the Gate', build:'tree',
@@ -100,6 +114,9 @@ const PUZZLES = [
       </div>
       <div class="chunk"><span class="clabel">p3g5</span>
         ${TV_HTML}
+      </div>
+      <div class="chunk"><span class="clabel">p3g6</span>
+        ${PAPER_HTML}
       </div>`,
     problem:`<div class="chunk"><span class="clabel">p3p1</span>
         <div class="combo-lock-wrap">

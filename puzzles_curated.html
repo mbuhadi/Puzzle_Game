@@ -137,6 +137,36 @@
   .tv-table{width:100%; border-collapse:collapse; margin-top:6px;}
   .tv-table td{padding:4px 10px; font-size:14px;}
   .tv-table .d{color:#55ff88; font-weight:bold;}
+
+  /* ── Handwritten paper / Morse reference (same table as the TV) ── */
+  /* Zeyada (Google Fonts, SIL OFL) self-hosted so the handwriting never falls back */
+  @font-face{font-family:'Zeyada'; font-style:normal; font-weight:400; font-display:block;
+    src:url('assets/fonts/Zeyada-latin.woff2') format('woff2');}
+  .paper-wrap{margin:20px 0; padding:6px 10px;}
+  .paper{
+    position:relative; max-width:560px; padding:34px 34px 30px 70px;
+    font-family:'Zeyada', cursive; color:#1f2d5a;
+    background:
+      linear-gradient(90deg, transparent 52px, rgba(214,70,70,.55) 52px, rgba(214,70,70,.55) 54px, transparent 54px),
+      repeating-linear-gradient(transparent 0 35px, rgba(90,130,190,.35) 35px 36px),
+      radial-gradient(ellipse at 30% 20%, #fffdf4 0%, #f6f0dc 60%, #ece3c6 100%);
+    background-position:0 0, 0 22px, 0 0;
+    border-radius:2px; transform:rotate(-1.2deg);
+    box-shadow:0 1px 1px rgba(0,0,0,.15), 0 10px 26px rgba(0,0,0,.55);
+  }
+  .paper::before{   /* torn-off top edge */
+    content:''; position:absolute; left:0; right:0; top:-6px; height:8px;
+    background:radial-gradient(circle at 6px 8px, transparent 5px, #fffdf4 5.5px) 0 0/12px 8px repeat-x;
+  }
+  .paper-title{text-align:center; font-size:40px; line-height:36px; margin-bottom:8px; transform:rotate(-1deg);}
+  .paper-table{border-collapse:collapse; font-size:36px; line-height:36px;}
+  .paper-table td{padding:0 14px 0 0; white-space:nowrap; height:36px; vertical-align:bottom;}
+  .paper-table .d{font-size:30px; text-decoration:underline; text-underline-offset:3px;}
+  .paper-table .m{letter-spacing:4px; font-size:42px;}
+  .paper-table .gap{width:44px;}
+  /* Zeyada sets dots on the baseline but dashes mid-height — lift and fatten the dots so each code reads as one line */
+  .paper-table .dt{font-style:normal; display:inline-block; position:relative; top:-.2em; font-size:1.25em; line-height:0; margin:0 1px;}
+  @media (max-width:520px){ .paper{padding:28px 12px 24px 64px;} .paper-table td{padding-right:8px;} .paper-table{font-size:30px;} .paper-table .m{font-size:34px; letter-spacing:2px;} .paper-title{font-size:32px;} }
   /* ── Courtyard minigame ── */
   .courtyard-wrap{display:inline-block;}
   .courtyard-wrap canvas{display:block; max-width:100%; border:1px solid var(--line); border-radius:10px; background:#e8e4de; box-shadow:0 6px 20px rgba(0,0,0,.5);}
