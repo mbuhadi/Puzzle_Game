@@ -238,6 +238,8 @@ select:focus { outline: none; border-color: var(--gold-dim); }
 #tsScroll img {
   display: block; width: 512px;              /* 2× the sheet's 256px width */
   image-rendering: pixelated; user-select: none;
+  touch-action: none;   /* one finger drag-selects; two fingers scroll (JS) */
+  -webkit-touch-callout: none;
 }
 #tsRect {
   position: absolute; pointer-events: none; display: none;
@@ -3096,6 +3098,76 @@ tsScroll.addEventListener('mousemove', e => {
 });
 tsScroll.addEventListener('mouseleave', () => { tsHover = null; tsSelLabel(); });
 window.addEventListener('mouseup', () => { tsStart = null; });
+
+// Touch (tablets): one finger drags out a selection just like the mouse; a
+// second finger cancels that drag and the two fingers scroll the sheet
+// instead, since a single-finger drag no longer scrolls it.
+let tsTouchId  = null;   // finger doing the drag-select
+let tsTouchPrev = null;  // selection before the touch, restored if it turns into a scroll
+let tsPanMid   = null;   // last two-finger midpoint while scrolling
+function tsMid(ts) {
+  return { x: (ts[0].clientX + ts[1].clientX) / 2, y: (ts[0].clientY + ts[1].clientY) / 2 };
+}
+// While drag-selecting near the edge of the view, scroll toward it so
+// objects bigger than the screen can still be selected in one drag
+function tsEdgeScroll(t) {
+  const r = tsScroll.getBoundingClientRect(), edge = 40, speed = 12;
+  if (t.clientX < r.left + edge)   tsScroll.scrollLeft -= speed;
+  if (t.clientX > r.right - edge)  tsScroll.scrollLeft += speed;
+  if (t.clientY < r.top + edge)    tsScroll.scrollTop  -= speed;
+  if (t.clientY > r.bottom - edge) tsScroll.scrollTop  += speed;
+}
+tsScroll.addEventListener('touchstart', e => {
+  if (tsSheet === 'animated') return;
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    if (tsTouchId !== null) {          // undo the accidental one-tile pick
+      tsTouchId = null; tsStart = null;
+      tsPick = tsTouchPrev;
+      if (tsPick) tsPlaceRect();
+      else {
+        tsRect.style.display = 'none';
+        document.getElementById('tsUseBtn').disabled = true;
+        tsSelLabel();
+      }
+    }
+    tsPanMid = tsMid(e.touches);
+    return;
+  }
+  if (e.touches.length !== 1 || e.target !== tsImgEl) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  tsTouchId = t.identifier;
+  tsTouchPrev = tsPick ? { ...tsPick } : null;
+  tsStart = tsTileAt(t);
+  tsHover = tsStart;
+  tsUpdateRect(tsStart, tsStart);
+}, { passive: false });
+tsScroll.addEventListener('touchmove', e => {
+  if (tsPanMid && e.touches.length === 2) {
+    e.preventDefault();
+    const m = tsMid(e.touches);
+    tsScroll.scrollLeft -= m.x - tsPanMid.x;
+    tsScroll.scrollTop  -= m.y - tsPanMid.y;
+    tsPanMid = m;
+    return;
+  }
+  if (tsTouchId === null) return;
+  const t = [...e.touches].find(t => t.identifier === tsTouchId);
+  if (!t) return;
+  e.preventDefault();
+  tsEdgeScroll(t);
+  tsHover = tsTileAt(t);
+  tsUpdateRect(tsStart, tsHover);
+}, { passive: false });
+function tsTouchEnd(e) {
+  if (tsPanMid && e.touches.length < 2) tsPanMid = null;
+  if (tsTouchId !== null && ![...e.touches].some(t => t.identifier === tsTouchId)) {
+    tsTouchId = null; tsStart = null;
+  }
+}
+tsScroll.addEventListener('touchend', tsTouchEnd);
+tsScroll.addEventListener('touchcancel', tsTouchEnd);
 
 function clearSpriteBrush() {
   selSprite = null;
