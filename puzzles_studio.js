@@ -7,7 +7,7 @@ const STUDIO_PUZZLES = [
   "num": 9,
   "name": "؟؟؟",
   "loc": "",
-  "updated": 1790179134113,
+  "updated": 1790179414542,
   "board": {
    "w": 1728,
    "h": 960,
@@ -20,32 +20,7 @@ const STUDIO_PUZZLES = [
    {
     "label": "p9p1",
     "kind": "problem",
-    "sprites": [
-     {
-      "src": "assets/custom/grandfather-clock-no-face.png",
-      "x": 0,
-      "y": 0,
-      "w": 32,
-      "h": 48,
-      "iw": 32,
-      "ih": 48,
-      "bx": 796,
-      "by": 377,
-      "bw": 128,
-      "bh": 192,
-      "pick": {
-       "kind": "image",
-       "name": "Grandfather clock (no face)",
-       "src": "assets/custom/grandfather-clock-no-face.png",
-       "x": 0,
-       "y": 0,
-       "w": 32,
-       "h": 48,
-       "sw": 2,
-       "sh": 3
-      }
-     }
-    ]
+    "sprites": []
    }
   ]
  }
