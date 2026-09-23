@@ -51,6 +51,33 @@ button:disabled { opacity: 0.35; cursor: default; }
 button:disabled:hover { border-color: var(--border); color: var(--text); }
 .hint-text { font-family: sans-serif; font-size: 10px; color: var(--dim); line-height: 1.5; letter-spacing: 0; }
 
+/* ── Screen tabs: the Problem plus its Givens (styled like Map Studio's rooms) */
+#screenTabs {
+  height: 32px; flex-shrink: 0;
+  background: var(--bg); border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-end; gap: 3px; padding: 4px 8px 0 8px;
+  overflow-x: auto; overflow-y: hidden;
+}
+#screenTabs::-webkit-scrollbar { height: 3px; }
+#screenTabs::-webkit-scrollbar-thumb { background: var(--border); }
+.screen-tab {
+  display: flex; align-items: center; gap: 7px; flex-shrink: 0;
+  padding: 5px 8px 5px 12px;
+  background: var(--bg2); border: 1px solid var(--border); border-bottom: none;
+  border-radius: 6px 6px 0 0; cursor: pointer;
+  font-size: 11px; letter-spacing: 0.5px; color: var(--dim);
+  user-select: none; white-space: nowrap;
+}
+.screen-tab:hover { color: var(--text); }
+.screen-tab.active { background: var(--bg3); border-color: var(--gold-dim); color: var(--gold); }
+.screen-tab.problem { padding-right: 12px; }
+.tab-x { font-size: 12px; line-height: 1; padding: 0 2px; border-radius: 2px; color: var(--dim); }
+.tab-x:hover { color: #cc7070; }
+#addGivenBtn {
+  flex-shrink: 0; align-self: center; margin-left: 4px;
+  font-size: 10px; padding: 3px 9px;
+}
+
 /* ── Main: sidebar + board ────────────────────────────────────────────────── */
 #main { flex: 1; display: flex; min-height: 0; }
 #sidebar {
@@ -63,13 +90,15 @@ button:disabled:hover { border-color: var(--border); color: var(--text); }
   flex: 1; min-width: 0; position: relative; overflow: hidden;
   background: repeating-conic-gradient(var(--check1) 0% 25%, var(--check2) 0% 50%) 0 0 / 32px 32px;
 }
-/* The puzzle "screen" — a fixed 16:9 board scaled to fit the space */
-#board {
+/* A puzzle "screen" — a fixed 16:9 board scaled to fit the space. One per
+   tab (the Problem and each Given); only the active tab's board is shown. */
+.board {
   position: absolute; left: 0; top: 0; width: 1280px; height: 720px;
   transform-origin: 0 0; background: #080705;
   border: 1px solid var(--gold-dim); box-shadow: 0 10px 40px rgba(0,0,0,0.6);
   touch-action: none; overflow: hidden;
 }
+.board:not(.active) { display: none; }
 .sprite {
   position: absolute; image-rendering: pixelated; cursor: grab;
   touch-action: none; user-select: none; -webkit-user-select: none;
@@ -112,19 +141,23 @@ button:disabled:hover { border-color: var(--border); color: var(--text); }
     <span class="tb-title">PUZZLE STUDIO</span>
   </div>
 
+  <div id="screenTabs">
+    <!-- tabs injected by renderTabs() -->
+    <button id="addGivenBtn" onclick="addGiven()" title="Add a given to this puzzle — it opens in its own tab">+ Given</button>
+  </div>
+
   <div id="main">
     <div id="sidebar">
       <div class="sec-title">OBJECTS</div>
       <button onclick="openTileset()" style="width:100%" title="Pick a sprite from the tilesets — it lands on the board, then drag it into place">Browse Tileset…</button>
     </div>
-    <div id="stageWrap">
-      <div id="board"></div>
-    </div>
+    <div id="stageWrap"></div>
   </div>
 
   <div id="statusbar">
+    <span id="stScreen">Problem</span>
     <span id="stCount">0 objects</span>
-    <span>pick from Browse Tileset, then drag it anywhere on the board</span>
+    <span>pick from Browse Tileset, then drag it anywhere on the board · + Given adds a given tab</span>
   </div>
 
 </div>
@@ -133,28 +166,100 @@ button:disabled:hover { border-color: var(--border); color: var(--text); }
 <script src="assets/tileset_picker.js"></script>
 <script>
 // ── Puzzle Studio ─────────────────────────────────────────────────────────────
-// For now: a 1280×720 puzzle board you fill from the shared Browse Tileset
-// picker (assets/tileset_picker.js). Each pick becomes a sprite on the board
-// (drawn at 4× — one 16px tile = 64 board px — or shrunk to fit if it's a
-// big picture) that can be dragged anywhere.
+// A puzzle is its Problem screen plus any number of Given screens, each a
+// 1280×720 board in its own tab. Boards are filled from the shared Browse
+// Tileset picker (assets/tileset_picker.js): each pick becomes a sprite on
+// the active tab's board (drawn at 4× — one 16px tile = 64 board px — or
+// shrunk to fit if it's a big picture) that can be dragged anywhere.
 const BOARD_W = 1280, BOARD_H = 720, PX = 4;
-const board = document.getElementById('board');
 const stageWrap = document.getElementById('stageWrap');
 let boardScale = 1;
 
-// Fit the board inside the stage area, centered
+// ── Screens (tabs) ────────────────────────────────────────────────────────────
+const screens = [];   // {kind: 'problem'|'given', board: <div>, sprites: [{el, pick, x, y}]}
+let cur = 0;          // index of the active tab
+function curScreen() { return screens[cur]; }
+function screenName(i) {
+  return screens[i].kind === 'problem' ? 'Problem' : 'Given ' + i;   // givens follow the problem
+}
+
+function makeScreen(kind) {
+  const board = document.createElement('div');
+  board.className = 'board';
+  stageWrap.appendChild(board);
+  const sc = { kind, board, sprites: [] };
+  screens.push(sc);
+  fitBoard();
+  return sc;
+}
+
+function switchScreen(i) {
+  cur = i;
+  screens.forEach((sc, j) => sc.board.classList.toggle('active', j === i));
+  renderTabs();
+  updateStatus();
+}
+
+function addGiven() {
+  makeScreen('given');
+  switchScreen(screens.length - 1);
+}
+
+function deleteGiven(i) {
+  const sc = screens[i];
+  if (sc.kind !== 'given') return;
+  if (sc.sprites.length &&
+      !confirm(`Delete ${screenName(i)} and the ${sc.sprites.length} object(s) on it?`)) return;
+  sc.board.remove();
+  screens.splice(i, 1);
+  switchScreen(cur === i ? i - 1 : cur > i ? cur - 1 : cur);
+}
+
+function renderTabs() {
+  const bar = document.getElementById('screenTabs');
+  bar.querySelectorAll('.screen-tab').forEach(t => t.remove());
+  const addBtn = document.getElementById('addGivenBtn');
+  screens.forEach((sc, i) => {
+    const tab = document.createElement('div');
+    tab.className = 'screen-tab' + (i === cur ? ' active' : '') + (sc.kind === 'problem' ? ' problem' : '');
+    const nm = document.createElement('span');
+    nm.textContent = screenName(i);
+    tab.appendChild(nm);
+    if (sc.kind === 'given') {
+      const x = document.createElement('span');
+      x.className = 'tab-x';
+      x.textContent = '×';
+      x.title = 'Delete this given';
+      x.onclick = e => { e.stopPropagation(); deleteGiven(i); };
+      tab.appendChild(x);
+    }
+    tab.onclick = () => switchScreen(i);
+    bar.insertBefore(tab, addBtn);
+  });
+}
+
+function updateStatus() {
+  const n = curScreen().sprites.length;
+  document.getElementById('stScreen').textContent = screenName(cur);
+  document.getElementById('stCount').textContent = n + (n === 1 ? ' object' : ' objects');
+}
+
+// Fit the boards inside the stage area, centered
 function fitBoard() {
   const m = 16;
   const w = stageWrap.clientWidth - m * 2, h = stageWrap.clientHeight - m * 2;
   boardScale = Math.max(0.1, Math.min(w / BOARD_W, h / BOARD_H));
   const x = (stageWrap.clientWidth  - BOARD_W * boardScale) / 2;
   const y = (stageWrap.clientHeight - BOARD_H * boardScale) / 2;
-  board.style.transform = `translate(${x}px, ${y}px) scale(${boardScale})`;
+  for (const sc of screens)
+    sc.board.style.transform = `translate(${x}px, ${y}px) scale(${boardScale})`;
 }
 new ResizeObserver(fitBoard).observe(stageWrap);
 
+makeScreen('problem');
+switchScreen(0);
+
 // ── Sprites ───────────────────────────────────────────────────────────────────
-const sprites = [];   // {el, pick, x, y}
 
 function sourceOf(pick) {
   if (pick.kind === 'sheet') {
@@ -196,7 +301,8 @@ function placeSprite(s) {
   s.el.style.top  = s.y + 'px';
 }
 
-// Called by the picker's "Use Selection" — drop the pick in the board's center
+// Called by the picker's "Use Selection" — drop the pick in the center of
+// the active tab's board
 function onTilesetUse(pick) {
   const src = sourceOf(pick);
   const cv = document.createElement('canvas');
@@ -208,20 +314,20 @@ function onTilesetUse(pick) {
   const w = Math.round(src.w * k), h = Math.round(src.h * k);
   cv.style.width  = w + 'px';
   cv.style.height = h + 'px';
+  const sc = curScreen();
   const s = { el: cv, pick,
               x: Math.round((BOARD_W - w) / 2), y: Math.round((BOARD_H - h) / 2) };
-  sprites.push(s);
-  board.appendChild(cv);
+  sc.sprites.push(s);
+  sc.board.appendChild(cv);
   placeSprite(s);
   drawSprite(s);
-  enableDrag(s);
-  document.getElementById('stCount').textContent =
-    sprites.length + (sprites.length === 1 ? ' object' : ' objects');
+  enableDrag(s, sc);
+  updateStatus();
 }
 
 // Drag with mouse, pen or finger. Deltas are divided by the board's display
 // scale so the sprite tracks the pointer exactly.
-function enableDrag(s) {
+function enableDrag(s, sc) {
   let start = null;
   s.el.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
@@ -229,8 +335,8 @@ function enableDrag(s) {
     s.el.setPointerCapture(e.pointerId);
     start = { px: e.clientX, py: e.clientY, x: s.x, y: s.y, id: e.pointerId };
     s.el.classList.add('dragging');
-    board.appendChild(s.el);   // bring to front while dragging
-    sprites.push(sprites.splice(sprites.indexOf(s), 1)[0]);
+    sc.board.appendChild(s.el);   // bring to front while dragging
+    sc.sprites.push(sc.sprites.splice(sc.sprites.indexOf(s), 1)[0]);
   });
   s.el.addEventListener('pointermove', e => {
     if (!start || e.pointerId !== start.id) return;
@@ -248,9 +354,9 @@ function enableDrag(s) {
   s.el.addEventListener('pointercancel', end);
 }
 
-// Animated picks keep playing on the board
+// Animated picks keep playing on the visible board
 setInterval(() => {
-  for (const s of sprites) if (sourceOf(s.pick).frames > 1) drawSprite(s);
+  for (const s of curScreen().sprites) if (sourceOf(s.pick).frames > 1) drawSprite(s);
 }, 60);
 
 // ── Keyboard: the picker's shortcuts (same as Map Studio) ─────────────────────
