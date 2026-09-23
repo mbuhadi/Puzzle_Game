@@ -304,6 +304,7 @@
   </div>
 
 <script src="puzzles_curated_data.js"></script>
+<script src="assets/custom_tiles.js"></script>
 <script>
 /* ───────────────── Ported game logic ───────────────── */
 
@@ -1495,6 +1496,29 @@ function buildPuzzleEight(){
     grid.appendChild(P8_makeCell());
   }
   wrap.appendChild(grid);
+  P8_addMashallah(wrap);
+}
+
+// "ما شاء الله" in the upper-left corner — the four Ma Sha Allah wall tiles
+// from Map Studio (assets/custom_tiles.js), drawn in black & white. It
+// floats over the corner so the grid itself doesn't move: pinned to the
+// screen in the game's single-puzzle view, to the chunk on the full page.
+function P8_addMashallah(wrap){
+  document.getElementById('p8mashallah')?.remove();
+  if(typeof getCustomTileCanvas!=='function')return;
+  const tiles=CUSTOM_TILE_LIST.filter(d=>d.key.startsWith('WALL_MASHALLAH_'));
+  if(tiles.length!==4)return;
+  const cv=document.createElement('canvas');
+  cv.id='p8mashallah'; cv.width=64; cv.height=16;
+  const g=cv.getContext('2d');
+  tiles.forEach((d,i)=>g.drawImage(getCustomTileCanvas(d.index),i*16,0));
+  const solo=new URLSearchParams(location.search).has('chunk');
+  cv.style.cssText=(solo?'position:fixed; top:12px; left:12px; z-index:50;'
+                         :'position:absolute; top:0; left:0;')+
+    'width:clamp(128px,26vmin,256px); height:auto; image-rendering:pixelated;'+
+    'filter:grayscale(1); border-radius:3px; box-shadow:0 4px 14px rgba(0,0,0,.5); pointer-events:none;';
+  if(solo) document.body.appendChild(cv);
+  else { wrap.parentElement.style.position='relative'; wrap.parentElement.appendChild(cv); }
 }
 
 /* ── Puzzle Three — p3p1's 3-digit combination lock (answer: 317) ── */
