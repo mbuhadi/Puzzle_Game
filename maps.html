@@ -822,20 +822,42 @@ function solveChunk(chunk) {
 
 // ── Celestial floor sequence (solves p4p1) ────────────────────────────────────
 // Walking onto the night-sky floor tiles in this order solves puzzle 4:
-// full moon, sun, full moon, crescent, star, sun, star. Only celestial tiles
-// count (plain floor between them is ignored), each step onto a new tile of
-// one counts once, and a wrong step needs no reset — the sequence is matched
-// against the latest steps, so the player just keeps going.
+// full moon, sun, full moon, crescent, star, sun, star. Each celestial tile
+// owns the 9×9 area centered on it (CELESTIAL_ZONE_R tiles out every way), so
+// stepping anywhere in that area counts as stepping on the tile. Entering an
+// area counts once — walking around inside it doesn't count again, leaving
+// and coming back does; plain floor outside every area is ignored. A wrong
+// step needs no reset: the sequence is matched against the latest steps, so
+// the player just keeps going.
 const CELESTIAL_SOLVE = {
   chunk: 'p4p1',
   sequence: ['FLOOR_FULLMOON', 'FLOOR_SUNSTAR8', 'FLOOR_FULLMOON', 'FLOOR_CRESCENT',
              'FLOOR_STAR5', 'FLOOR_SUNSTAR8', 'FLOOR_STAR5'],
 };
+const CELESTIAL_ZONE_R = 4;   // 9×9 area: the tile plus 4 tiles in every direction
 const CELESTIAL_KEY_OF = {};
 for (const k of new Set(CELESTIAL_SOLVE.sequence)) CELESTIAL_KEY_OF[T[k]] = k;
 let celestialSteps = [];
 let lastStepCell = null;
-function resetCelestialSteps() { celestialSteps = []; lastStepCell = null; STEP_GLOWS.length = 0; }
+let lastZone = null;          // "c,r" of the celestial tile whose area the player is in
+function resetCelestialSteps() { celestialSteps = []; lastStepCell = null; lastZone = null; STEP_GLOWS.length = 0; }
+
+// The celestial tile whose 9×9 area contains (col,row) — the nearest one if
+// areas ever overlap — or null
+function celestialZoneAt(col, row) {
+  let best = null, bestD = Infinity;
+  const R = CELESTIAL_ZONE_R;
+  for (let r = row - R; r <= row + R; r++) {
+    if (!mapGrid || !mapGrid[r]) continue;
+    for (let c = col - R; c <= col + R; c++) {
+      const key = CELESTIAL_KEY_OF[mapGrid[r][c]];
+      if (!key) continue;
+      const d = Math.max(Math.abs(c - col), Math.abs(r - row)) + 0.001 * Math.hypot(c - col, r - row);
+      if (d < bestD) { bestD = d; best = { c, r, key }; }
+    }
+  }
+  return best;
+}
 
 // A very faint moonlit glow that blooms on a celestial tile as it's stepped
 // on and fades away — quiet feedback that the step registered
@@ -865,11 +887,14 @@ function trackCelestialStep() {
   const cell = col + ',' + row;
   if (cell === lastStepCell) return;
   lastStepCell = cell;
-  const key = mapGrid && mapGrid[row] ? CELESTIAL_KEY_OF[mapGrid[row][col]] : undefined;
-  if (!key) return;
-  STEP_GLOWS.push({ c: col, r: row, t0: performance.now() });
+  const zone = celestialZoneAt(col, row);
+  const zoneId = zone ? zone.c + ',' + zone.r : null;
+  if (zoneId === lastZone) return;      // still in the same area (or still outside all)
+  lastZone = zoneId;
+  if (!zone) return;
+  STEP_GLOWS.push({ c: zone.c, r: zone.r, t0: performance.now() });
   const seq = CELESTIAL_SOLVE.sequence;
-  celestialSteps.push(key);
+  celestialSteps.push(zone.key);
   if (celestialSteps.length > seq.length) celestialSteps.shift();
   if (celestialSteps.length === seq.length && celestialSteps.every((k, i) => k === seq[i]) &&
       !SOLVED_CHUNKS.has(CELESTIAL_SOLVE.chunk)) {
