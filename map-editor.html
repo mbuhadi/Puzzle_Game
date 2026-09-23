@@ -2712,6 +2712,23 @@ function touchPoint(t) {
   return { offsetX: t.clientX - r.left, offsetY: t.clientY - r.top, clientX: t.clientX, clientY: t.clientY };
 }
 let activeTouchId = null;
+// Fingers never land at exactly the same instant, so the first finger of a
+// two-finger pan has already painted/filled/moved something by the time the
+// second one arrives. If the second finger follows within PAN_GRACE_MS, that
+// first-finger edit is rolled back (and dropped from undo history) instead.
+const PAN_GRACE_MS = 400;
+let touchStartTime = 0, touchStartSnap = null;
+function revertFirstFingerEdit() {
+  const snap = touchStartSnap;
+  touchStartSnap = null;
+  if (!snap || history[histIdx] === snap) return;   // nothing was committed
+  const i = history.lastIndexOf(snap);
+  if (i < 0) return;
+  history = history.slice(0, i + 1);
+  histIdx = i;
+  restoreSnapshot(snap);
+  render(); updateStatus();
+}
 function endActiveTouch() {
   clearLongPress();
   if (activeTouchId === null) return;
@@ -2746,7 +2763,9 @@ function clearLongPress() {
 canvas.addEventListener('touchstart', e => {
   if (e.touches.length === 2) {
     e.preventDefault();
+    const recent = activeTouchId !== null && performance.now() - touchStartTime < PAN_GRACE_MS;
     endActiveTouch();          // a second finger cancels any in-progress single-touch drag…
+    if (recent) revertFirstFingerEdit();   // …undoing what it did if it only just started
     const mid = touchMidpoint(e.touches);
     isPanning = true;          // …and switches to two-finger pan
     panAnchor = { mx: mid.x, my: mid.y, px: panX, py: panY };
@@ -2758,6 +2777,9 @@ canvas.addEventListener('touchstart', e => {
   hideSelectionMenu();
   const t = e.touches[0];
   activeTouchId = t.identifier;
+  flushNudge();
+  touchStartTime = performance.now();
+  touchStartSnap = history[histIdx];
   onPointerDown({ ...touchPoint(t), button: 0, shiftKey: false,
                   preventDefault(){}, stopPropagation(){} });
   armLongPress(t);
