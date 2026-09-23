@@ -560,12 +560,14 @@ function plasterBase(ctx) {   // identical to WALL_PLASTER's draw
   noiseShade(ctx, '#d8c9a3', 62, 6);
   speckle(ctx, 63, 0.1, '#c7b795', 0.35);
 }
-function mashallahPiece(part) {
+// Draws 16-px-wide slice `part` of a multi-tile lettering bitmap on plaster
+function phrasePiece(bitmap, part) {
+  const w = bitmap[0].length;
   return function (ctx) {
     plasterBase(ctx);
     const ink = (x, y) => {
       const gx = part * 16 + x;
-      return y >= 0 && y < 16 && gx >= 0 && gx < 64 && MASHALLAH_BITMAP[y][gx] === '#';
+      return y >= 0 && y < 16 && gx >= 0 && gx < w && bitmap[y][gx] === '#';
     };
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 16; x++) {
@@ -579,7 +581,36 @@ const WALL_DEFS_MASHALLAH = [0, 1, 2, 3].map(i => ({
   key: 'WALL_MASHALLAH_' + (i + 1),
   name: 'Ma Sha Allah ' + (i + 1) + '/4' + (i === 0 ? ' (left)' : i === 3 ? ' (right)' : ''),
   base: '#d8c9a3',
-  draw: mashallahPiece(i),
+  draw: phrasePiece(MASHALLAH_BITMAP, i),
+}));
+
+// ── 5 more: "لا إله إلا الله" in the same lettering, same plaster ─────────
+// Same scale as Ma Sha Allah, extra space between the four words so the
+// row of tall strokes still reads as words. Tile 1 on the left (الله), tile
+// 5 on the right (لا). Appended last — same index-stability rule.
+const TAWHID_BITMAP = [
+  '................................................................................',
+  '......##...##...##.##.........##..##..##............##...##.##.........##..##...',
+  '......##...##...##.##.........##..##..##............##...##.##.........##..##...',
+  '......##...##...##.##.........##..##..##............##...##.##.........##..##...',
+  '......##...##...##.##.........##..##..##............##...##.##.........##..##...',
+  '......##...##...##.##.........##..##..##.............#...##.##.........##..##...',
+  '......##...##...##.##.........##..##..##............##...##.##.........##..##...',
+  '......##...##...##.##.........##..##..##............##...##.##.........##..##...',
+  '......##...##...##.##.........##..##..##............##...##.##.........##..##...',
+  '...#####...##...##.##.........##..##..##..........####...##.##.........##..##...',
+  '...#####...##...##.##.........##..##..##.........#####...##.##.........##..##...',
+  '..###.##...##...##.##.........##..##..##.........##.##...##.##.........##..##...',
+  '...###############.##.........######..##.........##########.##.........######...',
+  '....##############.###........######..###.........#########.###........######...',
+  '...............................##.##....................................##.##...',
+  '...............................#####....................................#####...'
+];
+const WALL_DEFS_TAWHID = [0, 1, 2, 3, 4].map(i => ({
+  key: 'WALL_TAWHID_' + (i + 1),
+  name: 'La Ilaha Illallah ' + (i + 1) + '/5' + (i === 0 ? ' (left)' : i === 4 ? ' (right)' : ''),
+  base: '#d8c9a3',
+  draw: phrasePiece(TAWHID_BITMAP, i),
 }));
 
 const CUSTOM_TILE_CATEGORIES = { floor: FLOOR_DEFS, wall: WALL_DEFS, water: WATER_DEFS };
@@ -609,6 +640,13 @@ FLOOR_DEFS_CELESTIAL.forEach(def => {
 
 // Appended last again — see the comment above WALL_DEFS_MASHALLAH
 WALL_DEFS_MASHALLAH.forEach(def => {
+  def.category = 'wall';
+  def.index = CUSTOM_TILE_BASE_INDEX + CUSTOM_TILE_LIST.length;
+  CUSTOM_TILE_LIST.push(def);
+  WALL_DEFS.push(def);
+});
+// Appended last again — see the comment above WALL_DEFS_TAWHID
+WALL_DEFS_TAWHID.forEach(def => {
   def.category = 'wall';
   def.index = CUSTOM_TILE_BASE_INDEX + CUSTOM_TILE_LIST.length;
   CUSTOM_TILE_LIST.push(def);
