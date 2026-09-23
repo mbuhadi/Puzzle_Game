@@ -764,20 +764,27 @@ function playUnlockSound() {
 
 window.addEventListener('message', e => {
   if (!(e.data && e.data.type === 'puzzle-solved' && typeof e.data.chunk === 'string')) return;
-  const firstSolve = !SOLVED_CHUNKS.has(e.data.chunk);
-  SOLVED_CHUNKS.add(e.data.chunk);
+  solveChunk(e.data.chunk);
+});
+// Marks a puzzle chunk solved and applies everything that hangs off it —
+// the solve sound, its Map Change / removeOnSolve doors, and closing its
+// puzzle window if open. Used by puzzle windows (postMessage above) and by
+// in-world puzzles like the celestial floor sequence.
+function solveChunk(chunk) {
+  const firstSolve = !SOLVED_CHUNKS.has(chunk);
+  SOLVED_CHUNKS.add(chunk);
   persistSolved();
   // Plays the instant the puzzle solves, independent of the puzzle window's
   // own close (which still only happens after the short beat below) — a
   // chunk with nothing authored for 'solve' stays silent.
-  if (firstSolve) playSound(getSound(e.data.chunk, 'solve'));
+  if (firstSolve) playSound(getSound(chunk, 'solve'));
   // A removeOnSolve door or Map Change transform in the current room should
   // take effect the instant its puzzle is solved, not wait for the next room
   // load. A Map Change specifically is masked behind the fade transition so
   // the swap itself never happens in view.
   if (firstSolve) {
     const rm = ROOMS && ROOMS[curRoomIdx];
-    const t = rm && (rm.transforms || []).find(x => x.puzzleId === e.data.chunk);
+    const t = rm && (rm.transforms || []).find(x => x.puzzleId === chunk);
     if (t) {
       startMapChangeTransition(() => {
         applyTransformTiles(mapGrid, t);
@@ -798,7 +805,7 @@ window.addEventListener('message', e => {
   // "Leave" click needed. A locked door additionally carries the player
   // through to its room once the fade-out finishes.
   const a = activeInteractable;
-  if (firstSolve && a && a.id && String(a.id).replace(/s$/, '') === e.data.chunk) {
+  if (firstSolve && a && a.id && String(a.id).replace(/s$/, '') === chunk) {
     setTimeout(() => {
       fadeCloseExamine(() => {
         activeInteractable = null;
@@ -811,7 +818,40 @@ window.addEventListener('message', e => {
       });
     }, 900);
   }
-});
+}
+
+// ── Celestial floor sequence (solves p4p1) ────────────────────────────────────
+// Walking onto the night-sky floor tiles in this order solves puzzle 4:
+// full moon, sun, full moon, crescent, star, sun, star. Only celestial tiles
+// count (plain floor between them is ignored), each step onto a new tile of
+// one counts once, and a wrong step needs no reset — the sequence is matched
+// against the latest steps, so the player just keeps going.
+const CELESTIAL_SOLVE = {
+  chunk: 'p4p1',
+  sequence: ['FLOOR_FULLMOON', 'FLOOR_SUNSTAR8', 'FLOOR_FULLMOON', 'FLOOR_CRESCENT',
+             'FLOOR_STAR5', 'FLOOR_SUNSTAR8', 'FLOOR_STAR5'],
+};
+const CELESTIAL_KEY_OF = {};
+for (const k of new Set(CELESTIAL_SOLVE.sequence)) CELESTIAL_KEY_OF[T[k]] = k;
+let celestialSteps = [];
+let lastStepCell = null;
+function resetCelestialSteps() { celestialSteps = []; lastStepCell = null; }
+function trackCelestialStep() {
+  const col = Math.floor(player.x), row = Math.floor(player.y);
+  const cell = col + ',' + row;
+  if (cell === lastStepCell) return;
+  lastStepCell = cell;
+  const key = mapGrid && mapGrid[row] ? CELESTIAL_KEY_OF[mapGrid[row][col]] : undefined;
+  if (!key) return;
+  const seq = CELESTIAL_SOLVE.sequence;
+  celestialSteps.push(key);
+  if (celestialSteps.length > seq.length) celestialSteps.shift();
+  if (celestialSteps.length === seq.length && celestialSteps.every((k, i) => k === seq[i]) &&
+      !SOLVED_CHUNKS.has(CELESTIAL_SOLVE.chunk)) {
+    solveChunk(CELESTIAL_SOLVE.chunk);
+  }
+}
+
 function puzzleSolved(interId) {
   return SOLVED_CHUNKS.has(String(interId).replace(/s$/, ''));
 }
@@ -1095,6 +1135,7 @@ function update(dt) {
     if (canMoveTo(player.x + sdx, player.y)) player.x += sdx;
     if (canMoveTo(player.x, player.y + sdy)) player.y += sdy;
   }
+  trackCelestialStep();
   updateNearby();
 }
 
@@ -1719,6 +1760,7 @@ function sanitizeTransforms(raw) {
 function enterRoom(idx, px, py) {
   const rm = ROOMS[idx];
   curRoomIdx = idx;
+  resetCelestialSteps();
   // A fresh per-visit copy — Map Change transforms bake into this instance,
   // leaving rm.grid itself untouched as the "before" state for any later
   // fresh load (Play/Randomize opens a new tab and reparses from source).
