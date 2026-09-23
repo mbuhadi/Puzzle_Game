@@ -208,6 +208,7 @@ select:focus { outline: none; border-color: var(--gold-dim); }
   font-family: 'Cinzel', serif; font-size: 12px; color: var(--text); cursor: pointer;
 }
 .sel-menu button:hover, .sel-menu button:active { color: var(--gold); background: var(--bg3); }
+.sel-menu button:disabled { opacity: 0.35; color: var(--text); background: none; cursor: default; }
 .sel-menu-sep { height: 1px; background: var(--border); }
 
 /* ── Overlay dialogs (shared by the tileset picker and My Maps) ─────────── */
@@ -586,9 +587,11 @@ select:focus { outline: none; border-color: var(--gold-dim); }
     <span id="stSel" style="color:var(--gold)"></span>
   </div>
 
-  <!-- Long-press selection menu (touch: copy/delete the current selection) -->
+  <!-- Long-press selection menu (touch: copy/paste/delete) -->
   <div id="selMenu" class="sel-menu">
     <button id="selMenuCopy" type="button">Copy</button>
+    <div class="sel-menu-sep"></div>
+    <button id="selMenuPaste" type="button">Paste</button>
     <div class="sel-menu-sep"></div>
     <button id="selMenuDelete" type="button">Delete</button>
   </div>
@@ -2737,7 +2740,7 @@ function endActiveTouch() {
 }
 
 // A finger held still (within LONG_PRESS_MOVE_TOL) for LONG_PRESS_MS opens the
-// copy/delete menu for whatever onPointerDown already selected at touchdown —
+// copy/paste/delete menu for whatever onPointerDown already selected at touchdown —
 // the tile/object under the finger, or the existing multi-selection if the
 // finger landed on a tile that was already part of it. Any real movement, a
 // second finger, or lifting early cancels it, so it never fights a drag.
@@ -2748,7 +2751,10 @@ function armLongPress(t) {
   longPressStart = { x: t.clientX, y: t.clientY };
   longPressTimer = setTimeout(() => {
     longPressTimer = null;
-    if (activeTouchId === null || (!selectedObjs.size && !selectedTiles.size)) return;
+    // Opens over a selection (copy/delete it) or, with something copied,
+    // anywhere at all (paste it here)
+    if (activeTouchId === null ||
+        (!selectedObjs.size && !selectedTiles.size && !hasClipboard())) return;
     const { x, y } = longPressStart;
     endActiveTouch();
     if (navigator.vibrate) navigator.vibrate(15);
@@ -2815,6 +2821,7 @@ canvas.addEventListener('touchcancel', endTouchPan);
 // ── Long-press selection menu ────────────────────────────────────────────────
 const selMenu = document.getElementById('selMenu');
 function showSelectionMenu(x, y) {
+  prepSelectionMenu(x, y);
   selMenu.classList.add('open');
   selMenu.style.left = '-9999px'; selMenu.style.top = '-9999px';
   const r = selMenu.getBoundingClientRect();
@@ -2822,9 +2829,35 @@ function showSelectionMenu(x, y) {
   selMenu.style.top  = Math.max(8, Math.min(y - r.height - 14, window.innerHeight - r.height - 8)) + 'px';
 }
 function hideSelectionMenu() { selMenu.classList.remove('open'); }
-document.getElementById('selMenuCopy').addEventListener('click', () => {
+function hasClipboard() {
+  return !!clipboard && (clipboard.items.length > 0 || clipboard.tiles.length > 0);
+}
+let menuPasteCell = null;   // grid spot the menu was long-pressed at — where Paste lands
+const selMenuCopy  = document.getElementById('selMenuCopy');
+const selMenuPaste = document.getElementById('selMenuPaste');
+const selMenuDel   = document.getElementById('selMenuDelete');
+function prepSelectionMenu(x, y) {
+  const r = canvas.getBoundingClientRect();
+  menuPasteCell = canvasToCellF(x - r.left, y - r.top);
+  const hasSel = selectedObjs.size > 0 || selectedTiles.size > 0;
+  selMenuCopy.disabled  = !hasSel;
+  selMenuDel.disabled   = !hasSel;
+  selMenuPaste.disabled = !hasClipboard();
+}
+selMenuCopy.addEventListener('click', () => {
   hideSelectionMenu();
-  if (selectedObjs.size || selectedTiles.size) { copySelection(); pasteClipboard(false); }
+  if (!selectedObjs.size && !selectedTiles.size) return;
+  copySelection();   // clipboard only — Paste places it
+  const n = selectedObjs.size + selectedTiles.size;
+  const st = document.getElementById('stSel');
+  st.textContent = 'copied ' + n + ' ✓';
+  setTimeout(updateSelStatus, 1500);
+});
+selMenuPaste.addEventListener('click', () => {
+  hideSelectionMenu();
+  if (!hasClipboard()) return;
+  hoverCellF = menuPasteCell;   // pasteClipboard(true) drops it at the long-press spot
+  pasteClipboard(true);
 });
 document.getElementById('selMenuDelete').addEventListener('click', () => {
   hideSelectionMenu();
