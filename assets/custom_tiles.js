@@ -533,6 +533,55 @@ const FLOOR_DEFS_CELESTIAL = [
     } },
 ];
 
+// ── 4 wall tiles that spell "ما شاء الله" across a row, left to right ─────
+// Blocky Kufi lettering (traced from Reem Kufi at 64×16, hand-cleaned) on
+// the exact Smooth Plaster Wall texture, so the phrase sits flush in a plain
+// plaster wall. Arabic reads right-to-left: tile 1 (الله) goes on the left,
+// tile 4 (ما) on the right. Appended last — same index-stability rule.
+const MASHALLAH_BITMAP = [
+  '................................................................',
+  '......##...##...##.##.............##...............##...........',
+  '......##...##...##.##.............##......##.......##...........',
+  '......##...##...##.##.............##......##.......##...........',
+  '......##...##...##.##.............##.....##.##.....##...........',
+  '......##...##...##.##.............##.....##.##.....##...........',
+  '......##...##...##.##.............##...............##...........',
+  '......##...##...##.##.............##...............##...........',
+  '......##...##...##.##.............##...............##...........',
+  '......##...##...##.##.............##...............##...........',
+  '...#####...##...##.##.......###...##...##..##.##...##....####...',
+  '...#####...##...##.##......##.....##...##..##.##...##...#####...',
+  '...##.##...##...##.##......###....##...##..##.##...##...##.##...',
+  '...###############.##.....#######.##############...##########...',
+  '....##############.###...########.##############...#########....',
+  '................................................................',
+];
+function plasterBase(ctx) {   // identical to WALL_PLASTER's draw
+  noiseShade(ctx, '#d8c9a3', 62, 6);
+  speckle(ctx, 63, 0.1, '#c7b795', 0.35);
+}
+function mashallahPiece(part) {
+  return function (ctx) {
+    plasterBase(ctx);
+    const ink = (x, y) => {
+      const gx = part * 16 + x;
+      return y >= 0 && y < 16 && gx >= 0 && gx < 64 && MASHALLAH_BITMAP[y][gx] === '#';
+    };
+    for (let y = 0; y < 16; y++)
+      for (let x = 0; x < 16; x++) {
+        if (ink(x, y)) px(ctx, x, y, '#3f3122');
+        // soft shadow just below/right of each stroke, as if inlaid in the plaster
+        else if (ink(x - 1, y - 1) || ink(x, y - 1)) px(ctx, x, y, '#bba983');
+      }
+  };
+}
+const WALL_DEFS_MASHALLAH = [0, 1, 2, 3].map(i => ({
+  key: 'WALL_MASHALLAH_' + (i + 1),
+  name: 'Ma Sha Allah ' + (i + 1) + '/4' + (i === 0 ? ' (left)' : i === 3 ? ' (right)' : ''),
+  base: '#d8c9a3',
+  draw: mashallahPiece(i),
+}));
+
 const CUSTOM_TILE_CATEGORIES = { floor: FLOOR_DEFS, wall: WALL_DEFS, water: WATER_DEFS };
 const CUSTOM_TILE_LIST = [];
 ['floor', 'wall', 'water'].forEach(cat => {
@@ -556,6 +605,14 @@ FLOOR_DEFS_CELESTIAL.forEach(def => {
   def.index = CUSTOM_TILE_BASE_INDEX + CUSTOM_TILE_LIST.length;
   CUSTOM_TILE_LIST.push(def);
   FLOOR_DEFS.push(def);
+});
+
+// Appended last again — see the comment above WALL_DEFS_MASHALLAH
+WALL_DEFS_MASHALLAH.forEach(def => {
+  def.category = 'wall';
+  def.index = CUSTOM_TILE_BASE_INDEX + CUSTOM_TILE_LIST.length;
+  CUSTOM_TILE_LIST.push(def);
+  WALL_DEFS.push(def);
 });
 
 const canvasCache = new Map();
