@@ -92,10 +92,10 @@ button:disabled:hover { border-color: var(--border); color: var(--text); }
   flex: 1; min-width: 0; position: relative; overflow: hidden;
   background: repeating-conic-gradient(var(--check1) 0% 25%, var(--check2) 0% 50%) 0 0 / 32px 32px;
 }
-/* A puzzle "screen" — a fixed 16:9 board scaled to fit the space. One per
-   tab (the Problem and each Given); only the active tab's board is shown. */
+/* A puzzle "screen" — the game's puzzle window, scaled to fit the space. One
+   per tab (the Problem and each Given); only the active tab's board is shown. */
 .board {
-  position: absolute; left: 0; top: 0; width: 1280px; height: 720px;
+  position: absolute; left: 0; top: 0;   /* width/height = the puzzle window, set in JS */
   transform-origin: 0 0; background: #080705;
   border: 1px solid var(--gold-dim); box-shadow: 0 10px 40px rgba(0,0,0,0.6);
   touch-action: none; overflow: hidden;
@@ -193,6 +193,7 @@ button:disabled:hover { border-color: var(--border); color: var(--text); }
   <div id="statusbar">
     <span id="stScreen">Problem</span>
     <span id="stCount">0 objects</span>
+    <span id="stBoard" title="The game's puzzle window size — the board matches it exactly"></span>
     <span id="stSel" style="color:var(--gold)"></span>
     <span>drag on empty space to select · drag selected things to move · long-press or right-click: copy / paste / delete · Delete key removes</span>
   </div>
@@ -223,12 +224,25 @@ button:disabled:hover { border-color: var(--border); color: var(--text); }
 <script>
 // ── Puzzle Studio ─────────────────────────────────────────────────────────────
 // A puzzle is its Problem screen plus any number of Given screens, each a
-// 1280×720 board in its own tab. Boards are filled from the shared Browse
+// board the size of the game's puzzle window, in its own tab. Boards are filled from the shared Browse
 // Tileset picker (assets/tileset_picker.js): each pick becomes a sprite on
 // the active tab's board (drawn at 4× — one 16px tile = 64 board px — or
 // shrunk to fit if it's a big picture). Sprites are selected, moved, copied,
 // pasted and deleted like objects in Map Studio.
-const BOARD_W = 1280, BOARD_H = 720, PX = 4;
+const PX = 4;
+
+// The board is exactly the game's puzzle window: maps.html shows a puzzle in
+// #examineBox — 96% × 94% of the screen (landscape), minus its 2px border —
+// and a Puzzle Studio screen fills that window edge to edge. So a new
+// puzzle's board is that window's size on the device Puzzle Studio is open
+// on (in landscape, whichever way the device is held right now). The size is
+// saved with the puzzle, so loading it elsewhere keeps the same layout.
+function puzzleWindowSize() {
+  const vw = Math.max(window.innerWidth, window.innerHeight);
+  const vh = Math.min(window.innerWidth, window.innerHeight);
+  return { w: Math.round(vw * 0.96) - 4, h: Math.round(vh * 0.94) - 4 };
+}
+let { w: BOARD_W, h: BOARD_H } = puzzleWindowSize();
 const stageWrap = document.getElementById('stageWrap');
 let boardScale = 1;
 
@@ -260,6 +274,8 @@ function screenName(i) {
 function makeScreen(kind) {
   const board = document.createElement('div');
   board.className = 'board';
+  board.style.width  = BOARD_W + 'px';
+  board.style.height = BOARD_H + 'px';
   stageWrap.appendChild(board);
   const sc = { kind, board, sprites: [] };
   screens.push(sc);
@@ -320,6 +336,7 @@ function updateStatus() {
   document.getElementById('stScreen').textContent = screenName(cur);
   document.getElementById('stCount').textContent = n + (n === 1 ? ' object' : ' objects');
   document.getElementById('stSel').textContent = selected.size ? selected.size + ' selected' : '';
+  document.getElementById('stBoard').textContent = `board ${BOARD_W}×${BOARD_H}`;
 }
 
 // Fit the boards inside the stage area, centered
@@ -616,6 +633,7 @@ function flash(msg, color) {
 function puzzleData() {
   return {
     num: puzzleNum, name: '؟؟؟', loc: '', updated: Date.now(),
+    board: { w: BOARD_W, h: BOARD_H },
     screens: screens.map((sc, i) => ({
       label: screenLabel(i), kind: sc.kind,
       sprites: sc.sprites.map(s => {
@@ -743,6 +761,8 @@ function loadPuzzle(p) {
   cur = 0;
   puzzleNum = +p.num;
   editingSaved = true;
+  BOARD_W = (p.board && +p.board.w) || 1280;
+  BOARD_H = (p.board && +p.board.h) || 720;
   const ordered = [...p.screens.filter(s => s.kind === 'problem'), ...p.screens.filter(s => s.kind === 'given')];
   if (!ordered.length || ordered[0].kind !== 'problem') ordered.unshift({ kind: 'problem', sprites: [] });
   for (const saved of ordered) {

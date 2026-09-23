@@ -1672,7 +1672,12 @@ if (!CHUNK_PARAM) {
     // narrow puzzle would be scaled as if it were 900px wide and end up
     // small and off-center. Recomputed on resize/orientation change
     // (rotating the phone, the browser chrome showing/hiding, etc).
-    const FIT_MARGIN = 10;   // px of breathing room so nothing touches the edge
+    // px of breathing room so nothing touches the edge — except a Puzzle
+    // Studio screen, which is built to the puzzle window's exact size and
+    // fills it edge to edge
+    const studioBoard = detail.querySelector(':scope > .studio-board');
+    if (studioBoard) studioBoard.style.borderRadius = '0';
+    const FIT_MARGIN = studioBoard ? 0 : 10;
     function fitChunkToViewport() {
       detail.style.transform = 'none';
       detail.style.transformOrigin = '0 0';
