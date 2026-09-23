@@ -254,6 +254,35 @@ const PUZZLES = [
   },
 ];
 
+/* Puzzles built in Puzzle Studio (puzzles_studio.js, loaded before this file)
+   join the list as ordinary puzzles. Each screen becomes one chunk: a 16:9
+   board with its sprites positioned in percentages so it scales to any width.
+   A sprite is a crop (x,y,w,h) of image src (iw×ih px) placed at bx,by with
+   size bw×bh on the 1280×720 board — drawn as a scaled background crop. */
+function studioScreenHTML(sc) {
+  const W = 1280, H = 720, pct = v => +v.toFixed(4) + '%';
+  const sprites = sc.sprites.map(s => {
+    const px = s.iw === s.w ? 0 : s.x / (s.iw - s.w) * 100;
+    const py = s.ih === s.h ? 0 : s.y / (s.ih - s.h) * 100;
+    return `<div style="position:absolute; left:${pct(s.bx / W * 100)}; top:${pct(s.by / H * 100)};` +
+      ` width:${pct(s.bw / W * 100)}; height:${pct(s.bh / H * 100)};` +
+      ` background:url('${encodeURI(s.src)}') ${pct(px)} ${pct(py)} / ${pct(s.iw / s.w * 100)} ${pct(s.ih / s.h * 100)} no-repeat;` +
+      ` image-rendering:pixelated;"></div>`;
+  }).join('');
+  return `<div class="chunk"><span class="clabel">${sc.label}</span>` +
+    `<div style="position:relative; width:min(1280px,100%); aspect-ratio:16/9; background:#080705;` +
+    ` border-radius:6px; overflow:hidden; margin:16px 0;">${sprites}</div></div>`;
+}
+if (typeof STUDIO_PUZZLES !== 'undefined') {
+  for (const sp of STUDIO_PUZZLES) {
+    PUZZLES.push({
+      num: String(sp.num), name: sp.name || '؟؟؟', loc: sp.loc || '', studio: true,
+      given:   sp.screens.filter(s => s.kind === 'given').map(studioScreenHTML).join(''),
+      problem: sp.screens.filter(s => s.kind === 'problem').map(studioScreenHTML).join(''),
+    });
+  }
+}
+
 /* Every chunk on the curated page, in page order — the shared interactables
    list. The game shows a chunk by loading puzzles_curated.html?chunk=<id>,
    so edits to the chunks above appear in-game with no other changes. */

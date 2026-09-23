@@ -35,6 +35,8 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   background: var(--bg2); border-bottom: 1px solid var(--border);
   display: flex; align-items: center; gap: 4px; padding: 0 10px;
 }
+#puzzleLabel { font-size: 12px; color: var(--text); letter-spacing: 1px; margin-right: 8px; white-space: nowrap; }
+#saveFlash { font-family: monospace; font-size: 10px; margin-left: 6px; white-space: nowrap; }
 .tb-title {
   font-family: 'Cinzel Decorative', serif; font-size: 12px;
   color: var(--gold); letter-spacing: 2px; margin-right: 10px; white-space: nowrap;
@@ -139,6 +141,9 @@ button:disabled:hover { border-color: var(--border); color: var(--text); }
 
   <div id="topbar">
     <span class="tb-title">PUZZLE STUDIO</span>
+    <span id="puzzleLabel"></span>
+    <button id="saveBtn" onclick="savePuzzle()" title="Save this puzzle to the Puzzle Guide (commits it to the website's GitHub repo)">Save</button>
+    <span id="saveFlash"></span>
   </div>
 
   <div id="screenTabs">
@@ -162,6 +167,8 @@ button:disabled:hover { border-color: var(--border); color: var(--text); }
 
 </div>
 
+<script src="puzzles_studio.js"></script>
+<script src="puzzles_curated_data.js"></script>
 <script src="assets/anim_manifest.js"></script>
 <script src="assets/tileset_picker.js"></script>
 <script>
@@ -179,8 +186,18 @@ let boardScale = 1;
 const screens = [];   // {kind: 'problem'|'given', board: <div>, sprites: [{el, pick, x, y}]}
 let cur = 0;          // index of the active tab
 function curScreen() { return screens[cur]; }
+// The new puzzle continues the Puzzle Guide's numbering: one past the
+// highest puzzle number there (hand-made or saved from here)
+const PUZZLE_NUM = Math.max(0, ...PUZZLES.map(p => +p.num || 0)) + 1;
+document.getElementById('puzzleLabel').textContent = 'Puzzle ' + PUZZLE_NUM;
+document.title = 'Puzzle Studio — Puzzle ' + PUZZLE_NUM;
+
+// Chunk labels match the Puzzle Guide's: p9p1 = problem, p9g1… = givens
+function screenLabel(i) {
+  return screens[i].kind === 'problem' ? `p${PUZZLE_NUM}p1` : `p${PUZZLE_NUM}g${i}`;   // givens follow the problem
+}
 function screenName(i) {
-  return screens[i].kind === 'problem' ? 'Problem' : 'Given ' + i;   // givens follow the problem
+  return (screens[i].kind === 'problem' ? 'Problem' : 'Given ' + i) + ' · ' + screenLabel(i);
 }
 
 function makeScreen(kind) {
@@ -358,6 +375,92 @@ function enableDrag(s, sc) {
 setInterval(() => {
   for (const s of curScreen().sprites) if (sourceOf(s.pick).frames > 1) drawSprite(s);
 }, 60);
+
+// ── Save → Puzzle Guide ───────────────────────────────────────────────────────
+// Puzzles live in puzzles_studio.js (STUDIO_PUZZLES), which the Puzzle Guide,
+// Map Studio and the game all load; puzzles_curated_data.js turns each one
+// into ordinary chunks. Saving rewrites that file through the GitHub API with
+// this puzzle added — or replaced, when saving the same number again.
+function flash(msg, color) {
+  const f = document.getElementById('saveFlash');
+  f.textContent = msg; f.style.color = color || '#4a9a60';
+  clearTimeout(flash._t);
+  flash._t = setTimeout(() => { f.textContent = ''; }, 4000);
+}
+
+function puzzleData() {
+  return {
+    num: PUZZLE_NUM, name: '؟؟؟', loc: '', updated: Date.now(),
+    screens: screens.map((sc, i) => ({
+      label: screenLabel(i), kind: sc.kind,
+      sprites: sc.sprites.map(s => {
+        const src = sourceOf(s.pick);
+        return {
+          src: s.pick.kind === 'sheet' ? SHEETS[s.pick.sheet].src
+             : s.pick.kind === 'anim' ? s.pick.anim.src : s.pick.src,
+          x: src.x, y: src.y, w: src.w, h: src.h,
+          iw: src.img.naturalWidth, ih: src.img.naturalHeight,
+          // style size, not offsetWidth — boards of other tabs are display:none
+          bx: s.x, by: s.y, bw: parseFloat(s.el.style.width), bh: parseFloat(s.el.style.height),
+        };
+      }),
+    })),
+  };
+}
+
+const STUDIO_FILE = 'puzzles_studio.js';
+const STUDIO_HEADER =
+`/* Puzzles made in Puzzle Studio — this file is rewritten by Puzzle Studio's
+   Save button (via the GitHub API), so don't hand-edit it. Each entry holds
+   the puzzle's screens (problem p<N>p1, givens p<N>g1…) with their sprites;
+   puzzles_curated_data.js turns them into curated-page chunks. */
+`;
+
+let saving = false;
+async function savePuzzle() {
+  if (saving) return;
+  if (!tsGhToken()) {
+    const t = (prompt('Saving writes the puzzle to the website (GitHub repo).\n' +
+      'Paste your GitHub token — the same one Map Studio → My Maps uses:') || '').trim();
+    if (!t) return;
+    localStorage.setItem('ghToken', t);
+  }
+  saving = true;
+  document.getElementById('saveBtn').disabled = true;
+  flash('saving…', '#b8a06a');
+  try {
+    // Read the current file through the API (not the deployed copy) so a save
+    // a minute ago that hasn't deployed yet isn't lost
+    const r = await fetch(tsGhApi(STUDIO_FILE) + '?ref=' + TS_GH.branch,
+                          { headers: tsGhHeaders(), cache: 'no-store' });
+    let list = [], sha = null;
+    if (r.ok) {
+      const j = await r.json();
+      sha = j.sha;
+      const text = decodeURIComponent(escape(atob(j.content.replace(/\s/g, ''))));
+      const m = text.match(/const STUDIO_PUZZLES = ([\s\S]*);\s*$/);
+      list = m ? JSON.parse(m[1]) : [];
+    } else if (r.status !== 404) throw await tsGhFail(r);
+
+    const data = puzzleData();
+    const i = list.findIndex(p => +p.num === PUZZLE_NUM);
+    if (i >= 0) list[i] = data; else list.push(data);
+    list.sort((a, b) => a.num - b.num);
+    const text = STUDIO_HEADER + 'const STUDIO_PUZZLES = ' + JSON.stringify(list, null, 1) + ';\n';
+    const body = { message: `Save puzzle ${PUZZLE_NUM} from Puzzle Studio`,
+                   content: btoa(unescape(encodeURIComponent(text))), branch: TS_GH.branch };
+    if (sha) body.sha = sha;
+    const w = await fetch(tsGhApi(STUDIO_FILE), { method: 'PUT', headers: tsGhHeaders(), body: JSON.stringify(body) });
+    if (!w.ok) throw await tsGhFail(w);
+    flash(`saved puzzle ${PUZZLE_NUM} to the Puzzle Guide ✓`);
+  } catch (e) {
+    if (/bad credentials/i.test(e.message)) localStorage.removeItem('ghToken');
+    flash('save failed ✗ ' + e.message, '#cc7070');
+  } finally {
+    saving = false;
+    document.getElementById('saveBtn').disabled = false;
+  }
+}
 
 // ── Keyboard: the picker's shortcuts (same as Map Studio) ─────────────────────
 window.addEventListener('keydown', e => {
