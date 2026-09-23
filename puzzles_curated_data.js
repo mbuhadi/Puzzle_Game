@@ -140,6 +140,10 @@ const PUZZLES = [
           يلفون لفتبن حول الماي ويختفون،<br>
           مادري وين يروحون
         </div>
+      </div>
+      <div class="chunk"><span class="clabel">p4g2</span>
+        <div class="clue arabic" style="direction:rtl;text-align:right;font-size:1.1rem;line-height:2;">
+        </div>
       </div>`,
     problem:`<div class="chunk"><span class="clabel">p4p1</span>
         <div class="note">Not yet implemented.</div>
