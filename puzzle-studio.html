@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Puzzle Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cinzel+Decorative:wght@400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/tileset_picker.css">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Same palette as Map Studio's default (Desert Gold) theme */
+:root {
+  --gold:     #c8a84b;
+  --gold-dim: #7a6030;
+  --bg:       #0e0d0a;
+  --bg2:      #14120e;
+  --bg3:      #1e1a12;
+  --border:   #2e2a1e;
+  --text:     #d4ba88;
+  --dim:      #6a5c3a;
+  --hover:    #231d0e;
+  --check1:   #171512;
+  --check2:   #1d1a15;
+}
+
+html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
+  font-family: 'Cinzel', serif; }
+
+#app { display: flex; flex-direction: column; height: 100%; }
+
+/* ── Top bar ──────────────────────────────────────────────────────────────── */
+#topbar {
+  height: 42px; flex-shrink: 0;
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 4px; padding: 0 10px;
+}
+.tb-title {
+  font-family: 'Cinzel Decorative', serif; font-size: 12px;
+  color: var(--gold); letter-spacing: 2px; margin-right: 10px; white-space: nowrap;
+}
+
+button {
+  background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+  font-family: 'Cinzel', serif; font-size: 11px; letter-spacing: 0.5px;
+  padding: 5px 11px; border-radius: 3px; cursor: pointer; white-space: nowrap;
+}
+button:hover { border-color: var(--gold-dim); color: var(--gold); }
+button.active { border-color: var(--gold); color: var(--gold); }
+button:disabled { opacity: 0.35; cursor: default; }
+button:disabled:hover { border-color: var(--border); color: var(--text); }
+.hint-text { font-family: sans-serif; font-size: 10px; color: var(--dim); line-height: 1.5; letter-spacing: 0; }
+
+/* ── Main: sidebar + board ────────────────────────────────────────────────── */
+#main { flex: 1; display: flex; min-height: 0; }
+#sidebar {
+  width: 210px; flex-shrink: 0; overflow-y: auto;
+  background: var(--bg2); border-right: 1px solid var(--border); padding: 12px;
+}
+.sec-title { font-size: 9px; letter-spacing: 2.5px; color: var(--dim); margin-bottom: 8px; }
+
+#stageWrap {
+  flex: 1; min-width: 0; position: relative; overflow: hidden;
+  background: repeating-conic-gradient(var(--check1) 0% 25%, var(--check2) 0% 50%) 0 0 / 32px 32px;
+}
+/* The puzzle "screen" — a fixed 16:9 board scaled to fit the space */
+#board {
+  position: absolute; left: 0; top: 0; width: 1280px; height: 720px;
+  transform-origin: 0 0; background: #080705;
+  border: 1px solid var(--gold-dim); box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  touch-action: none; overflow: hidden;
+}
+.sprite {
+  position: absolute; image-rendering: pixelated; cursor: grab;
+  touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.sprite.dragging { cursor: grabbing; outline: 2px solid var(--gold); }
+
+#statusbar {
+  height: 24px; flex-shrink: 0; display: flex; align-items: center; gap: 16px;
+  padding: 0 10px; background: var(--bg2); border-top: 1px solid var(--border);
+  font-family: monospace; font-size: 10px; color: var(--dim);
+}
+
+/* ── Overlay dialogs (the tileset picker) ─────────────────────────────────── */
+.overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.82);
+  z-index: 500; display: none; align-items: center; justify-content: center;
+}
+.overlay.open { display: flex; }
+.overlay-box {
+  display: flex; flex-direction: column; max-width: 94vw;
+  background: var(--bg2); border: 1px solid var(--gold-dim);
+  border-radius: 6px; overflow: hidden;
+}
+.overlay-head {
+  flex-shrink: 0; display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+  font-size: 10px; letter-spacing: 1.5px; color: var(--dim);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 700px) {
+  #sidebar { width: 150px; padding: 8px; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="topbar">
+    <span class="tb-title">PUZZLE STUDIO</span>
+  </div>
+
+  <div id="main">
+    <div id="sidebar">
+      <div class="sec-title">OBJECTS</div>
+      <button onclick="openTileset()" style="width:100%" title="Pick a sprite from the tilesets — it lands on the board, then drag it into place">Browse Tileset…</button>
+    </div>
+    <div id="stageWrap">
+      <div id="board"></div>
+    </div>
+  </div>
+
+  <div id="statusbar">
+    <span id="stCount">0 objects</span>
+    <span>pick from Browse Tileset, then drag it anywhere on the board</span>
+  </div>
+
+</div>
+
+<script src="assets/anim_manifest.js"></script>
+<script src="assets/tileset_picker.js"></script>
+<script>
+// ── Puzzle Studio ─────────────────────────────────────────────────────────────
+// For now: a 1280×720 puzzle board you fill from the shared Browse Tileset
+// picker (assets/tileset_picker.js). Each pick becomes a sprite on the board
+// (drawn at 4× — one 16px tile = 64 board px — or shrunk to fit if it's a
+// big picture) that can be dragged anywhere.
+const BOARD_W = 1280, BOARD_H = 720, PX = 4;
+const board = document.getElementById('board');
+const stageWrap = document.getElementById('stageWrap');
+let boardScale = 1;
+
+// Fit the board inside the stage area, centered
+function fitBoard() {
+  const m = 16;
+  const w = stageWrap.clientWidth - m * 2, h = stageWrap.clientHeight - m * 2;
+  boardScale = Math.max(0.1, Math.min(w / BOARD_W, h / BOARD_H));
+  const x = (stageWrap.clientWidth  - BOARD_W * boardScale) / 2;
+  const y = (stageWrap.clientHeight - BOARD_H * boardScale) / 2;
+  board.style.transform = `translate(${x}px, ${y}px) scale(${boardScale})`;
+}
+new ResizeObserver(fitBoard).observe(stageWrap);
+
+// ── Sprites ───────────────────────────────────────────────────────────────────
+const sprites = [];   // {el, pick, x, y}
+
+function sourceOf(pick) {
+  if (pick.kind === 'sheet') {
+    const u = SHEET_TILE;
+    return { img: sheetImg(pick.sheet), x: pick.sx * u, y: pick.sy * u,
+             w: pick.sw * u, h: pick.sh * u, stride: 0, frames: 1, ms: 1000 };
+  }
+  if (pick.kind === 'anim') {
+    const a = pick.anim;
+    return { img: stripImg(a.src), x: a.x, y: a.y, w: a.w, h: a.h,
+             stride: a.stride, frames: a.frames, ms: a.ms };
+  }
+  return { img: stripImg(pick.src), x: pick.x, y: pick.y, w: pick.w, h: pick.h,
+           stride: 0, frames: 1, ms: 1000 };
+}
+
+const SHEET_IMGS = {};
+function sheetImg(key) {
+  if (!SHEET_IMGS[key]) { const im = new Image(); im.src = SHEETS[key].src; SHEET_IMGS[key] = im; }
+  return SHEET_IMGS[key];
+}
+
+function drawSprite(s) {
+  const src = sourceOf(s.pick), cv = s.el, g = cv.getContext('2d');
+  const im = src.img;
+  if (!(im.complete && im.naturalWidth)) {
+    im.addEventListener('load', () => drawSprite(s), { once: true });
+    return;
+  }
+  // Loop animations continuously (doors included) so the board shows movement
+  const f = src.frames > 1 ? Math.floor(performance.now() / src.ms) % src.frames : 0;
+  g.clearRect(0, 0, cv.width, cv.height);
+  g.imageSmoothingEnabled = false;
+  g.drawImage(im, src.x + f * src.stride, src.y, src.w, src.h, 0, 0, cv.width, cv.height);
+}
+
+function placeSprite(s) {
+  s.el.style.left = s.x + 'px';
+  s.el.style.top  = s.y + 'px';
+}
+
+// Called by the picker's "Use Selection" — drop the pick in the board's center
+function onTilesetUse(pick) {
+  const src = sourceOf(pick);
+  const cv = document.createElement('canvas');
+  cv.className = 'sprite';
+  cv.width = src.w; cv.height = src.h;
+  // Pixel art shows at 4×; anything big (an uploaded picture) is shrunk to
+  // fit within 60% of the board instead of dwarfing it
+  const k = Math.min(PX, BOARD_W * 0.6 / src.w, BOARD_H * 0.6 / src.h);
+  const w = Math.round(src.w * k), h = Math.round(src.h * k);
+  cv.style.width  = w + 'px';
+  cv.style.height = h + 'px';
+  const s = { el: cv, pick,
+              x: Math.round((BOARD_W - w) / 2), y: Math.round((BOARD_H - h) / 2) };
+  sprites.push(s);
+  board.appendChild(cv);
+  placeSprite(s);
+  drawSprite(s);
+  enableDrag(s);
+  document.getElementById('stCount').textContent =
+    sprites.length + (sprites.length === 1 ? ' object' : ' objects');
+}
+
+// Drag with mouse, pen or finger. Deltas are divided by the board's display
+// scale so the sprite tracks the pointer exactly.
+function enableDrag(s) {
+  let start = null;
+  s.el.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    s.el.setPointerCapture(e.pointerId);
+    start = { px: e.clientX, py: e.clientY, x: s.x, y: s.y, id: e.pointerId };
+    s.el.classList.add('dragging');
+    board.appendChild(s.el);   // bring to front while dragging
+    sprites.push(sprites.splice(sprites.indexOf(s), 1)[0]);
+  });
+  s.el.addEventListener('pointermove', e => {
+    if (!start || e.pointerId !== start.id) return;
+    const w = s.el.offsetWidth, h = s.el.offsetHeight;
+    s.x = Math.round(Math.max(-w + 16, Math.min(BOARD_W - 16, start.x + (e.clientX - start.px) / boardScale)));
+    s.y = Math.round(Math.max(-h + 16, Math.min(BOARD_H - 16, start.y + (e.clientY - start.py) / boardScale)));
+    placeSprite(s);
+  });
+  const end = e => {
+    if (!start || e.pointerId !== start.id) return;
+    start = null;
+    s.el.classList.remove('dragging');
+  };
+  s.el.addEventListener('pointerup', end);
+  s.el.addEventListener('pointercancel', end);
+}
+
+// Animated picks keep playing on the board
+setInterval(() => {
+  for (const s of sprites) if (sourceOf(s.pick).frames > 1) drawSprite(s);
+}, 60);
+
+// ── Keyboard: the picker's shortcuts (same as Map Studio) ─────────────────────
+window.addEventListener('keydown', e => {
+  if (!tsOverlay.classList.contains('open')) return;
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') {
+    if (e.key === 'Escape') document.activeElement.blur();
+    return;
+  }
+  if (e.key === 'Escape') { tsCancel(); e.preventDefault(); return; }
+  if (e.key === 'Enter') {
+    if (!document.getElementById('tsUseBtn').disabled) tsUse();
+    e.preventDefault(); return;
+  }
+  const arrow = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+  if (arrow && tsSheet !== 'animated') {
+    tsNudge(arrow[0], arrow[1], e.shiftKey);
+    e.preventDefault();
+  }
+});
+</script>
+</body>
+</html>

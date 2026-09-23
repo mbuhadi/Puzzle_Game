@@ -1,0 +1,104 @@
+/* Browse Tileset picker — see assets/tileset_picker.js. Uses the host page's
+   theme variables (--gold, --bg2, --border, --check1, …). */
+
+#tsBox { width: 600px; height: 84vh; }
+#tsSel { font-family: monospace; color: var(--gold); margin-left: auto; }
+#tsScroll {
+  flex: 1; overflow: auto; position: relative;
+  background:
+    repeating-conic-gradient(var(--check1) 0% 25%, var(--check2) 0% 50%) 0 0 / 32px 32px;
+}
+#tsImg {
+  display: block; width: 512px;              /* 2× the sheet's 256px width */
+  image-rendering: pixelated; user-select: none;
+  touch-action: none;   /* one finger drag-selects; two fingers scroll (JS) */
+  -webkit-touch-callout: none;
+}
+#tsRect {
+  position: absolute; pointer-events: none; display: none;
+  border: 2px solid var(--gold);
+  background: rgba(200,168,75,0.18);
+}
+#tsFoot {
+  flex-shrink: 0; display: flex; gap: 8px; justify-content: flex-end;
+  align-items: center; padding: 8px 12px; border-top: 1px solid var(--border);
+}
+#tsZoomLabel {
+  font-family: monospace; font-size: 11px; color: var(--dim);
+  min-width: 24px; text-align: center;
+}
+
+/* ── Animated tab inside the tileset picker ─────────────────────────────── */
+#animPane { display: none; height: 100%; }
+#tsScroll.anim-mode { overflow: hidden; }
+#tsScroll.anim-mode #tsImg, #tsScroll.anim-mode #tsRect { display: none !important; }
+#tsScroll.anim-mode #animPane { display: flex; }
+#animSide {
+  width: 232px; flex-shrink: 0; display: flex; flex-direction: column;
+  border-right: 1px solid var(--border); background: var(--bg2);
+}
+#animSearch {
+  margin: 8px; padding: 5px 7px; background: var(--bg3);
+  border: 1px solid var(--border); border-radius: 3px;
+  color: var(--text); font-family: monospace; font-size: 11px;
+}
+#animSearch:focus { outline: none; border-color: var(--gold-dim); }
+#animItems { flex: 1; overflow-y: auto; padding: 0 4px 8px; }
+#animItems::-webkit-scrollbar { width: 4px; }
+#animItems::-webkit-scrollbar-thumb { background: var(--border); }
+.anim-cat { font-size: 8px; letter-spacing: 2.5px; color: var(--dim); padding: 8px 4px 3px; }
+.anim-item {
+  display: flex; align-items: center; gap: 7px; padding: 3px 4px;
+  border-radius: 3px; cursor: pointer; border: 1px solid transparent;
+  font-size: 10px; letter-spacing: 0.3px;
+}
+.anim-item:hover { background: var(--hover); }
+.anim-item.active { border-color: var(--gold); color: var(--gold); }
+.anim-item canvas {
+  width: 32px; height: 32px; flex-shrink: 0;
+  image-rendering: pixelated; background: var(--check1); border-radius: 2px;
+}
+.anim-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#animStage {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 10px; padding: 14px; min-width: 0; overflow: auto;
+}
+#animCanvas {
+  image-rendering: pixelated; cursor: crosshair;
+  background: repeating-conic-gradient(var(--check1) 0% 25%, var(--check2) 0% 50%) 0 0 / 16px 16px;
+  border: 1px solid var(--border); border-radius: 3px;
+}
+#animInfo { font-family: monospace; font-size: 10px; color: var(--gold); text-align: center; }
+
+/* ── Custom tab inside the tileset picker ───────────────────────────────── */
+#customPane { display: none; flex-direction: column; min-height: 100%; }
+#tsScroll.custom-mode #tsImg, #tsScroll.custom-mode #tsRect { display: none !important; }
+#tsScroll.custom-mode #customPane { display: flex; }
+#customBar {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border-bottom: 1px solid var(--border); background: var(--bg2);
+  position: sticky; top: 0; z-index: 1;
+}
+#customStatus { font-family: monospace; font-size: 10px; }
+#customGrid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px; padding: 12px;
+}
+.custom-item {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 8px 6px; border: 1px solid var(--border); border-radius: 4px;
+  background: var(--bg2); cursor: pointer; font-size: 10px; letter-spacing: 0.3px;
+}
+.custom-item:hover { border-color: var(--gold-dim); background: var(--hover); }
+.custom-item img {
+  width: 88px; height: 88px; object-fit: contain; image-rendering: pixelated;
+  background: repeating-conic-gradient(var(--check1) 0% 25%, var(--check2) 0% 50%) 0 0 / 16px 16px;
+  border-radius: 2px;
+}
+.custom-item span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#customGrid .hint-text { grid-column: 1 / -1; padding: 6px 2px; }
+
+
+/* Tabs + hint + selection readout wrap onto a second line on narrow screens */
+#tsHead { flex-wrap: wrap; row-gap: 6px; }
+#tsHead > span { white-space: nowrap; }
