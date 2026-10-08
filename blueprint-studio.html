@@ -1,0 +1,1452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Blueprint Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cinzel+Decorative:wght@400&display=swap" rel="stylesheet">
+<style>
+/* Blueprint Studio — a second map studio (map-editor.html is the old one).
+   The map is a blueprint: areas are outlined on a grid and marked explored
+   (open from the start) or unexplored. Areas are sectioned into flip tiles;
+   each tile holds one puzzle chunk (a problem or a given), and a tile can
+   open one or more unexplored areas once it is solved. */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --gold: #c8a84b; --gold-dim: #7a6030;
+  --bg: #0e0d0a; --bg2: #14120e; --bg3: #1e1a12; --border: #2e2a1e;
+  --text: #d4ba88; --dim: #6a5c3a; --hover: #231d0e;
+  --bp: #123b66; --bp-line: rgba(220,236,255,.9);
+}
+html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Cinzel', serif; }
+#app { display: flex; flex-direction: column; height: 100%; }
+
+#topbar { height: 44px; flex-shrink: 0; background: var(--bg2); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 4px; padding: 0 8px; overflow-x: auto; }
+.tb-title { font-family: 'Cinzel Decorative', serif; font-size: 12px; color: var(--gold); letter-spacing: 2px; margin-right: 8px; white-space: nowrap; }
+.tb-sep { width: 1px; height: 24px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
+.tb-grow { flex: 1; }
+#mapNameLbl { font-size: 11px; color: var(--dim); white-space: nowrap; margin-right: 6px; }
+
+#main { flex: 1; display: flex; overflow: hidden; min-height: 0; position: relative; }
+#sidebar { width: 250px; flex-shrink: 0; background: var(--bg2); border-right: 1px solid var(--border);
+  overflow-y: auto; padding: 10px 9px 30px; display: flex; flex-direction: column; gap: 12px; z-index: 5; }
+#sidebar::-webkit-scrollbar { width: 4px; }
+#sidebar::-webkit-scrollbar-thumb { background: var(--border); }
+.sec-title { font-size: 9px; letter-spacing: 2.5px; color: var(--dim); margin-bottom: 6px; }
+.divider { height: 1px; background: var(--border); }
+.hint { font-family: sans-serif; font-size: 11px; color: var(--dim); line-height: 1.5; }
+
+button { background: var(--bg3); border: 1px solid var(--border); color: var(--text); font-family: 'Cinzel', serif;
+  font-size: 11px; padding: 6px 8px; cursor: pointer; border-radius: 3px; letter-spacing: .5px; white-space: nowrap;
+  transition: border-color .12s, color .12s; }
+button:hover { border-color: var(--gold-dim); color: var(--gold); }
+button.active { border-color: var(--gold); color: var(--gold); background: var(--hover); }
+button:disabled { opacity: .35; cursor: default; }
+button.danger:hover { border-color: #7a3030; color: #cc7070; }
+button.play { border-color: #3a6a30; color: #7acc60; }
+button.play:hover, button.play.active { border-color: #5a9a48; color: #aaee88; background: #142010; }
+button.wide { width: 100%; }
+.tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.row { display: flex; gap: 4px; align-items: center; }
+.row > * { flex: 1; }
+input[type=text], input[type=number], input[type=password], select {
+  width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+  font-family: 'Cinzel', serif; font-size: 11px; padding: 5px 6px; border-radius: 3px; }
+input:focus, select:focus { outline: none; border-color: var(--gold-dim); }
+input[type=number] { font-family: monospace; }
+select.mono { font-family: monospace; }
+label.chk { display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; padding: 2px 0; }
+label.chk input { accent-color: var(--gold); }
+.field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
+.field > span { font-size: 9px; letter-spacing: 1.5px; color: var(--dim); }
+
+.area-item { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border: 1px solid var(--border);
+  border-radius: 3px; cursor: pointer; font-size: 11px; margin-bottom: 3px; background: var(--bg3); }
+.area-item:hover { border-color: var(--gold-dim); }
+.area-item.sel { border-color: var(--gold); background: var(--hover); color: var(--gold); }
+.area-item .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.area-item .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badge { font-size: 8px; letter-spacing: 1px; padding: 2px 4px; border-radius: 2px; border: 1px solid; flex-shrink: 0; }
+.badge.start { color: #7acc60; border-color: #3a6a30; }
+.badge.locked { color: #8aaedc; border-color: #34507a; }
+.opens-list { max-height: 160px; overflow-y: auto; border: 1px solid var(--border); border-radius: 3px; padding: 3px 6px; background: var(--bg); }
+.checks div { font-family: sans-serif; font-size: 11px; line-height: 1.45; margin-bottom: 4px; }
+.checks .warn { color: #e0a060; }
+.checks .ok { color: #4a9a60; }
+.checks .warn[data-sel] { cursor: pointer; text-decoration: underline dotted; }
+
+#canvasWrap { flex: 1; position: relative; overflow: hidden; background: var(--bp); }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+#status { position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 10px; font-family: monospace; font-size: 11px;
+  color: rgba(220,236,255,.75); background: rgba(8,24,44,.75); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#playBar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: none; gap: 6px; z-index: 4; }
+body.playing #playBar { display: flex; }
+body.playing #sidebar { display: none; }
+body.playing .edit-only { display: none; }
+
+#saveFlash { position: fixed; top: 52px; right: 14px; font-size: 12px; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 50; }
+#saveFlash.show { opacity: 1; }
+
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none; align-items: center; justify-content: center; z-index: 40; padding: 12px; }
+.overlay.open { display: flex; }
+.panel { background: var(--bg2); border: 1px solid var(--gold-dim); border-radius: 8px; padding: 14px; width: min(460px, 100%);
+  max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.panel h3 { font-size: 13px; color: var(--gold); letter-spacing: 2px; font-weight: 400; }
+.mp-item { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+.mp-item .nm { flex: 1; font-size: 12px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; }
+.mp-item .nm:hover { color: var(--gold); }
+#mpStatus { font-family: sans-serif; font-size: 11px; min-height: 14px; }
+
+#tileView .panel { width: min(1100px, 100%); height: min(92vh, 900px); max-height: none; padding: 10px; }
+#tvFrame { flex: 1; width: 100%; border: 1px solid var(--border); border-radius: 6px; background: #0e0d0a; }
+#tvEmpty { flex: 1; display: flex; align-items: center; justify-content: center; font-family: sans-serif; color: var(--dim); font-size: 13px; text-align: center; }
+#tvTitle { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+#sideToggle { display: none; }
+@media (max-width: 760px) {
+  #sideToggle { display: inline-block; }
+  #sidebar { position: absolute; left: 0; top: 0; bottom: 0; transform: translateX(-100%); transition: transform .2s; box-shadow: 4px 0 18px rgba(0,0,0,.5); }
+  body.side-open #sidebar { transform: none; }
+  .tb-title { display: none; }
+  #mapNameLbl { display: none; }
+  .wide-only { display: none; }
+  #topbar button { padding: 6px 7px; }
+}
+@media (min-width: 761px) { .narrow-only { display: none; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <button id="sideToggle" class="edit-only" onclick="document.body.classList.toggle('side-open')">☰</button>
+    <a href="index.html" style="text-decoration:none"><span class="tb-title">Blueprint Studio</span></a>
+    <span id="mapNameLbl"></span>
+    <span class="tb-sep edit-only"></span>
+    <button class="edit-only" id="undoBtn" onclick="undo()" title="Undo (Ctrl+Z)">↶</button>
+    <button class="edit-only" id="redoBtn" onclick="redo()" title="Redo (Ctrl+Y)">↷</button>
+    <span class="tb-sep"></span>
+    <button onclick="zoomStep(-1)" title="Zoom out">−</button>
+    <button onclick="fitView()" title="Fit blueprint">Fit</button>
+    <button onclick="zoomStep(1)" title="Zoom in">+</button>
+    <span class="tb-grow"></span>
+    <button class="edit-only" onclick="openPanel()" title="Save / load blueprints"><span class="wide-only">My Blueprints</span><span class="narrow-only">☁</span></button>
+    <button class="edit-only" onclick="quickSave()" title="Save to website (Ctrl+S)">Save</button>
+    <button class="play" id="playBtn" onclick="togglePlay()">▶ Test</button>
+  </div>
+
+  <div id="main">
+    <div id="sidebar">
+      <div>
+        <div class="sec-title">TOOLS</div>
+        <div class="tool-grid">
+          <button data-tool="select" title="Select / move tiles, pick areas (V)">↖ Select</button>
+          <button data-tool="pan" title="Pan (hold Space)">✋ Pan</button>
+          <button data-tool="paint" title="Paint cells into the selected area (B)">▦ Outline</button>
+          <button data-tool="erase" title="Erase cells from any area (E)">⌫ Erase</button>
+          <button data-tool="tile" title="Drag a rectangle to make a flip tile (T)" style="grid-column: span 2">▣ Flip Tile</button>
+        </div>
+        <div class="hint" id="toolHint" style="margin-top:6px"></div>
+      </div>
+      <div class="divider"></div>
+
+      <div>
+        <div class="sec-title">AREAS</div>
+        <div id="areaList"></div>
+        <div class="row" style="margin-top:4px">
+          <button onclick="addArea(true)">+ Explored</button>
+          <button onclick="addArea(false)">+ Unexplored</button>
+        </div>
+      </div>
+
+      <div id="areaProps" style="display:none">
+        <div class="divider" style="margin-bottom:10px"></div>
+        <div class="sec-title">SELECTED AREA</div>
+        <div class="field"><span>NAME</span><input type="text" id="apName" maxlength="40"></div>
+        <label class="chk"><input type="checkbox" id="apExplored"> Explored at the start</label>
+        <div class="field" style="margin-top:4px"><span>EDITOR COLOUR</span><input type="color" id="apColor" style="width:100%;height:26px;background:none;border:1px solid var(--border)"></div>
+        <div class="field"><span>OPENED BY</span><div class="hint" id="apOpenedBy"></div></div>
+        <div class="field"><span>SECTION INTO TILES (W × H CELLS)</span>
+          <div class="row"><input type="number" id="fillW" min="1" max="20" value="2"><input type="number" id="fillH" min="1" max="20" value="2"><button onclick="fillAreaWithTiles()">Fill</button></div>
+          <div class="hint">Adds tiles wherever they fit fully inside the area and don't overlap existing ones.</div>
+        </div>
+        <button class="danger wide" onclick="deleteArea()">Delete area</button>
+      </div>
+
+      <div id="tileProps" style="display:none">
+        <div class="divider" style="margin-bottom:10px"></div>
+        <div class="sec-title">SELECTED FLIP TILE</div>
+        <div class="field"><span>CONTENT (PUZZLE / GIVEN)</span><select id="tpChunk" class="mono"></select></div>
+        <div class="field"><span>LABEL ON BLUEPRINT (OPTIONAL)</span><input type="text" id="tpLabel" maxlength="24" placeholder="defaults to the content id"></div>
+        <div class="field"><span>SOLVING THIS TILE OPENS</span><div class="opens-list" id="tpOpens"></div></div>
+        <div class="hint" id="tpInfo" style="margin-bottom:6px"></div>
+        <button class="danger wide" onclick="deleteSelectedTile()">Delete tile</button>
+      </div>
+      <div class="divider"></div>
+
+      <div>
+        <div class="sec-title">CHECKS</div>
+        <div class="checks" id="checks"></div>
+        <label class="chk" style="margin-top:4px"><input type="checkbox" id="showLinks" checked onchange="render()"> Show all "opens" links</label>
+      </div>
+      <div class="divider"></div>
+
+      <div>
+        <div class="sec-title">BLUEPRINT</div>
+        <div class="field"><span>GRID SIZE (COLS × ROWS)</span>
+          <div class="row"><input type="number" id="gridCols" min="8" max="200"><input type="number" id="gridRows" min="8" max="200"><button onclick="applyGridSize()">Set</button></div>
+        </div>
+        <div class="row" style="margin-top:4px">
+          <button onclick="exportJSON()">Export</button>
+          <button onclick="document.getElementById('importFile').click()">Import</button>
+        </div>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
+        <button class="danger wide" style="margin-top:4px" onclick="newBlueprint()">New blueprint</button>
+      </div>
+    </div>
+
+    <div id="canvasWrap">
+      <canvas id="cv"></canvas>
+      <div id="playBar">
+        <button onclick="resetPlay()">↺ Restart</button>
+        <button class="play active" onclick="togglePlay()">■ Stop test</button>
+      </div>
+      <div id="status"></div>
+    </div>
+  </div>
+</div>
+
+<div id="saveFlash"></div>
+
+<!-- My Blueprints: saved to the website (blueprints/ in the repo) -->
+<div id="bpOverlay" class="overlay" onclick="if(event.target===this)closePanel()">
+  <div class="panel">
+    <h3>MY BLUEPRINTS</h3>
+    <div class="row">
+      <input type="text" id="mpName" placeholder="blueprint name…" maxlength="40">
+      <button onclick="mpSave()" style="flex:0 0 auto">Save to Website</button>
+    </div>
+    <div id="mpStatus"></div>
+    <div class="divider"></div>
+    <div class="sec-title">ON THE WEBSITE</div>
+    <div id="mpList"></div>
+    <div id="mpAuth"></div>
+    <button onclick="closePanel()">Close</button>
+  </div>
+</div>
+
+<!-- Test mode: a flipped tile's interface -->
+<div id="tileView" class="overlay">
+  <div class="panel">
+    <div class="row" style="flex:0 0 auto">
+      <span id="tvTitle" style="font-size:12px;color:var(--gold);letter-spacing:1px"></span>
+      <button id="tvSolve" class="play" style="flex:0 0 auto" onclick="solveOpenTile()"></button>
+      <button style="flex:0 0 auto" onclick="closeTileView()">Close</button>
+    </div>
+    <iframe id="tvFrame"></iframe>
+    <div id="tvEmpty">This tile has no puzzle or given assigned yet.</div>
+  </div>
+</div>
+
+<script src="puzzles_studio.js"></script>
+<script src="puzzles_curated_data.js"></script>
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+// areas: { id, name, color, explored, cells:Set<"c,r"> } — a cell belongs to at
+//   most one area. explored = open when the game starts.
+// tiles: { id, area, c, r, w, h, chunk, label, opens:[areaId] } — a rectangle of
+//   cells inside one area. chunk is a puzzles_curated.html chunk id (p1p1,
+//   p1g1 …). opens lists the areas that become explored once it is solved.
+const AREA_COLORS = ['#ffd166', '#06d6a0', '#ef476f', '#4cc9f0', '#f78c6b', '#b388eb', '#a0e426', '#ff9ff3', '#fca311', '#80ffdb'];
+let bpName = 'Untitled Blueprint';
+let cols = 48, rows = 30;
+let areas = [], tiles = [];
+let owner = new Map();          // "c,r" → area id (derived from areas)
+let nextId = 1;
+let selArea = null, selTile = null;
+let tool = 'select';
+
+const CHUNKS = (typeof PUZZLE_CHUNKS !== 'undefined') ? PUZZLE_CHUNKS : [];
+const CHUNK_IDS = new Set(CHUNKS.map(c => c.id));
+const chunkKind = id => /^p\d+g/.test(id) ? 'given' : /^p\d+p/.test(id) ? 'problem' : '';
+
+const key = (c, r) => c + ',' + r;
+const uid = p => p + (nextId++);
+const areaById = id => areas.find(a => a.id === id) || null;
+const tileById = id => tiles.find(t => t.id === id) || null;
+
+function rebuildOwner() {
+  owner = new Map();
+  for (const a of areas) for (const k of a.cells) owner.set(k, a.id);
+}
+function tileCells(t) {
+  const out = [];
+  for (let r = t.r; r < t.r + t.h; r++) for (let c = t.c; c < t.c + t.w; c++) out.push(key(c, r));
+  return out;
+}
+function tileAt(c, r) {
+  for (let i = tiles.length - 1; i >= 0; i--) {
+    const t = tiles[i];
+    if (c >= t.c && c < t.c + t.w && r >= t.r && r < t.r + t.h) return t;
+  }
+  return null;
+}
+function rectsOverlap(a, b) {
+  return a.c < b.c + b.w && b.c < a.c + a.w && a.r < b.r + b.h && b.r < a.r + a.h;
+}
+// A tile is valid when every one of its cells belongs to its area and it
+// doesn't overlap another tile
+function tileProblem(t) {
+  if (!areaById(t.area)) return 'is not inside an area';
+  if (tileCells(t).some(k => owner.get(k) !== t.area)) return 'pokes outside its area';
+  if (tiles.some(o => o !== t && rectsOverlap(o, t))) return 'overlaps another tile';
+  return '';
+}
+function areaCentroid(a) {
+  let sx = 0, sy = 0, n = 0;
+  for (const k of a.cells) { const [c, r] = k.split(',').map(Number); sx += c + .5; sy += r + .5; n++; }
+  return n ? { x: sx / n, y: sy / n } : null;
+}
+// Label spot: the area cell nearest the centroid (the centroid of an L shape
+// can fall outside the area)
+function areaLabelPos(a) {
+  const cen = areaCentroid(a);
+  if (!cen) return null;
+  let best = null, bd = Infinity;
+  for (const k of a.cells) {
+    const [c, r] = k.split(',').map(Number);
+    const d = (c + .5 - cen.x) ** 2 + (r + .5 - cen.y) ** 2;
+    if (d < bd) { bd = d; best = { x: c + .5, y: r + .5 }; }
+  }
+  return best;
+}
+
+function toData() {
+  return {
+    version: 1, name: bpName, cols, rows,
+    areas: areas.map(a => ({ id: a.id, name: a.name, color: a.color, explored: a.explored,
+      cells: [...a.cells].map(k => k.split(',').map(Number)) })),
+    tiles: tiles.map(t => ({ id: t.id, area: t.area, c: t.c, r: t.r, w: t.w, h: t.h,
+      chunk: t.chunk || '', label: t.label || '', opens: [...t.opens] })),
+  };
+}
+function fromData(d) {
+  if (!d || !Array.isArray(d.areas)) throw new Error('not a blueprint file');
+  bpName = d.name || 'Untitled Blueprint';
+  cols = Math.max(8, +d.cols || 48); rows = Math.max(8, +d.rows || 30);
+  areas = d.areas.map(a => ({ id: String(a.id), name: a.name || 'Area', color: a.color || '#ffd166',
+    explored: !!a.explored, cells: new Set((a.cells || []).map(([c, r]) => key(c, r))) }));
+  const ids = new Set(areas.map(a => a.id));
+  tiles = (d.tiles || []).map(t => ({ id: String(t.id), area: String(t.area), c: +t.c, r: +t.r,
+    w: Math.max(1, +t.w || 1), h: Math.max(1, +t.h || 1), chunk: t.chunk || '', label: t.label || '',
+    opens: (t.opens || []).map(String).filter(id => ids.has(id)) }));
+  let max = 0;
+  for (const x of [...areas, ...tiles]) { const n = parseInt(x.id.replace(/\D/g, ''), 10); if (n > max) max = n; }
+  nextId = max + 1;
+  selArea = null; selTile = null;
+  rebuildOwner();
+}
+
+// ── History ───────────────────────────────────────────────────────────────────
+let history = [], hIdx = -1;
+function pushHistory() {
+  const s = JSON.stringify(toData());
+  if (history[hIdx] === s) return;
+  history = history.slice(0, hIdx + 1);
+  history.push(s);
+  if (history.length > 120) history.shift();
+  hIdx = history.length - 1;
+  updateUndoButtons();
+}
+function restore(s) {
+  const sa = selArea, st = selTile;
+  fromData(JSON.parse(s));
+  selArea = areaById(sa) ? sa : null;
+  selTile = tileById(st) ? st : null;
+  refreshAll();
+}
+function undo() { if (hIdx > 0) { hIdx--; restore(history[hIdx]); updateUndoButtons(); } }
+function redo() { if (hIdx < history.length - 1) { hIdx++; restore(history[hIdx]); updateUndoButtons(); } }
+function updateUndoButtons() {
+  document.getElementById('undoBtn').disabled = hIdx <= 0;
+  document.getElementById('redoBtn').disabled = hIdx >= history.length - 1;
+}
+
+// ── View ──────────────────────────────────────────────────────────────────────
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const CELL = 24;
+let view = { x: 20, y: 20, z: 1 };
+let dpr = 1;
+
+function resizeCanvas() {
+  dpr = window.devicePixelRatio || 1;
+  const r = cv.getBoundingClientRect();
+  cv.width = Math.round(r.width * dpr);
+  cv.height = Math.round(r.height * dpr);
+  render();
+}
+function toCell(px, py) {
+  return { c: Math.floor((px - view.x) / (CELL * view.z)), r: Math.floor((py - view.y) / (CELL * view.z)) };
+}
+function inBounds(c, r) { return c >= 0 && r >= 0 && c < cols && r < rows; }
+function fitView() {
+  const r = cv.getBoundingClientRect();
+  const z = Math.min((r.width - 40) / (cols * CELL), (r.height - 50) / (rows * CELL));
+  view.z = Math.max(.2, Math.min(4, z));
+  view.x = (r.width - cols * CELL * view.z) / 2;
+  view.y = (r.height - 24 - rows * CELL * view.z) / 2;
+  render();
+}
+function zoomAt(px, py, f) {
+  const nz = Math.max(.2, Math.min(6, view.z * f));
+  view.x = px - (px - view.x) * nz / view.z;
+  view.y = py - (py - view.y) * nz / view.z;
+  view.z = nz;
+  render();
+}
+function zoomStep(dir) {
+  const r = cv.getBoundingClientRect();
+  zoomAt(r.width / 2, r.height / 2, dir > 0 ? 1.25 : 0.8);
+}
+
+// ── Rendering ─────────────────────────────────────────────────────────────────
+let hatch = null;
+function hatchPattern() {
+  if (hatch) return hatch;
+  const p = document.createElement('canvas');
+  p.width = p.height = 10;
+  const g = p.getContext('2d');
+  g.strokeStyle = 'rgba(220,236,255,.16)';
+  g.lineWidth = 1.2;
+  g.beginPath(); g.moveTo(0, 10); g.lineTo(10, 0); g.moveTo(-5, 5); g.lineTo(5, -5); g.moveTo(5, 15); g.lineTo(15, 5); g.stroke();
+  hatch = ctx.createPattern(p, 'repeat');
+  return hatch;
+}
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`;
+}
+function roundRect(x, y, w, h, rad) {
+  ctx.beginPath();
+  ctx.moveTo(x + rad, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rad);
+  ctx.arcTo(x + w, y + h, x, y + h, rad);
+  ctx.arcTo(x, y + h, x, y, rad);
+  ctx.arcTo(x, y, x + w, y, rad);
+  ctx.closePath();
+}
+// Outline = every cell edge whose neighbour is not in the same area
+function strokeAreaOutline(a, s) {
+  ctx.beginPath();
+  for (const k of a.cells) {
+    const [c, r] = k.split(',').map(Number);
+    const x = c * s, y = r * s;
+    if (!a.cells.has(key(c, r - 1))) { ctx.moveTo(x, y); ctx.lineTo(x + s, y); }
+    if (!a.cells.has(key(c, r + 1))) { ctx.moveTo(x, y + s); ctx.lineTo(x + s, y + s); }
+    if (!a.cells.has(key(c - 1, r))) { ctx.moveTo(x, y); ctx.lineTo(x, y + s); }
+    if (!a.cells.has(key(c + 1, r))) { ctx.moveTo(x + s, y); ctx.lineTo(x + s, y + s); }
+  }
+  ctx.stroke();
+}
+function fillArea(a, s, style) {
+  ctx.fillStyle = style;
+  ctx.beginPath();
+  for (const k of a.cells) { const [c, r] = k.split(',').map(Number); ctx.rect(c * s, r * s, s, s); }
+  ctx.fill();
+}
+
+let renderQueued = false;
+function render() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => { renderQueued = false; draw(); });
+}
+
+function draw() {
+  const W = cv.width / dpr, H = cv.height / dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#0d2e52';
+  ctx.fillRect(0, 0, W, H);
+  ctx.translate(view.x, view.y);
+  const s = CELL * view.z;
+  const now = performance.now();
+  let animating = false;
+
+  // Sheet + grid
+  ctx.fillStyle = '#123b66';
+  ctx.fillRect(0, 0, cols * s, rows * s);
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= cols; i++) {
+    ctx.strokeStyle = i % 5 ? 'rgba(220,236,255,.06)' : 'rgba(220,236,255,.14)';
+    ctx.beginPath(); ctx.moveTo(i * s + .5, 0); ctx.lineTo(i * s + .5, rows * s); ctx.stroke();
+  }
+  for (let j = 0; j <= rows; j++) {
+    ctx.strokeStyle = j % 5 ? 'rgba(220,236,255,.06)' : 'rgba(220,236,255,.14)';
+    ctx.beginPath(); ctx.moveTo(0, j * s + .5); ctx.lineTo(cols * s, j * s + .5); ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(220,236,255,.5)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(0, 0, cols * s, rows * s);
+
+  // Areas
+  for (const a of areas) {
+    const explored = playing ? play.explored.has(a.id) : a.explored;
+    let alpha = 1;
+    if (playing && play.reveal.has(a.id)) {
+      alpha = Math.max(0, Math.min(1, (now - play.reveal.get(a.id)) / 700));
+      if (alpha < 1) animating = true; else play.reveal.delete(a.id);
+    }
+    if (!explored || alpha < 1) {
+      ctx.globalAlpha = 1 - (explored ? alpha : 0);
+      fillArea(a, s, 'rgba(5,18,36,.55)');
+      fillArea(a, s, hatchPattern());
+      if (!playing) fillArea(a, s, hexA(a.color, .10));
+      ctx.setLineDash([6, 5]);
+      ctx.strokeStyle = 'rgba(220,236,255,.45)';
+      ctx.lineWidth = 1.5;
+      strokeAreaOutline(a, s);
+      ctx.setLineDash([]);
+    }
+    if (explored) {
+      ctx.globalAlpha = alpha;
+      fillArea(a, s, 'rgba(220,236,255,.10)');
+      if (!playing) fillArea(a, s, hexA(a.color, .16));
+      ctx.strokeStyle = 'rgba(235,244,255,.95)';
+      ctx.lineWidth = Math.max(2, 3 * view.z);
+      strokeAreaOutline(a, s);
+    }
+    ctx.globalAlpha = 1;
+    if (!playing && a.id === selArea) {
+      ctx.strokeStyle = '#ffd166';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([8, 4]);
+      strokeAreaOutline(a, s);
+      ctx.setLineDash([]);
+    }
+  }
+
+  // Tiles
+  for (const t of tiles) {
+    const a = areaById(t.area);
+    if (playing && (!a || !play.explored.has(a.id))) continue;
+    let alpha = 1;
+    if (playing && play.reveal.has(t.area)) alpha = Math.max(0, Math.min(1, (now - play.reveal.get(t.area)) / 700));
+    ctx.globalAlpha = alpha;
+    drawTile(t, s, now);
+    ctx.globalAlpha = 1;
+    if (playing && play.flip.has(t.id)) animating = true;
+  }
+
+  // Area names
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const a of areas) {
+    if (playing && !play.explored.has(a.id)) continue;
+    const p = areaLabelPos(a);
+    if (!p) continue;
+    // In the editor, put the name on a cell without a tile when possible
+    const fs = Math.max(9, Math.min(15, 11 * view.z));
+    ctx.font = `600 ${fs}px Cinzel, serif`;
+    // When a tile sits on the label spot, put the name just above the area
+    let x = p.x * s, y = p.y * s;
+    if (tileAt(Math.floor(p.x), Math.floor(p.y))) {
+      let minR = Infinity, minC = Infinity, maxC = -1;
+      for (const k of a.cells) { const [c, r] = k.split(',').map(Number); minR = Math.min(minR, r); minC = Math.min(minC, c); maxC = Math.max(maxC, c); }
+      x = (minC + maxC + 1) / 2 * s; y = minR * s - fs * .9;
+    }
+    ctx.fillStyle = 'rgba(13,46,82,.75)';
+    const tw = ctx.measureText(a.name).width;
+    ctx.fillRect(x - tw / 2 - 4, y - fs * .7, tw + 8, fs * 1.4);
+    ctx.fillStyle = playing ? 'rgba(235,244,255,.9)' : a.color;
+    ctx.fillText(a.name, x, y);
+  }
+  // Unexplored placeholders in test mode
+  if (playing) {
+    for (const a of areas) {
+      if (play.explored.has(a.id)) continue;
+      const p = areaLabelPos(a);
+      if (!p) continue;
+      ctx.font = `600 ${Math.max(10, 14 * view.z)}px Cinzel, serif`;
+      ctx.fillStyle = 'rgba(220,236,255,.4)';
+      ctx.fillText('UNEXPLORED', p.x * s, p.y * s);
+    }
+  }
+
+  // "Opens" links (editor only)
+  if (!playing) {
+    const all = document.getElementById('showLinks').checked;
+    for (const t of tiles) {
+      if (!t.opens.length || (!all && t.id !== selTile)) continue;
+      const sel = t.id === selTile;
+      const fx = (t.c + t.w / 2) * s, fy = (t.r + t.h / 2) * s;
+      for (const id of t.opens) {
+        const a = areaById(id);
+        const p = a && areaLabelPos(a);
+        if (!p) continue;
+        drawArrow(fx, fy, p.x * s, p.y * s, sel ? '#ffd166' : 'rgba(255,209,102,.45)', sel ? 2.5 : 1.5);
+      }
+    }
+  }
+
+  // Drag previews
+  if (drag && drag.kind === 'tile' && drag.rect) {
+    const R = drag.rect;
+    ctx.fillStyle = drag.valid ? 'rgba(255,209,102,.25)' : 'rgba(239,71,111,.25)';
+    ctx.strokeStyle = drag.valid ? '#ffd166' : '#ef476f';
+    ctx.lineWidth = 2;
+    ctx.fillRect(R.c * s, R.r * s, R.w * s, R.h * s);
+    ctx.strokeRect(R.c * s, R.r * s, R.w * s, R.h * s);
+  }
+  if (!playing && hover && inBounds(hover.c, hover.r) && (tool === 'paint' || tool === 'erase' || tool === 'tile')) {
+    ctx.strokeStyle = tool === 'erase' ? '#ef476f' : '#ffd166';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(hover.c * s + 1, hover.r * s + 1, s - 2, s - 2);
+  }
+
+  if (animating) render();
+}
+
+function drawArrow(x1, y1, x2, y2, color, w) {
+  const ang = Math.atan2(y2 - y1, x2 - x1);
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = w;
+  ctx.setLineDash([7, 5]);
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.setLineDash([]);
+  const h = 6 + w * 2;
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - h * Math.cos(ang - .4), y2 - h * Math.sin(ang - .4));
+  ctx.lineTo(x2 - h * Math.cos(ang + .4), y2 - h * Math.sin(ang + .4));
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.arc(x1, y1, 3 + w, 0, Math.PI * 2); ctx.fill();
+}
+
+function tileText(t) { return t.label || t.chunk || ''; }
+
+function drawTile(t, s, now) {
+  const pad = Math.max(2, 3 * view.z);
+  const x = t.c * s + pad, y = t.r * s + pad, w = t.w * s - pad * 2, h = t.h * s - pad * 2;
+  const rad = Math.min(8, 5 * view.z);
+  ctx.save();
+  let faceUp = true;
+  if (playing) {
+    faceUp = play.flipped.has(t.id);
+    if (play.flip.has(t.id)) {
+      // Flip: squash to 0 showing the back, then grow showing the face
+      const p = Math.min(1, (now - play.flip.get(t.id)) / 420);
+      if (p >= 1) play.flip.delete(t.id);
+      const sx = Math.abs(Math.cos(p * Math.PI));
+      faceUp = p >= .5;
+      ctx.translate(x + w / 2, y + h / 2);
+      ctx.scale(Math.max(.02, sx), 1 + .08 * Math.sin(p * Math.PI));
+      ctx.translate(-(x + w / 2), -(y + h / 2));
+    }
+  }
+  const problem = tileProblem(t);
+  const kind = chunkKind(t.chunk);
+  const fs = Math.max(8, Math.min(14, Math.min(w / 5.5, h / 2.4)));
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  if (playing && !faceUp) {
+    // Back of the tile: a sign to tap
+    roundRect(x, y, w, h, rad);
+    ctx.fillStyle = 'rgba(220,236,255,.16)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(235,244,255,.95)';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    const r = Math.min(w, h) * .28;
+    ctx.beginPath();
+    ctx.arc(x + w / 2, y + h / 2, r, 0, Math.PI * 2);
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(235,244,255,.95)';
+    ctx.font = `600 ${Math.max(9, r * 1.2)}px Cinzel, serif`;
+    ctx.fillText('?', x + w / 2, y + h / 2 + 1);
+  } else {
+    roundRect(x, y, w, h, rad);
+    const solved = playing && play.solved.has(t.id);
+    ctx.fillStyle = playing ? (solved ? 'rgba(122,204,96,.30)' : 'rgba(235,244,255,.85)')
+      : (kind === 'problem' ? 'rgba(255,209,102,.20)' : kind === 'given' ? 'rgba(76,201,240,.20)' : 'rgba(220,236,255,.10)');
+    ctx.fill();
+    ctx.lineWidth = (!playing && t.id === selTile) ? 3 : 1.6;
+    ctx.strokeStyle = (!playing && t.id === selTile) ? '#ffd166'
+      : (!playing && problem) ? '#ef476f'
+      : solved ? '#7acc60' : 'rgba(235,244,255,.95)';
+    if (!playing && !t.chunk) ctx.setLineDash([4, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = playing ? (solved ? '#d8ffd0' : '#123b66') : 'rgba(235,244,255,.95)';
+    ctx.font = `600 ${fs}px monospace`;
+    const txt = tileText(t) || (playing ? '' : '·');
+    ctx.fillText(fitText(txt, w - 4), x + w / 2, y + h / 2 - (kind && h > fs * 3 ? fs * .45 : 0));
+    if (kind && h > fs * 3) {
+      ctx.font = `${Math.max(7, fs * .7)}px Cinzel, serif`;
+      ctx.fillText(kind === 'problem' ? 'PUZZLE' : 'GIVEN', x + w / 2, y + h / 2 + fs * .75);
+    }
+    if (!playing && t.opens.length) {
+      ctx.fillStyle = '#ffd166';
+      ctx.font = `600 ${Math.max(8, fs * .8)}px sans-serif`;
+      ctx.textAlign = 'right';
+      ctx.fillText('→' + t.opens.length, x + w - 3, y + fs * .6 + 2);
+    }
+    if (solved) {
+      ctx.fillStyle = '#7acc60';
+      ctx.font = `700 ${Math.max(9, fs)}px sans-serif`;
+      ctx.textAlign = 'right';
+      ctx.fillText('✓', x + w - 3, y + fs * .6 + 2);
+    }
+  }
+  ctx.restore();
+}
+function fitText(txt, maxW) {
+  if (ctx.measureText(txt).width <= maxW) return txt;
+  while (txt.length > 1 && ctx.measureText(txt + '…').width > maxW) txt = txt.slice(0, -1);
+  return txt + '…';
+}
+
+// ── Editing operations ────────────────────────────────────────────────────────
+function addArea(explored) {
+  const n = areas.length;
+  const a = { id: uid('a'), name: (explored ? 'Room ' : 'Unexplored ') + (n + 1),
+    color: AREA_COLORS[n % AREA_COLORS.length], explored, cells: new Set() };
+  areas.push(a);
+  selArea = a.id; selTile = null;
+  setTool('paint');
+  pushHistory();
+  refreshAll();
+  setStatus(`New area "${a.name}" — paint its cells on the blueprint.`);
+}
+function deleteArea() {
+  const a = areaById(selArea);
+  if (!a) return;
+  const n = tiles.filter(t => t.area === a.id).length;
+  if (!confirm(`Delete "${a.name}"${n ? ` and its ${n} tile(s)` : ''}?`)) return;
+  areas = areas.filter(x => x !== a);
+  tiles = tiles.filter(t => t.area !== a.id);
+  for (const t of tiles) t.opens = t.opens.filter(id => id !== a.id);
+  selArea = null;
+  rebuildOwner();
+  pushHistory();
+  refreshAll();
+}
+function setCell(c, r, areaId) {
+  if (!inBounds(c, r)) return false;
+  const k = key(c, r);
+  const cur = owner.get(k);
+  if (cur === areaId) return false;
+  if (cur) areaById(cur).cells.delete(k);
+  if (areaId) { areaById(areaId).cells.add(k); owner.set(k, areaId); }
+  else owner.delete(k);
+  return true;
+}
+// Bresenham between successive pointer cells so fast strokes leave no gaps
+function lineCells(c0, r0, c1, r1, fn) {
+  const dc = Math.abs(c1 - c0), dr = Math.abs(r1 - r0);
+  const sc = c0 < c1 ? 1 : -1, sr = r0 < r1 ? 1 : -1;
+  let err = dc - dr;
+  for (;;) {
+    fn(c0, r0);
+    if (c0 === c1 && r0 === r1) break;
+    const e2 = 2 * err;
+    if (e2 > -dr) { err -= dr; c0 += sc; }
+    if (e2 < dc) { err += dc; r0 += sr; }
+  }
+}
+function normRect(a, b) {
+  const c = Math.max(0, Math.min(a.c, b.c)), r = Math.max(0, Math.min(a.r, b.r));
+  const c2 = Math.min(cols - 1, Math.max(a.c, b.c)), r2 = Math.min(rows - 1, Math.max(a.r, b.r));
+  return { c, r, w: c2 - c + 1, h: r2 - r + 1 };
+}
+function rectValidFor(R, areaId, ignore) {
+  if (!areaId) return false;
+  for (let r = R.r; r < R.r + R.h; r++) for (let c = R.c; c < R.c + R.w; c++)
+    if (owner.get(key(c, r)) !== areaId) return false;
+  return !tiles.some(t => t !== ignore && rectsOverlap(t, R));
+}
+function fillAreaWithTiles() {
+  const a = areaById(selArea);
+  if (!a || !a.cells.size) return;
+  const w = Math.max(1, +document.getElementById('fillW').value || 1);
+  const h = Math.max(1, +document.getElementById('fillH').value || 1);
+  let minC = Infinity, minR = Infinity, maxC = -1, maxR = -1;
+  for (const k of a.cells) {
+    const [c, r] = k.split(',').map(Number);
+    minC = Math.min(minC, c); minR = Math.min(minR, r); maxC = Math.max(maxC, c); maxR = Math.max(maxR, r);
+  }
+  let added = 0;
+  for (let r = minR; r + h - 1 <= maxR; r += h)
+    for (let c = minC; c + w - 1 <= maxC; c += w) {
+      const R = { c, r, w, h };
+      if (rectValidFor(R, a.id, null)) { tiles.push({ id: uid('t'), area: a.id, ...R, chunk: '', label: '', opens: [] }); added++; }
+    }
+  pushHistory();
+  refreshAll();
+  setStatus(added ? `Added ${added} tile(s) to "${a.name}".` : 'No room for tiles of that size.');
+}
+function deleteSelectedTile() {
+  if (!selTile) return;
+  tiles = tiles.filter(t => t.id !== selTile);
+  selTile = null;
+  pushHistory();
+  refreshAll();
+}
+function applyGridSize() {
+  const c = Math.max(8, Math.min(200, +document.getElementById('gridCols').value || cols));
+  const r = Math.max(8, Math.min(200, +document.getElementById('gridRows').value || rows));
+  const lost = [...owner.keys()].some(k => { const [x, y] = k.split(',').map(Number); return x >= c || y >= r; });
+  if (lost && !confirm('Shrinking cuts off painted cells. Continue?')) return;
+  cols = c; rows = r;
+  for (const a of areas) for (const k of [...a.cells]) {
+    const [x, y] = k.split(',').map(Number);
+    if (x >= c || y >= r) a.cells.delete(k);
+  }
+  rebuildOwner();
+  pushHistory();
+  refreshAll();
+  fitView();
+}
+function newBlueprint() {
+  if (!confirm('Start a new, empty blueprint? Unsaved changes are lost.')) return;
+  fromData({ version: 1, name: 'Untitled Blueprint', cols: 48, rows: 30, areas: [], tiles: [] });
+  history = []; hIdx = -1;
+  pushHistory(); markSaved();
+  refreshAll(); fitView();
+}
+
+// ── Sidebar UI ────────────────────────────────────────────────────────────────
+const TOOL_HINTS = {
+  select: 'Tap a tile to edit it (drag to move). Tap an empty part of an area to select the area.',
+  pan: 'Drag to move around. Pinch or scroll to zoom.',
+  paint: 'Drag over the blueprint to outline the selected area. Painting over another area takes those cells.',
+  erase: 'Drag to remove cells from any area.',
+  tile: 'Drag a rectangle inside an area to make a flip tile. It must stay inside one area and not overlap other tiles.',
+};
+function setTool(t) {
+  tool = t;
+  document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
+  document.getElementById('toolHint').textContent = TOOL_HINTS[t];
+  cv.style.cursor = t === 'pan' ? 'grab' : t === 'select' ? 'default' : 'crosshair';
+  render();
+}
+document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
+
+function renderAreaList() {
+  const el = document.getElementById('areaList');
+  el.innerHTML = areas.length ? '' : '<div class="hint">No areas yet. Add an explored area for the starting rooms and unexplored ones for what gets opened later.</div>';
+  for (const a of areas) {
+    const d = document.createElement('div');
+    d.className = 'area-item' + (a.id === selArea ? ' sel' : '');
+    const nt = tiles.filter(t => t.area === a.id).length;
+    d.innerHTML = `<span class="dot"></span><span class="nm"></span><span class="hint" style="font-size:10px">${a.cells.size}▦ ${nt}▣</span>` +
+      `<span class="badge ${a.explored ? 'start' : 'locked'}">${a.explored ? 'START' : 'LOCKED'}</span>`;
+    d.querySelector('.dot').style.background = a.color;
+    d.querySelector('.nm').textContent = a.name;
+    d.onclick = () => { selArea = a.id; selTile = null; refreshAll(); };
+    el.appendChild(d);
+  }
+}
+function renderAreaProps() {
+  const a = areaById(selArea);
+  document.getElementById('areaProps').style.display = a && !selTile ? '' : 'none';
+  if (!a) return;
+  document.getElementById('apName').value = a.name;
+  document.getElementById('apExplored').checked = a.explored;
+  document.getElementById('apColor').value = a.color;
+  const by = tiles.filter(t => t.opens.includes(a.id));
+  document.getElementById('apOpenedBy').textContent = a.explored
+    ? 'Open from the start.'
+    : by.length ? by.map(t => `${tileText(t) || 'empty tile'} (in ${areaById(t.area)?.name || '?'})`).join(', ')
+      : 'Nothing opens this area yet — select a tile and tick this area under "Solving this tile opens".';
+}
+document.getElementById('apName').oninput = e => { const a = areaById(selArea); if (a) { a.name = e.target.value || 'Area'; renderAreaList(); render(); } };
+document.getElementById('apName').onchange = () => { pushHistory(); refreshAll(); };
+document.getElementById('apExplored').onchange = e => { const a = areaById(selArea); if (a) { a.explored = e.target.checked; pushHistory(); refreshAll(); } };
+document.getElementById('apColor').oninput = e => { const a = areaById(selArea); if (a) { a.color = e.target.value; renderAreaList(); render(); } };
+document.getElementById('apColor').onchange = () => pushHistory();
+
+function buildChunkSelect() {
+  const sel = document.getElementById('tpChunk');
+  sel.innerHTML = '<option value="">— empty —</option>';
+  const byPuzzle = new Map();
+  for (const ch of CHUNKS) {
+    if (!byPuzzle.has(ch.puzzle)) byPuzzle.set(ch.puzzle, []);
+    byPuzzle.get(ch.puzzle).push(ch.id);
+  }
+  for (const [num, ids] of byPuzzle) {
+    const p = (typeof PUZZLES !== 'undefined') && PUZZLES.find(x => +x.num === num);
+    const g = document.createElement('optgroup');
+    g.label = `Puzzle ${num}${p && p.name ? ' — ' + p.name : ''}`;
+    for (const id of ids) {
+      const o = document.createElement('option');
+      o.value = id;
+      o.textContent = `${id}  ${chunkKind(id) === 'problem' ? '(puzzle)' : chunkKind(id) === 'given' ? '(given)' : ''}`;
+      g.appendChild(o);
+    }
+    sel.appendChild(g);
+  }
+}
+function renderTileProps() {
+  const t = tileById(selTile);
+  document.getElementById('tileProps').style.display = t ? '' : 'none';
+  if (!t) return;
+  const sel = document.getElementById('tpChunk');
+  if (t.chunk && !CHUNK_IDS.has(t.chunk) && ![...sel.options].some(o => o.value === t.chunk)) {
+    const o = document.createElement('option');
+    o.value = t.chunk; o.textContent = t.chunk + ' (missing)';
+    sel.appendChild(o);
+  }
+  sel.value = t.chunk || '';
+  document.getElementById('tpLabel').value = t.label || '';
+  const box = document.getElementById('tpOpens');
+  box.innerHTML = '';
+  const others = areas.filter(a => a.id !== t.area);
+  if (!others.length) box.innerHTML = '<div class="hint">Add more areas to link them here.</div>';
+  for (const a of others) {
+    const l = document.createElement('label');
+    l.className = 'chk';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = t.opens.includes(a.id);
+    cb.onchange = () => {
+      t.opens = cb.checked ? [...t.opens, a.id] : t.opens.filter(id => id !== a.id);
+      pushHistory(); refreshAll();
+    };
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.cssText = `width:9px;height:9px;border-radius:50%;background:${a.color};flex-shrink:0`;
+    const nm = document.createElement('span');
+    nm.textContent = a.name + (a.explored ? ' (already open)' : '');
+    l.append(cb, dot, nm);
+    box.appendChild(l);
+  }
+  const a = areaById(t.area);
+  const prob = tileProblem(t);
+  document.getElementById('tpInfo').innerHTML = '';
+  const info = document.getElementById('tpInfo');
+  info.textContent = `In "${a ? a.name : '?'}" · ${t.w}×${t.h} cells at (${t.c}, ${t.r})`;
+  if (prob) { const w = document.createElement('div'); w.style.color = '#e0a060'; w.textContent = '⚠ This tile ' + prob + '.'; info.appendChild(w); }
+}
+document.getElementById('tpChunk').onchange = e => { const t = tileById(selTile); if (t) { t.chunk = e.target.value; pushHistory(); refreshAll(); } };
+document.getElementById('tpLabel').oninput = e => { const t = tileById(selTile); if (t) { t.label = e.target.value; render(); } };
+document.getElementById('tpLabel').onchange = () => { pushHistory(); refreshAll(); };
+
+function renderChecks() {
+  const out = [];
+  const warn = (msg, sel) => out.push({ msg, sel });
+  if (!areas.length) warn('No areas yet.');
+  if (areas.length && !areas.some(a => a.explored)) warn('No area is explored at the start — the player would see nothing.');
+  for (const a of areas) {
+    if (!a.cells.size) warn(`"${a.name}" has no cells painted.`, { area: a.id });
+    else if (!tiles.some(t => t.area === a.id)) warn(`"${a.name}" has no flip tiles.`, { area: a.id });
+    if (!a.explored && !tiles.some(t => t.opens.includes(a.id))) warn(`"${a.name}" is unexplored but no tile opens it.`, { area: a.id });
+  }
+  // Reachability: walk from the start areas through tiles that are themselves reachable
+  const reach = new Set(areas.filter(a => a.explored).map(a => a.id));
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const t of tiles) if (reach.has(t.area)) for (const id of t.opens) if (!reach.has(id)) { reach.add(id); changed = true; }
+  }
+  for (const a of areas) if (!reach.has(a.id) && tiles.some(t => t.opens.includes(a.id)))
+    warn(`"${a.name}" can't be reached — the tiles that open it are in areas that are never opened.`, { area: a.id });
+  for (const t of tiles) {
+    const p = tileProblem(t);
+    if (p) warn(`Tile ${tileText(t) || '(empty)'} ${p}.`, { tile: t.id });
+  }
+  const empty = tiles.filter(t => !t.chunk).length;
+  if (empty) warn(`${empty} tile(s) have no puzzle or given yet.`, { tile: tiles.find(t => !t.chunk).id });
+  const seen = new Map();
+  for (const t of tiles) if (t.chunk) {
+    if (seen.has(t.chunk)) warn(`${t.chunk} is used by more than one tile.`, { tile: t.id });
+    seen.set(t.chunk, t.id);
+    if (!CHUNK_IDS.has(t.chunk)) warn(`${t.chunk} no longer exists in the puzzle data.`, { tile: t.id });
+  }
+  const el = document.getElementById('checks');
+  el.innerHTML = '';
+  if (!out.length) { el.innerHTML = '<div class="ok">✓ Everything is linked up.</div>'; return; }
+  for (const w of out.slice(0, 30)) {
+    const d = document.createElement('div');
+    d.className = 'warn';
+    d.textContent = '⚠ ' + w.msg;
+    if (w.sel) {
+      d.dataset.sel = '1';
+      d.onclick = () => { selTile = w.sel.tile || null; selArea = w.sel.area || (w.sel.tile && tileById(w.sel.tile)?.area) || null; refreshAll(); };
+    }
+    el.appendChild(d);
+  }
+  if (out.length > 30) el.insertAdjacentHTML('beforeend', `<div class="hint">…and ${out.length - 30} more</div>`);
+}
+
+function refreshAll() {
+  if (selTile && !tileById(selTile)) selTile = null;
+  if (selArea && !areaById(selArea)) selArea = null;
+  renderAreaList();
+  renderAreaProps();
+  renderTileProps();
+  renderChecks();
+  document.getElementById('gridCols').value = cols;
+  document.getElementById('gridRows').value = rows;
+  document.getElementById('mapNameLbl').textContent = bpName + (isDirty() ? ' •' : '');
+  render();
+}
+
+let statusMsg = '', hover = null;
+function setStatus(m) { statusMsg = m; updateStatus(); }
+function updateStatus() {
+  let s = '';
+  if (hover && inBounds(hover.c, hover.r)) {
+    const a = areaById(owner.get(key(hover.c, hover.r)));
+    s = `(${hover.c}, ${hover.r})${a ? ' · ' + a.name : ''}  `;
+  }
+  document.getElementById('status').textContent = s + (statusMsg || (playing
+    ? 'TEST MODE — tap a tile to flip it and open its puzzle.'
+    : `${areas.length} areas · ${tiles.length} tiles`));
+}
+
+// ── Pointer input ─────────────────────────────────────────────────────────────
+const pointers = new Map();
+let drag = null;        // current gesture
+let spaceDown = false;
+
+function localXY(e) { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId);
+  const p = localXY(e);
+  pointers.set(e.pointerId, p);
+  if (pointers.size === 2) {
+    // Second finger: abandon the edit in progress and pinch-zoom instead
+    if (drag && drag.changed && drag.kind !== 'pan') restore(history[hIdx]);
+    const [a, b] = [...pointers.values()];
+    drag = { kind: 'pinch', d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+    return;
+  }
+  if (pointers.size > 2) return;
+  const cell = toCell(p.x, p.y);
+  if (playing) { drag = { kind: 'playtap', sx: p.x, sy: p.y, lx: p.x, ly: p.y, moved: false }; return; }
+  if (tool === 'pan' || spaceDown || e.button === 1 || e.button === 2) {
+    drag = { kind: 'pan', lx: p.x, ly: p.y };
+    cv.style.cursor = 'grabbing';
+    return;
+  }
+  if (tool === 'paint' || tool === 'erase') {
+    if (tool === 'paint' && !areaById(selArea)) { setStatus('Select or add an area first, then paint its cells.'); drag = null; return; }
+    drag = { kind: 'paint', area: tool === 'paint' ? selArea : null, last: cell, changed: false };
+    drag.changed = setCell(cell.c, cell.r, drag.area) || drag.changed;
+    render();
+    return;
+  }
+  if (tool === 'tile') {
+    const areaId = owner.get(key(cell.c, cell.r));
+    if (!inBounds(cell.c, cell.r) || !areaId) { setStatus('Start the tile inside an area.'); drag = null; return; }
+    drag = { kind: 'tile', start: cell, area: areaId };
+    drag.rect = normRect(cell, cell);
+    drag.valid = rectValidFor(drag.rect, areaId, null);
+    render();
+    return;
+  }
+  // select
+  const t = tileAt(cell.c, cell.r);
+  if (t) {
+    selTile = t.id; selArea = t.area;
+    drag = { kind: 'move', tile: t, sc: cell.c, sr: cell.r, oc: t.c, or: t.r, changed: false };
+  } else {
+    const a = owner.get(key(cell.c, cell.r));
+    selTile = null; selArea = a || null;
+    drag = { kind: 'pan', lx: p.x, ly: p.y, quiet: true };
+  }
+  refreshAll();
+});
+
+cv.addEventListener('pointermove', e => {
+  const p = localXY(e);
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, p);
+  const cell = toCell(p.x, p.y);
+  if (!hover || hover.c !== cell.c || hover.r !== cell.r) { hover = cell; updateStatus(); if (!drag) render(); }
+  if (!drag) return;
+  if (drag.kind === 'pinch') {
+    if (pointers.size < 2) return;
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    view.x += mx - drag.mx; view.y += my - drag.my;
+    zoomAt(mx, my, d / (drag.d || d));
+    drag.d = d; drag.mx = mx; drag.my = my;
+    return;
+  }
+  if (drag.kind === 'pan' || drag.kind === 'playtap') {
+    if (drag.kind === 'playtap') {
+      if (Math.hypot(p.x - drag.sx, p.y - drag.sy) > 8) drag.moved = true;
+      if (!drag.moved) return;
+    }
+    view.x += p.x - drag.lx; view.y += p.y - drag.ly;
+    drag.lx = p.x; drag.ly = p.y;
+    render();
+    return;
+  }
+  if (drag.kind === 'paint') {
+    lineCells(drag.last.c, drag.last.r, cell.c, cell.r, (c, r) => { drag.changed = setCell(c, r, drag.area) || drag.changed; });
+    drag.last = cell;
+    render();
+    return;
+  }
+  if (drag.kind === 'tile') {
+    drag.rect = normRect(drag.start, cell);
+    drag.valid = rectValidFor(drag.rect, drag.area, null);
+    render();
+    return;
+  }
+  if (drag.kind === 'move') {
+    const t = drag.tile;
+    t.c = Math.max(0, Math.min(cols - t.w, drag.oc + cell.c - drag.sc));
+    t.r = Math.max(0, Math.min(rows - t.h, drag.or + cell.r - drag.sr));
+    drag.changed = t.c !== drag.oc || t.r !== drag.or;
+    render();
+  }
+});
+
+function endPointer(e) {
+  pointers.delete(e.pointerId);
+  if (!drag) return;
+  if (drag.kind === 'pinch') { if (pointers.size === 0) drag = null; return; }
+  if (pointers.size > 0) return;
+  const d = drag; drag = null;
+  if (d.kind === 'pan') { setTool(tool); return; }
+  if (d.kind === 'playtap') { if (!d.moved) playTap(localXY(e)); return; }
+  if (d.kind === 'paint') { if (d.changed) { pushHistory(); refreshAll(); } return; }
+  if (d.kind === 'tile') {
+    if (d.valid) {
+      const t = { id: uid('t'), area: d.area, ...d.rect, chunk: '', label: '', opens: [] };
+      tiles.push(t);
+      selTile = t.id; selArea = d.area;
+      pushHistory();
+      setStatus('Tile added — pick its puzzle or given in the sidebar.');
+    } else setStatus('A tile has to fit inside one area without overlapping another tile.');
+    refreshAll();
+    if (d.valid && innerWidth <= 760) document.body.classList.add('side-open');
+    return;
+  }
+  if (d.kind === 'move') {
+    const t = d.tile;
+    if (d.changed) {
+      // The tile may move into another area — it adopts the area under it if it fits there
+      const target = owner.get(key(t.c, t.r));
+      if (target && rectValidFor(t, target, t)) {
+        if (target !== t.area) { t.area = target; t.opens = t.opens.filter(id => id !== target); }
+        pushHistory();
+      } else { t.c = d.oc; t.r = d.or; setStatus('Tiles must stay inside an area without overlapping.'); }
+    }
+    refreshAll();
+  }
+}
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', endPointer);
+cv.addEventListener('pointerleave', () => { if (!drag) { hover = null; updateStatus(); render(); } });
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const p = localXY(e);
+  if (e.ctrlKey || Math.abs(e.deltaY) > Math.abs(e.deltaX)) zoomAt(p.x, p.y, Math.exp(-e.deltaY * (e.ctrlKey ? .01 : .0015)));
+  else { view.x -= e.deltaX; render(); }
+}, { passive: false });
+
+document.addEventListener('keydown', e => {
+  const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); quickSave(); return; }
+  if (typing || playing) { if (e.key === 'Escape' && document.getElementById('tileView').classList.contains('open')) closeTileView(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
+  if (e.key === ' ') { spaceDown = true; cv.style.cursor = 'grab'; e.preventDefault(); return; }
+  const k = e.key.toLowerCase();
+  if (k === 'v') setTool('select');
+  else if (k === 'b') setTool('paint');
+  else if (k === 'e') setTool('erase');
+  else if (k === 't') setTool('tile');
+  else if (k === 'h') setTool('pan');
+  else if (e.key === 'Delete' || e.key === 'Backspace') { if (selTile) deleteSelectedTile(); }
+  else if (e.key === 'Escape') { selTile = null; selArea = null; refreshAll(); }
+});
+document.addEventListener('keyup', e => { if (e.key === ' ') { spaceDown = false; setTool(tool); } });
+
+// ── Test mode ─────────────────────────────────────────────────────────────────
+// Plays the blueprint the way the phone game will: only explored areas show
+// their tiles face down; tapping one flips it and opens its puzzle. Marking a
+// tile solved opens the areas it is linked to.
+let playing = false;
+let play = null;
+let openTile = null;
+
+function resetPlay() {
+  play = { explored: new Set(areas.filter(a => a.explored).map(a => a.id)),
+    flipped: new Set(), solved: new Set(), flip: new Map(), reveal: new Map() };
+  closeTileView();
+  render(); updateStatus();
+}
+function togglePlay() {
+  playing = !playing;
+  // The sidebar hides/shows, shifting the canvas — keep the blueprint still on screen
+  const left0 = cv.getBoundingClientRect().left;
+  document.body.classList.toggle('playing', playing);
+  view.x += left0 - cv.getBoundingClientRect().left;
+  document.body.classList.remove('side-open');
+  document.getElementById('playBtn').textContent = playing ? '■ Stop' : '▶ Test';
+  document.getElementById('playBtn').classList.toggle('active', playing);
+  statusMsg = '';
+  if (playing) resetPlay(); else { closeTileView(); refreshAll(); }
+  updateStatus();
+}
+function playTap(p) {
+  const cell = toCell(p.x, p.y);
+  const t = tileAt(cell.c, cell.r);
+  if (!t || !play.explored.has(t.area)) return;
+  if (!play.flipped.has(t.id)) {
+    play.flipped.add(t.id);
+    play.flip.set(t.id, performance.now());
+    render();
+    setTimeout(() => openTileView(t), 450);
+  } else openTileView(t);
+}
+function openTileView(t) {
+  openTile = t;
+  const frame = document.getElementById('tvFrame');
+  const has = !!t.chunk;
+  document.getElementById('tvTitle').textContent = (tileText(t) || 'Empty tile') +
+    (chunkKind(t.chunk) ? ' · ' + (chunkKind(t.chunk) === 'problem' ? 'Puzzle' : 'Given') : '');
+  frame.style.display = has ? '' : 'none';
+  document.getElementById('tvEmpty').style.display = has ? 'none' : '';
+  if (has) frame.src = 'puzzles_curated.html?chunk=' + encodeURIComponent(t.chunk);
+  const btn = document.getElementById('tvSolve');
+  const names = t.opens.map(id => areaById(id)?.name).filter(Boolean);
+  btn.style.display = (chunkKind(t.chunk) === 'given' && !t.opens.length) ? 'none' : '';
+  btn.disabled = play.solved.has(t.id);
+  btn.textContent = play.solved.has(t.id) ? 'Solved ✓' : names.length ? `Mark solved → opens ${names.join(', ')}` : 'Mark solved';
+  document.getElementById('tileView').classList.add('open');
+}
+function closeTileView() {
+  document.getElementById('tileView').classList.remove('open');
+  document.getElementById('tvFrame').src = 'about:blank';
+  openTile = null;
+}
+function solveOpenTile() {
+  const t = openTile;
+  if (!t) return;
+  play.solved.add(t.id);
+  const opened = [];
+  for (const id of t.opens) if (!play.explored.has(id)) {
+    play.explored.add(id);
+    play.reveal.set(id, performance.now() + 250);
+    opened.push(areaById(id)?.name);
+  }
+  closeTileView();
+  setStatus(opened.length ? `Opened: ${opened.join(', ')}` : 'Tile solved.');
+  render();
+}
+
+// ── Save / load (website = the GitHub repo behind the site) ──────────────────
+// Same mechanism and token as Map Studio: blueprints are committed to
+// blueprints/<name>.json via the GitHub contents API. Reading needs no auth;
+// writing uses the fine-grained token kept in this browser's localStorage.
+const GH = { owner: 'mbuhadi', repo: 'Puzzle_Game', dir: 'blueprints' };
+let savedBaseline = '';
+function markSaved() { savedBaseline = JSON.stringify(toData()); }
+function isDirty() { return JSON.stringify(toData()) !== savedBaseline; }
+
+function ghToken() { return localStorage.getItem('ghToken') || ''; }
+function ghApi(path) { return `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${path}`; }
+function ghHeaders() {
+  const h = { Accept: 'application/vnd.github+json' };
+  if (ghToken()) h.Authorization = 'Bearer ' + ghToken();
+  return h;
+}
+async function ghErrMsg(resp) {
+  try { return (await resp.json()).message || resp.statusText; } catch (e) { return resp.statusText || ('HTTP ' + resp.status); }
+}
+function b64EncodeUtf8(str) { return btoa(unescape(encodeURIComponent(str))); }
+function b64DecodeUtf8(b64) { return decodeURIComponent(escape(atob(b64.replace(/\s/g, '')))); }
+async function ghSha(path) {
+  const r = await fetch(ghApi(path), { headers: ghHeaders(), cache: 'no-store' });
+  return r.ok ? (await r.json()).sha : null;
+}
+function slugify(name) { return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'blueprint'; }
+
+function showFlash(msg, color) {
+  const f = document.getElementById('saveFlash');
+  f.textContent = msg; f.style.color = color || '#4a9a60';
+  f.classList.add('show');
+  clearTimeout(showFlash._t);
+  showFlash._t = setTimeout(() => f.classList.remove('show'), 1800);
+}
+function mpStatus(msg, ok) {
+  const el = document.getElementById('mpStatus');
+  el.textContent = msg || '';
+  el.style.color = ok ? '#4a9a60' : '#cc7070';
+}
+function openPanel() {
+  document.getElementById('mpName').value = bpName !== 'Untitled Blueprint' ? bpName : '';
+  mpStatus('');
+  document.getElementById('bpOverlay').classList.add('open');
+  renderAuth();
+  refreshList();
+}
+function closePanel() { document.getElementById('bpOverlay').classList.remove('open'); }
+
+const TOKEN_FIX_HINT = `create a new token with Repository access "Only select repositories" → ${GH.repo}, and Permissions → Contents → "Read and write".`;
+function renderAuth() {
+  const el = document.getElementById('mpAuth');
+  if (ghToken()) {
+    el.innerHTML = `<div class="row"><span class="hint" style="color:#4a9a60">GitHub token connected ✓ — saving enabled</span><button style="flex:0 0 auto" onclick="forgetToken()">Disconnect</button></div>`;
+  } else {
+    el.innerHTML = `<div class="hint" style="margin-bottom:5px">Loading needs no setup. To <b style="color:var(--text)">save</b> from this browser, paste a GitHub token once (the same one Map Studio uses):<br>
+      GitHub → Settings → Developer settings → Fine-grained tokens. Repository access: <b style="color:var(--text)">only ${GH.owner}/${GH.repo}</b> · Permissions: <b style="color:var(--text)">Contents — Read and write</b>. Stored in this browser only.</div>
+      <div class="row"><input id="mpToken" type="password" placeholder="github_pat_…" autocomplete="off"><button style="flex:0 0 auto" onclick="connectToken()">Connect</button></div>`;
+  }
+}
+async function connectToken() {
+  const t = document.getElementById('mpToken').value.trim();
+  if (!t) { mpStatus('Paste a token first.'); return; }
+  localStorage.setItem('ghToken', t);
+  mpStatus('Checking token…', true);
+  try {
+    const r = await fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}`, { headers: ghHeaders() });
+    if (!r.ok) throw new Error(await ghErrMsg(r));
+    if (!(await r.json()).permissions?.push) throw new Error('the token can read but not write the repo — ' + TOKEN_FIX_HINT);
+  } catch (e) {
+    localStorage.removeItem('ghToken');
+    mpStatus('Token rejected: ' + e.message);
+    return;
+  }
+  renderAuth(); refreshList();
+  mpStatus('Connected ✓ — you can now save to the website.', true);
+}
+function forgetToken() { localStorage.removeItem('ghToken'); renderAuth(); }
+
+async function refreshList() {
+  const list = document.getElementById('mpList');
+  list.innerHTML = '<div class="hint">loading blueprints from the website…</div>';
+  try {
+    const r = await fetch(ghApi(GH.dir), { headers: ghHeaders(), cache: 'no-store' });
+    if (r.status === 404) { list.innerHTML = '<div class="hint">no blueprints on the website yet</div>'; return; }
+    if (!r.ok) throw new Error(await ghErrMsg(r));
+    const files = (await r.json()).filter(f => f.type === 'file' && f.name.endsWith('.json'));
+    list.innerHTML = files.length ? '' : '<div class="hint">no blueprints on the website yet</div>';
+    for (const f of files) {
+      const row = document.createElement('div');
+      row.className = 'mp-item';
+      const nm = document.createElement('span');
+      nm.className = 'nm'; nm.textContent = f.name.replace(/\.json$/, '');
+      nm.onclick = () => loadCloud(f.name);
+      const del = document.createElement('button'); del.className = 'danger'; del.textContent = 'Delete'; del.onclick = () => deleteCloud(f.name);
+      const ld = document.createElement('button'); ld.textContent = 'Load'; ld.onclick = () => loadCloud(f.name);
+      row.append(del, nm, ld);
+      list.appendChild(row);
+    }
+  } catch (e) {
+    list.innerHTML = '';
+    const err = document.createElement('div');
+    err.className = 'hint'; err.style.color = '#cc7070';
+    err.textContent = 'Couldn’t reach GitHub: ' + e.message;
+    list.appendChild(err);
+  }
+}
+async function writeCloud(name) {
+  const path = GH.dir + '/' + slugify(name) + '.json';
+  const sha = await ghSha(path);
+  bpName = name;
+  const data = toData();
+  const body = { message: `Save blueprint "${name}" from Blueprint Studio`,
+    content: b64EncodeUtf8(JSON.stringify({ updated: Date.now(), data })) };
+  if (sha) body.sha = sha;
+  const r = await fetch(ghApi(path), { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(await ghErrMsg(r));
+  savedBaseline = JSON.stringify(data);
+  refreshAll();
+}
+function writeFixMsg(e) {
+  return /not accessible/i.test(e.message) ? 'the token can\'t write to the repo. Open My Blueprints, Disconnect, then ' + TOKEN_FIX_HINT : e.message;
+}
+async function quickSave() {
+  if (playing) return;
+  if (!ghToken()) { openPanel(); mpStatus('Connect a GitHub token below to enable saving to the website.'); return; }
+  if (bpName === 'Untitled Blueprint') { openPanel(); mpStatus('Name the blueprint, then press "Save to Website".'); document.getElementById('mpName').focus(); return; }
+  showFlash('saving…', '#b8a06a');
+  try { await writeCloud(bpName); showFlash('saved to website ✓'); }
+  catch (e) { showFlash('save failed ✗', '#cc7070'); alert('Save to website failed: ' + writeFixMsg(e)); }
+}
+async function mpSave() {
+  const name = document.getElementById('mpName').value.trim();
+  if (!name) { mpStatus('Enter a blueprint name first.'); return; }
+  if (!ghToken()) { mpStatus('Connect a GitHub token below first — saving writes to the repo.'); return; }
+  mpStatus('Saving to the website…', true);
+  try {
+    if (slugify(name) !== slugify(bpName) && await ghSha(GH.dir + '/' + slugify(name) + '.json') &&
+        !confirm(`"${slugify(name)}" already exists on the website. Overwrite it?`)) { mpStatus(''); return; }
+    await writeCloud(name);
+    mpStatus(`Saved "${name}" ✓ — Ctrl+S / Save updates it from now on.`, true);
+    refreshList();
+  } catch (e) { mpStatus('Save to website failed: ' + writeFixMsg(e)); }
+}
+async function loadCloud(fileName) {
+  if (isDirty() && !confirm('Load this blueprint? Unsaved changes to the current one are lost.')) return;
+  mpStatus('Loading…', true);
+  try {
+    const r = await fetch(ghApi(GH.dir + '/' + fileName), { headers: ghHeaders(), cache: 'no-store' });
+    if (!r.ok) throw new Error(await ghErrMsg(r));
+    const parsed = JSON.parse(b64DecodeUtf8((await r.json()).content));
+    loadData(parsed.data || parsed);
+    closePanel();
+  } catch (e) { mpStatus('Load failed: ' + e.message); }
+}
+async function deleteCloud(fileName) {
+  if (!ghToken()) { mpStatus('Connect a GitHub token below first — deleting writes to the repo.'); return; }
+  if (!confirm(`Delete "${fileName}" from the website? This cannot be undone.`)) return;
+  try {
+    const path = GH.dir + '/' + fileName;
+    const sha = await ghSha(path);
+    if (!sha) throw new Error('file not found on the website');
+    const r = await fetch(ghApi(path), { method: 'DELETE', headers: ghHeaders(),
+      body: JSON.stringify({ message: `Delete blueprint ${fileName} from Blueprint Studio`, sha }) });
+    if (!r.ok) throw new Error(await ghErrMsg(r));
+    mpStatus('Deleted ✓', true);
+    refreshList();
+  } catch (e) { mpStatus('Delete failed: ' + e.message); }
+}
+function loadData(d) {
+  fromData(d);
+  history = []; hIdx = -1;
+  pushHistory(); markSaved();
+  refreshAll(); fitView();
+}
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(toData(), null, 1)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = slugify(bpName) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function importJSON(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try { const d = JSON.parse(ev.target.result); loadData(d.data || d); }
+    catch (err) { alert('Could not import: ' + err.message); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault(); e.returnValue = ''; } });
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+buildChunkSelect();
+new ResizeObserver(resizeCanvas).observe(document.getElementById('canvasWrap'));
+pushHistory(); markSaved();
+setTool('select');
+resizeCanvas();
+refreshAll();
+fitView();
+</script>
+</body>
+</html>
