@@ -7,21 +7,21 @@
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cinzel+Decorative:wght@400&display=swap" rel="stylesheet">
 <style>
 /* Blueprint Studio — a second map studio (map-editor.html is the old one).
-   The map is a blueprint: areas are outlined on a grid and marked explored
-   (open from the start) or unexplored. Areas are sectioned into flip tiles;
-   each tile holds one puzzle chunk (a problem or a given), and a tile can
-   open one or more unexplored areas once it is solved. */
+   The map is a blueprint: an outline cut into flip tiles of any shape. Each
+   tile holds a puzzle or a given; starting tiles are explored. Solving a
+   puzzle tile opens other tiles and/or cancels (locks) explored ones. The
+   player only ever sees the outline and the explored tiles. */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
   --gold: #c8a84b; --gold-dim: #7a6030;
   --bg: #0e0d0a; --bg2: #14120e; --bg3: #1e1a12; --border: #2e2a1e;
   --text: #d4ba88; --dim: #6a5c3a; --hover: #231d0e;
-  --bp: #123b66; --bp-line: rgba(220,236,255,.9);
+  --open: #7ee08a; --cancel: #ff6b6b;
 }
 html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Cinzel', serif; }
 #app { display: flex; flex-direction: column; height: 100%; }
 
-#topbar { height: 44px; flex-shrink: 0; background: var(--bg2); border-bottom: 1px solid var(--border);
+#topbar { height: 46px; flex-shrink: 0; background: var(--bg2); border-bottom: 1px solid var(--border);
   display: flex; align-items: center; gap: 4px; padding: 0 8px; overflow-x: auto; }
 .tb-title { font-family: 'Cinzel Decorative', serif; font-size: 12px; color: var(--gold); letter-spacing: 2px; margin-right: 8px; white-space: nowrap; }
 .tb-sep { width: 1px; height: 24px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
@@ -29,7 +29,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #mapNameLbl { font-size: 11px; color: var(--dim); white-space: nowrap; margin-right: 6px; }
 
 #main { flex: 1; display: flex; overflow: hidden; min-height: 0; position: relative; }
-#sidebar { width: 250px; flex-shrink: 0; background: var(--bg2); border-right: 1px solid var(--border);
+#sidebar { width: 260px; flex-shrink: 0; background: var(--bg2); border-right: 1px solid var(--border);
   overflow-y: auto; padding: 10px 9px 30px; display: flex; flex-direction: column; gap: 12px; z-index: 5; }
 #sidebar::-webkit-scrollbar { width: 4px; }
 #sidebar::-webkit-scrollbar-thumb { background: var(--border); }
@@ -38,54 +38,56 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .hint { font-family: sans-serif; font-size: 11px; color: var(--dim); line-height: 1.5; }
 
 button { background: var(--bg3); border: 1px solid var(--border); color: var(--text); font-family: 'Cinzel', serif;
-  font-size: 11px; padding: 6px 8px; cursor: pointer; border-radius: 3px; letter-spacing: .5px; white-space: nowrap;
-  transition: border-color .12s, color .12s; }
+  font-size: 11px; padding: 7px 8px; cursor: pointer; border-radius: 3px; letter-spacing: .5px; white-space: nowrap;
+  transition: border-color .12s, color .12s; touch-action: manipulation; }
 button:hover { border-color: var(--gold-dim); color: var(--gold); }
 button.active { border-color: var(--gold); color: var(--gold); background: var(--hover); }
 button:disabled { opacity: .35; cursor: default; }
 button.danger:hover { border-color: #7a3030; color: #cc7070; }
 button.play { border-color: #3a6a30; color: #7acc60; }
 button.play:hover, button.play.active { border-color: #5a9a48; color: #aaee88; background: #142010; }
+button.pick-open.active { border-color: var(--open); color: var(--open); background: #12241a; }
+button.pick-cancel.active { border-color: var(--cancel); color: var(--cancel); background: #2a1414; }
 button.wide { width: 100%; }
 .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 .row { display: flex; gap: 4px; align-items: center; }
 .row > * { flex: 1; }
 input[type=text], input[type=number], input[type=password], select {
   width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text);
-  font-family: 'Cinzel', serif; font-size: 11px; padding: 5px 6px; border-radius: 3px; }
+  font-family: 'Cinzel', serif; font-size: 12px; padding: 6px; border-radius: 3px; }
 input:focus, select:focus { outline: none; border-color: var(--gold-dim); }
 input[type=number] { font-family: monospace; }
 select.mono { font-family: monospace; }
-label.chk { display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; padding: 2px 0; }
-label.chk input { accent-color: var(--gold); }
-.field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
+label.chk { display: flex; align-items: center; gap: 7px; font-size: 11px; cursor: pointer; padding: 3px 0; }
+label.chk input { accent-color: var(--gold); width: 15px; height: 15px; }
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
 .field > span { font-size: 9px; letter-spacing: 1.5px; color: var(--dim); }
+.tile-head { font-size: 13px; color: var(--gold); margin-bottom: 8px; }
 
-.area-item { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border: 1px solid var(--border);
-  border-radius: 3px; cursor: pointer; font-size: 11px; margin-bottom: 3px; background: var(--bg3); }
-.area-item:hover { border-color: var(--gold-dim); }
-.area-item.sel { border-color: var(--gold); background: var(--hover); color: var(--gold); }
-.area-item .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.area-item .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.badge { font-size: 8px; letter-spacing: 1px; padding: 2px 4px; border-radius: 2px; border: 1px solid; flex-shrink: 0; }
-.badge.start { color: #7acc60; border-color: #3a6a30; }
-.badge.locked { color: #8aaedc; border-color: #34507a; }
-.opens-list { max-height: 160px; overflow-y: auto; border: 1px solid var(--border); border-radius: 3px; padding: 3px 6px; background: var(--bg); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; min-height: 22px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; font-family: monospace; font-size: 11px; padding: 2px 4px 2px 7px;
+  border-radius: 10px; border: 1px solid; background: var(--bg); }
+.chip.open { color: var(--open); border-color: #2f6a3a; }
+.chip.cancel { color: var(--cancel); border-color: #7a3030; }
+.chip b { cursor: pointer; padding: 0 4px; font-weight: 400; opacity: .8; }
+.chip b:hover { opacity: 1; }
 .checks div { font-family: sans-serif; font-size: 11px; line-height: 1.45; margin-bottom: 4px; }
 .checks .warn { color: #e0a060; }
 .checks .ok { color: #4a9a60; }
 .checks .warn[data-sel] { cursor: pointer; text-decoration: underline dotted; }
 
-#canvasWrap { flex: 1; position: relative; overflow: hidden; background: var(--bp); }
+#canvasWrap { flex: 1; position: relative; overflow: hidden; background: #0d2e52; }
 #cv { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
 #status { position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 10px; font-family: monospace; font-size: 11px;
-  color: rgba(220,236,255,.75); background: rgba(8,24,44,.75); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#playBar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: none; gap: 6px; z-index: 4; }
-body.playing #playBar { display: flex; }
+  color: rgba(220,236,255,.8); background: rgba(8,24,44,.8); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.float-bar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: none; gap: 6px; z-index: 4;
+  align-items: center; background: rgba(14,13,10,.92); border: 1px solid var(--gold-dim); border-radius: 6px; padding: 5px 6px; max-width: calc(100% - 16px); }
+.float-bar.show { display: flex; }
+.float-bar .msg { font-family: sans-serif; font-size: 12px; color: var(--text); padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 body.playing #sidebar { display: none; }
 body.playing .edit-only { display: none; }
 
-#saveFlash { position: fixed; top: 52px; right: 14px; font-size: 12px; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 50; }
+#saveFlash { position: fixed; top: 54px; right: 14px; font-size: 12px; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 50; }
 #saveFlash.show { opacity: 1; }
 
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none; align-items: center; justify-content: center; z-index: 40; padding: 12px; }
@@ -108,10 +110,8 @@ body.playing .edit-only { display: none; }
   #sideToggle { display: inline-block; }
   #sidebar { position: absolute; left: 0; top: 0; bottom: 0; transform: translateX(-100%); transition: transform .2s; box-shadow: 4px 0 18px rgba(0,0,0,.5); }
   body.side-open #sidebar { transform: none; }
-  .tb-title { display: none; }
-  #mapNameLbl { display: none; }
-  .wide-only { display: none; }
-  #topbar button { padding: 6px 7px; }
+  .tb-title, #mapNameLbl, .wide-only { display: none; }
+  #topbar button { padding: 7px; }
 }
 @media (min-width: 761px) { .narrow-only { display: none; } }
 </style>
@@ -127,7 +127,7 @@ body.playing .edit-only { display: none; }
     <button class="edit-only" id="redoBtn" onclick="redo()" title="Redo (Ctrl+Y)">↷</button>
     <span class="tb-sep"></span>
     <button onclick="zoomStep(-1)" title="Zoom out">−</button>
-    <button onclick="fitView()" title="Fit blueprint">Fit</button>
+    <button onclick="fitView()" title="Fit the map">Fit</button>
     <button onclick="zoomStep(1)" title="Zoom in">+</button>
     <span class="tb-grow"></span>
     <button class="edit-only" onclick="openPanel()" title="Save / load blueprints"><span class="wide-only">My Blueprints</span><span class="narrow-only">☁</span></button>
@@ -138,48 +138,51 @@ body.playing .edit-only { display: none; }
   <div id="main">
     <div id="sidebar">
       <div>
-        <div class="sec-title">TOOLS</div>
+        <div class="sec-title">MODE</div>
         <div class="tool-grid">
-          <button data-tool="select" title="Select / move tiles, pick areas (V)">↖ Select</button>
-          <button data-tool="pan" title="Pan (hold Space)">✋ Pan</button>
-          <button data-tool="paint" title="Paint cells into the selected area (B)">▦ Outline</button>
-          <button data-tool="erase" title="Erase cells from any area (E)">⌫ Erase</button>
-          <button data-tool="tile" title="Drag a rectangle to make a flip tile (T)" style="grid-column: span 2">▣ Flip Tile</button>
+          <button id="mSelect" onclick="setMode('select')" title="Select and edit tiles (V)">↖ Select</button>
+          <button id="mDrawTile" onclick="startDraw('tile')" title="Add a tile by tapping its corners (T)">✚ Add tile</button>
+          <button id="mDrawOutline" onclick="startDraw('outline')" title="Draw the map's outer outline">⬠ Draw outline</button>
+          <button id="mEditOutline" onclick="selectOutline()" title="Edit the outline's corners">✥ Edit outline</button>
         </div>
-        <div class="hint" id="toolHint" style="margin-top:6px"></div>
-      </div>
-      <div class="divider"></div>
-
-      <div>
-        <div class="sec-title">AREAS</div>
-        <div id="areaList"></div>
-        <div class="row" style="margin-top:4px">
-          <button onclick="addArea(true)">+ Explored</button>
-          <button onclick="addArea(false)">+ Unexplored</button>
-        </div>
+        <div class="hint" id="modeHint" style="margin-top:6px"></div>
+        <label class="chk" style="margin-top:6px"><input type="checkbox" id="snapGrid" checked> Snap to grid
+          <input type="number" id="gridSize" min="2" max="200" value="20" style="width:60px;margin-left:auto"></label>
+        <label class="chk"><input type="checkbox" id="linkCorners" checked> Shared corners move together</label>
       </div>
 
-      <div id="areaProps" style="display:none">
+      <div id="outlinePanel" style="display:none">
         <div class="divider" style="margin-bottom:10px"></div>
-        <div class="sec-title">SELECTED AREA</div>
-        <div class="field"><span>NAME</span><input type="text" id="apName" maxlength="40"></div>
-        <label class="chk"><input type="checkbox" id="apExplored"> Explored at the start</label>
-        <div class="field" style="margin-top:4px"><span>EDITOR COLOUR</span><input type="color" id="apColor" style="width:100%;height:26px;background:none;border:1px solid var(--border)"></div>
-        <div class="field"><span>OPENED BY</span><div class="hint" id="apOpenedBy"></div></div>
-        <div class="field"><span>SECTION INTO TILES (W × H CELLS)</span>
-          <div class="row"><input type="number" id="fillW" min="1" max="20" value="2"><input type="number" id="fillH" min="1" max="20" value="2"><button onclick="fillAreaWithTiles()">Fill</button></div>
-          <div class="hint">Adds tiles wherever they fit fully inside the area and don't overlap existing ones.</div>
+        <div class="sec-title">MAP OUTLINE</div>
+        <div class="hint" style="margin-bottom:6px">Drag a corner to move it. Tap a <b style="color:var(--text)">+</b> on an edge to add a corner. Tap a corner, then Remove corner to delete it.</div>
+        <div class="row">
+          <button class="rmCorner" onclick="removeCorner()">Remove corner</button>
+          <button class="danger" onclick="deleteOutline()">Delete outline</button>
         </div>
-        <button class="danger wide" onclick="deleteArea()">Delete area</button>
       </div>
 
-      <div id="tileProps" style="display:none">
+      <div id="tilePanel" style="display:none">
         <div class="divider" style="margin-bottom:10px"></div>
-        <div class="sec-title">SELECTED FLIP TILE</div>
-        <div class="field"><span>CONTENT (PUZZLE / GIVEN)</span><select id="tpChunk" class="mono"></select></div>
-        <div class="field"><span>LABEL ON BLUEPRINT (OPTIONAL)</span><input type="text" id="tpLabel" maxlength="24" placeholder="defaults to the content id"></div>
-        <div class="field"><span>SOLVING THIS TILE OPENS</span><div class="opens-list" id="tpOpens"></div></div>
-        <div class="hint" id="tpInfo" style="margin-bottom:6px"></div>
+        <div class="sec-title">SELECTED TILE</div>
+        <div class="tile-head" id="tpHead"></div>
+        <div class="field"><span>CONTENT</span><select id="tpChunk" class="mono"></select></div>
+        <div class="field"><span>NAME ON BLUEPRINT (OPTIONAL)</span><input type="text" id="tpLabel" maxlength="24" placeholder="defaults to the content id"></div>
+        <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="tpStart"> Starting tile (explored at the start)</label>
+        <div class="field"><span>SHAPE</span>
+          <div class="hint">Drag corners to reshape, drag the tile to move it. Tap a <b style="color:var(--text)">+</b> on an edge to add a corner.</div>
+          <button class="rmCorner wide" onclick="removeCorner()">Remove selected corner</button>
+        </div>
+        <div id="fxSection">
+          <div class="field"><span style="color:var(--open)">WHEN SOLVED, OPENS</span>
+            <div class="chips" id="tpOpens"></div>
+            <button class="pick-open wide" id="pickOpensBtn" onclick="togglePick('opens')">Pick tiles to open</button>
+          </div>
+          <div class="field"><span style="color:var(--cancel)">WHEN SOLVED, CANCELS (LOCKS)</span>
+            <div class="chips" id="tpCancels"></div>
+            <button class="pick-cancel wide" id="pickCancelsBtn" onclick="togglePick('cancels')">Pick tiles to cancel</button>
+          </div>
+        </div>
+        <div class="hint" id="fxGivenNote" style="display:none;margin-bottom:8px">Givens have no effects — only puzzles open or cancel tiles.</div>
         <button class="danger wide" onclick="deleteSelectedTile()">Delete tile</button>
       </div>
       <div class="divider"></div>
@@ -187,16 +190,13 @@ body.playing .edit-only { display: none; }
       <div>
         <div class="sec-title">CHECKS</div>
         <div class="checks" id="checks"></div>
-        <label class="chk" style="margin-top:4px"><input type="checkbox" id="showLinks" checked onchange="render()"> Show all "opens" links</label>
+        <label class="chk" style="margin-top:4px"><input type="checkbox" id="showLinks" onchange="render()"> Show every tile's effects</label>
       </div>
       <div class="divider"></div>
 
       <div>
         <div class="sec-title">BLUEPRINT</div>
-        <div class="field"><span>GRID SIZE (COLS × ROWS)</span>
-          <div class="row"><input type="number" id="gridCols" min="8" max="200"><input type="number" id="gridRows" min="8" max="200"><button onclick="applyGridSize()">Set</button></div>
-        </div>
-        <div class="row" style="margin-top:4px">
+        <div class="row">
           <button onclick="exportJSON()">Export</button>
           <button onclick="document.getElementById('importFile').click()">Import</button>
         </div>
@@ -207,7 +207,17 @@ body.playing .edit-only { display: none; }
 
     <div id="canvasWrap">
       <canvas id="cv"></canvas>
-      <div id="playBar">
+      <div class="float-bar" id="drawBar">
+        <span class="msg" id="drawMsg"></span>
+        <button onclick="finishDraw()" id="drawFinish">✓ Finish</button>
+        <button onclick="undoDrawPoint()">↶ Corner</button>
+        <button onclick="cancelDraw()">Cancel</button>
+      </div>
+      <div class="float-bar" id="pickBar">
+        <span class="msg" id="pickMsg"></span>
+        <button onclick="togglePick(null)">Done</button>
+      </div>
+      <div class="float-bar" id="playBar">
         <button onclick="resetPlay()">↺ Restart</button>
         <button class="play active" onclick="togglePlay()">■ Stop test</button>
       </div>
@@ -252,99 +262,159 @@ body.playing .edit-only { display: none; }
 <script src="puzzles_curated_data.js"></script>
 <script>
 // ── Data ──────────────────────────────────────────────────────────────────────
-// areas: { id, name, color, explored, cells:Set<"c,r"> } — a cell belongs to at
-//   most one area. explored = open when the game starts.
-// tiles: { id, area, c, r, w, h, chunk, label, opens:[areaId] } — a rectangle of
-//   cells inside one area. chunk is a puzzles_curated.html chunk id (p1p1,
-//   p1g1 …). opens lists the areas that become explored once it is solved.
-const AREA_COLORS = ['#ffd166', '#06d6a0', '#ef476f', '#4cc9f0', '#f78c6b', '#b388eb', '#a0e426', '#ff9ff3', '#fca311', '#80ffdb'];
+// outline: [[x,y], …] — the map's perimeter polygon (world units).
+// tiles: { id, pts:[[x,y]…], start, chunk, label, opens:[id], cancels:[id] }
+//   start   — explored when the game begins
+//   chunk   — puzzles_curated.html chunk id (p1p1 = puzzle, p1g1 = given)
+//   opens   — tiles that become explored when this puzzle is solved
+//   cancels — explored tiles that get locked when this puzzle is solved
+//             (an unexplored target is left alone)
 let bpName = 'Untitled Blueprint';
-let cols = 48, rows = 30;
-let areas = [], tiles = [];
-let owner = new Map();          // "c,r" → area id (derived from areas)
+let outline = [];
+let tiles = [];
 let nextId = 1;
-let selArea = null, selTile = null;
-let tool = 'select';
 
 const CHUNKS = (typeof PUZZLE_CHUNKS !== 'undefined') ? PUZZLE_CHUNKS : [];
 const CHUNK_IDS = new Set(CHUNKS.map(c => c.id));
-const chunkKind = id => /^p\d+g/.test(id) ? 'given' : /^p\d+p/.test(id) ? 'problem' : '';
+const chunkKind = id => /^p\d+g/.test(id || '') ? 'given' : /^p\d+p/.test(id || '') ? 'problem' : '';
+const hasEffects = t => chunkKind(t.chunk) !== 'given';   // givens never affect the map
 
-const key = (c, r) => c + ',' + r;
-const uid = p => p + (nextId++);
-const areaById = id => areas.find(a => a.id === id) || null;
 const tileById = id => tiles.find(t => t.id === id) || null;
+const tileName = t => t.label || t.chunk || ('Tile ' + t.id.replace(/\D/g, ''));
 
-function rebuildOwner() {
-  owner = new Map();
-  for (const a of areas) for (const k of a.cells) owner.set(k, a.id);
+const COARSE = matchMedia('(pointer: coarse)').matches;
+const HR = COARSE ? 10 : 6;        // corner handle radius, screen px
+const HIT = COARSE ? 24 : 12;      // handle hit radius, screen px
+const SNAP_PX = COARSE ? 18 : 11;  // snap distance, screen px
+
+// ── Geometry ──────────────────────────────────────────────────────────────────
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+const same = (a, b) => dist(a, b) < 0.01;
+function closestOnSeg(p, a, b) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy;
+  let t = L ? ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L : 0;
+  t = Math.max(0, Math.min(1, t));
+  return [a[0] + t * dx, a[1] + t * dy];
 }
-function tileCells(t) {
-  const out = [];
-  for (let r = t.r; r < t.r + t.h; r++) for (let c = t.c; c < t.c + t.w; c++) out.push(key(c, r));
+function edgeDist(p, pts) {
+  let m = Infinity;
+  for (let i = 0; i < pts.length; i++) m = Math.min(m, dist(p, closestOnSeg(p, pts[i], pts[(i + 1) % pts.length])));
+  return m;
+}
+function pip(p, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if ((yi > p[1]) !== (yj > p[1]) && p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+const strictlyInside = (p, pts) => pip(p, pts) && edgeDist(p, pts) > 0.5;
+const insideOrOn = (p, pts) => pip(p, pts) || edgeDist(p, pts) <= 0.5;
+function polyArea(pts) {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; a += p[0] * q[1] - q[0] * p[1]; }
+  return a / 2;
+}
+function polyCentroid(pts) {
+  const A = polyArea(pts);
+  if (Math.abs(A) < 1e-6) return [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length];
+  let cx = 0, cy = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length], f = p[0] * q[1] - q[0] * p[1];
+    cx += (p[0] + q[0]) * f; cy += (p[1] + q[1]) * f;
+  }
+  return [cx / (6 * A), cy / (6 * A)];
+}
+const orient = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+// Segments cross through each other's interiors (touching / collinear doesn't count)
+function properCross(a, b, c, d) {
+  const e = 1e-3;
+  const o1 = orient(a, b, c), o2 = orient(a, b, d), o3 = orient(c, d, a), o4 = orient(c, d, b);
+  return ((o1 > e && o2 < -e) || (o1 < -e && o2 > e)) && ((o3 > e && o4 < -e) || (o3 < -e && o4 > e));
+}
+function bbox(pts) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [x, y] of pts) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+  return { x0, y0, x1, y1 };
+}
+// Where to put a tile's text: a point well inside the shape (the centroid of a
+// concave shape can fall outside it), plus how much room there is around it
+const lpCache = new Map();
+function labelInfo(pts) {
+  const k = pts.join(';');
+  if (lpCache.has(k)) return lpCache.get(k);
+  if (lpCache.size > 3000) lpCache.clear();
+  let best = null, bd = -1;
+  const c = polyCentroid(pts);
+  if (pip(c, pts)) { best = c; bd = edgeDist(c, pts); }
+  const b = bbox(pts), N = 16;
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+    const p = [b.x0 + (i + .5) / N * (b.x1 - b.x0), b.y0 + (j + .5) / N * (b.y1 - b.y0)];
+    if (!pip(p, pts)) continue;
+    const d = edgeDist(p, pts);
+    if (d > bd * 1.35) { bd = d; best = p; }
+  }
+  const out = { p: best || c, r: Math.max(0, bd) };
+  lpCache.set(k, out);
   return out;
 }
-function tileAt(c, r) {
-  for (let i = tiles.length - 1; i >= 0; i--) {
-    const t = tiles[i];
-    if (c >= t.c && c < t.c + t.w && r >= t.r && r < t.r + t.h) return t;
+function selfCrossing(pts) {
+  const n = pts.length;
+  for (let i = 0; i < n; i++) for (let j = i + 2; j < n; j++) {
+    if (i === 0 && j === n - 1) continue;
+    if (properCross(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n])) return true;
   }
-  return null;
+  return false;
 }
-function rectsOverlap(a, b) {
-  return a.c < b.c + b.w && b.c < a.c + a.w && a.r < b.r + b.h && b.r < a.r + a.h;
+function polysOverlap(A, B) {
+  const a = bbox(A), b = bbox(B);
+  if (a.x1 <= b.x0 || b.x1 <= a.x0 || a.y1 <= b.y0 || b.y1 <= a.y0) return false;
+  for (let i = 0; i < A.length; i++) for (let j = 0; j < B.length; j++)
+    if (properCross(A[i], A[(i + 1) % A.length], B[j], B[(j + 1) % B.length])) return true;
+  if (A.some(v => strictlyInside(v, B)) || B.some(v => strictlyInside(v, A))) return true;
+  return strictlyInside(labelInfo(A).p, B) || strictlyInside(labelInfo(B).p, A);
 }
-// A tile is valid when every one of its cells belongs to its area and it
-// doesn't overlap another tile
-function tileProblem(t) {
-  if (!areaById(t.area)) return 'is not inside an area';
-  if (tileCells(t).some(k => owner.get(k) !== t.area)) return 'pokes outside its area';
-  if (tiles.some(o => o !== t && rectsOverlap(o, t))) return 'overlaps another tile';
-  return '';
-}
-function areaCentroid(a) {
-  let sx = 0, sy = 0, n = 0;
-  for (const k of a.cells) { const [c, r] = k.split(',').map(Number); sx += c + .5; sy += r + .5; n++; }
-  return n ? { x: sx / n, y: sy / n } : null;
-}
-// Label spot: the area cell nearest the centroid (the centroid of an L shape
-// can fall outside the area)
-function areaLabelPos(a) {
-  const cen = areaCentroid(a);
-  if (!cen) return null;
-  let best = null, bd = Infinity;
-  for (const k of a.cells) {
-    const [c, r] = k.split(',').map(Number);
-    const d = (c + .5 - cen.x) ** 2 + (r + .5 - cen.y) ** 2;
-    if (d < bd) { bd = d; best = { x: c + .5, y: r + .5 }; }
-  }
-  return best;
+function outsideOutline(pts) {
+  if (outline.length < 3) return false;
+  if (pts.some(v => !insideOrOn(v, outline))) return true;
+  for (let i = 0; i < pts.length; i++) for (let j = 0; j < outline.length; j++)
+    if (properCross(pts[i], pts[(i + 1) % pts.length], outline[j], outline[(j + 1) % outline.length])) return true;
+  return false;
 }
 
+// Every editable polygon: the outline plus each tile
+function allPolys() {
+  const out = [];
+  if (outline.length) out.push({ ref: 'outline', pts: outline });
+  for (const t of tiles) out.push({ ref: t.id, pts: t.pts });
+  return out;
+}
+function polyOf(ref) { return ref === 'outline' ? outline : (tileById(ref) || {}).pts; }
+
+// ── Serialisation ─────────────────────────────────────────────────────────────
+const r2 = v => Math.round(v * 100) / 100;
 function toData() {
   return {
-    version: 1, name: bpName, cols, rows,
-    areas: areas.map(a => ({ id: a.id, name: a.name, color: a.color, explored: a.explored,
-      cells: [...a.cells].map(k => k.split(',').map(Number)) })),
-    tiles: tiles.map(t => ({ id: t.id, area: t.area, c: t.c, r: t.r, w: t.w, h: t.h,
-      chunk: t.chunk || '', label: t.label || '', opens: [...t.opens] })),
+    version: 2, name: bpName,
+    outline: outline.map(p => [r2(p[0]), r2(p[1])]),
+    tiles: tiles.map(t => ({ id: t.id, pts: t.pts.map(p => [r2(p[0]), r2(p[1])]), start: !!t.start,
+      chunk: t.chunk || '', label: t.label || '', opens: [...t.opens], cancels: [...t.cancels] })),
   };
 }
 function fromData(d) {
-  if (!d || !Array.isArray(d.areas)) throw new Error('not a blueprint file');
+  if (!d || !Array.isArray(d.tiles) || !Array.isArray(d.outline)) throw new Error('not a blueprint file (or an old-format one)');
   bpName = d.name || 'Untitled Blueprint';
-  cols = Math.max(8, +d.cols || 48); rows = Math.max(8, +d.rows || 30);
-  areas = d.areas.map(a => ({ id: String(a.id), name: a.name || 'Area', color: a.color || '#ffd166',
-    explored: !!a.explored, cells: new Set((a.cells || []).map(([c, r]) => key(c, r))) }));
-  const ids = new Set(areas.map(a => a.id));
-  tiles = (d.tiles || []).map(t => ({ id: String(t.id), area: String(t.area), c: +t.c, r: +t.r,
-    w: Math.max(1, +t.w || 1), h: Math.max(1, +t.h || 1), chunk: t.chunk || '', label: t.label || '',
-    opens: (t.opens || []).map(String).filter(id => ids.has(id)) }));
-  let max = 0;
-  for (const x of [...areas, ...tiles]) { const n = parseInt(x.id.replace(/\D/g, ''), 10); if (n > max) max = n; }
-  nextId = max + 1;
-  selArea = null; selTile = null;
-  rebuildOwner();
+  outline = d.outline.map(p => [+p[0], +p[1]]);
+  tiles = d.tiles.map(t => ({ id: String(t.id), pts: (t.pts || []).map(p => [+p[0], +p[1]]), start: !!t.start,
+    chunk: t.chunk || '', label: t.label || '', opens: (t.opens || []).map(String), cancels: (t.cancels || []).map(String) }));
+  const ids = new Set(tiles.map(t => t.id));
+  for (const t of tiles) {
+    t.opens = t.opens.filter(id => ids.has(id) && id !== t.id);
+    t.cancels = t.cancels.filter(id => ids.has(id) && id !== t.id);
+  }
+  nextId = 1 + Math.max(0, ...tiles.map(t => parseInt(t.id.replace(/\D/g, ''), 10) || 0));
+  sel = null; selVertex = null; pickMode = null;
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
@@ -354,30 +424,30 @@ function pushHistory() {
   if (history[hIdx] === s) return;
   history = history.slice(0, hIdx + 1);
   history.push(s);
-  if (history.length > 120) history.shift();
+  if (history.length > 150) history.shift();
   hIdx = history.length - 1;
   updateUndoButtons();
 }
 function restore(s) {
-  const sa = selArea, st = selTile;
+  const keep = sel;
   fromData(JSON.parse(s));
-  selArea = areaById(sa) ? sa : null;
-  selTile = tileById(st) ? st : null;
+  if (keep && (keep.kind === 'outline' ? outline.length : tileById(keep.id))) sel = keep;
   refreshAll();
 }
-function undo() { if (hIdx > 0) { hIdx--; restore(history[hIdx]); updateUndoButtons(); } }
+function undo() { if (mode === 'draw') { undoDrawPoint(); return; } if (hIdx > 0) { hIdx--; restore(history[hIdx]); updateUndoButtons(); } }
 function redo() { if (hIdx < history.length - 1) { hIdx++; restore(history[hIdx]); updateUndoButtons(); } }
 function updateUndoButtons() {
-  document.getElementById('undoBtn').disabled = hIdx <= 0;
+  document.getElementById('undoBtn').disabled = hIdx <= 0 && mode !== 'draw';
   document.getElementById('redoBtn').disabled = hIdx >= history.length - 1;
 }
 
 // ── View ──────────────────────────────────────────────────────────────────────
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
-const CELL = 24;
-let view = { x: 20, y: 20, z: 1 };
+let view = { x: 40, y: 40, z: 1 };
 let dpr = 1;
+const S = p => [p[0] * view.z + view.x, p[1] * view.z + view.y];
+const toWorld = (sx, sy) => [(sx - view.x) / view.z, (sy - view.y) / view.z];
 
 function resizeCanvas() {
   dpr = window.devicePixelRatio || 1;
@@ -386,28 +456,72 @@ function resizeCanvas() {
   cv.height = Math.round(r.height * dpr);
   render();
 }
-function toCell(px, py) {
-  return { c: Math.floor((px - view.x) / (CELL * view.z)), r: Math.floor((py - view.y) / (CELL * view.z)) };
-}
-function inBounds(c, r) { return c >= 0 && r >= 0 && c < cols && r < rows; }
 function fitView() {
+  const pts = outline.length ? outline : tiles.flatMap(t => t.pts);
+  const b = pts.length ? bbox(pts) : { x0: 0, y0: 0, x1: 1200, y1: 800 };
   const r = cv.getBoundingClientRect();
-  const z = Math.min((r.width - 40) / (cols * CELL), (r.height - 50) / (rows * CELL));
-  view.z = Math.max(.2, Math.min(4, z));
-  view.x = (r.width - cols * CELL * view.z) / 2;
-  view.y = (r.height - 24 - rows * CELL * view.z) / 2;
+  const w = Math.max(1, b.x1 - b.x0), h = Math.max(1, b.y1 - b.y0);
+  view.z = Math.max(.05, Math.min(8, Math.min((r.width - 60) / w, (r.height - 90) / h)));
+  view.x = (r.width - w * view.z) / 2 - b.x0 * view.z;
+  view.y = (r.height - 24 - h * view.z) / 2 - b.y0 * view.z + 10;
   render();
 }
 function zoomAt(px, py, f) {
-  const nz = Math.max(.2, Math.min(6, view.z * f));
+  const nz = Math.max(.05, Math.min(12, view.z * f));
   view.x = px - (px - view.x) * nz / view.z;
   view.y = py - (py - view.y) * nz / view.z;
   view.z = nz;
   render();
 }
-function zoomStep(dir) {
-  const r = cv.getBoundingClientRect();
-  zoomAt(r.width / 2, r.height / 2, dir > 0 ? 1.25 : 0.8);
+function zoomStep(dir) { const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, dir > 0 ? 1.25 : 0.8); }
+
+// ── Editor state ──────────────────────────────────────────────────────────────
+let mode = 'select';          // select | draw | pick
+let drawTarget = 'tile';      // what 'draw' mode is making: tile | outline
+let drawPts = [];
+let sel = null;               // { kind:'tile', id } | { kind:'outline' } | null
+let selVertex = null;         // index of the selected corner of the selected shape
+let pickMode = null;          // 'opens' | 'cancels' while picking effect targets
+let hoverW = null;            // mouse position in world units (for previews)
+
+const selTileObj = () => sel && sel.kind === 'tile' ? tileById(sel.id) : null;
+const selRef = () => sel ? (sel.kind === 'outline' ? 'outline' : sel.id) : null;
+const selPts = () => sel ? polyOf(selRef()) : null;
+
+function gridOn() { return document.getElementById('snapGrid').checked; }
+function gridSize() { return Math.max(2, +document.getElementById('gridSize').value || 20); }
+function linkedOn() { return document.getElementById('linkCorners').checked; }
+
+// Snap: other corners first, then edges, then the grid. exclude holds
+// "ref:index" keys of corners being dragged (and so can't snap to themselves)
+function snapPoint(p, exclude) {
+  const r = SNAP_PX / view.z;
+  let best = null, bd = r;
+  for (const P of allPolys()) P.pts.forEach((v, i) => {
+    if (exclude && exclude.has(P.ref + ':' + i)) return;
+    const d = dist(p, v);
+    if (d < bd) { bd = d; best = v; }
+  });
+  if (best) return [best[0], best[1]];
+  bd = r * .8;
+  for (const P of allPolys()) {
+    const n = P.pts.length;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      if (exclude && (exclude.has(P.ref + ':' + i) || exclude.has(P.ref + ':' + j))) continue;
+      const q = closestOnSeg(p, P.pts[i], P.pts[j]);
+      const d = dist(p, q);
+      if (d < bd) { bd = d; best = q; }
+    }
+  }
+  if (best) return best;
+  if (gridOn()) { const g = gridSize(); return [Math.round(p[0] / g) * g, Math.round(p[1] / g) * g]; }
+  return [p[0], p[1]];
+}
+function coincident(p) {
+  const out = [];
+  for (const P of allPolys()) P.pts.forEach((v, i) => { if (same(v, p)) out.push({ ref: P.ref, i }); });
+  return out;
 }
 
 // ── Rendering ─────────────────────────────────────────────────────────────────
@@ -415,45 +529,18 @@ let hatch = null;
 function hatchPattern() {
   if (hatch) return hatch;
   const p = document.createElement('canvas');
-  p.width = p.height = 10;
+  p.width = p.height = 12;
   const g = p.getContext('2d');
-  g.strokeStyle = 'rgba(220,236,255,.16)';
+  g.strokeStyle = 'rgba(220,236,255,.13)';
   g.lineWidth = 1.2;
-  g.beginPath(); g.moveTo(0, 10); g.lineTo(10, 0); g.moveTo(-5, 5); g.lineTo(5, -5); g.moveTo(5, 15); g.lineTo(15, 5); g.stroke();
+  g.beginPath(); g.moveTo(0, 12); g.lineTo(12, 0); g.moveTo(-6, 6); g.lineTo(6, -6); g.moveTo(6, 18); g.lineTo(18, 6); g.stroke();
   hatch = ctx.createPattern(p, 'repeat');
   return hatch;
 }
-function hexA(hex, a) {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`;
-}
-function roundRect(x, y, w, h, rad) {
+function pathPoly(pts) {
   ctx.beginPath();
-  ctx.moveTo(x + rad, y);
-  ctx.arcTo(x + w, y, x + w, y + h, rad);
-  ctx.arcTo(x + w, y + h, x, y + h, rad);
-  ctx.arcTo(x, y + h, x, y, rad);
-  ctx.arcTo(x, y, x + w, y, rad);
+  pts.forEach((p, i) => { const [x, y] = S(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
   ctx.closePath();
-}
-// Outline = every cell edge whose neighbour is not in the same area
-function strokeAreaOutline(a, s) {
-  ctx.beginPath();
-  for (const k of a.cells) {
-    const [c, r] = k.split(',').map(Number);
-    const x = c * s, y = r * s;
-    if (!a.cells.has(key(c, r - 1))) { ctx.moveTo(x, y); ctx.lineTo(x + s, y); }
-    if (!a.cells.has(key(c, r + 1))) { ctx.moveTo(x, y + s); ctx.lineTo(x + s, y + s); }
-    if (!a.cells.has(key(c - 1, r))) { ctx.moveTo(x, y); ctx.lineTo(x, y + s); }
-    if (!a.cells.has(key(c + 1, r))) { ctx.moveTo(x + s, y); ctx.lineTo(x + s, y + s); }
-  }
-  ctx.stroke();
-}
-function fillArea(a, s, style) {
-  ctx.fillStyle = style;
-  ctx.beginPath();
-  for (const k of a.cells) { const [c, r] = k.split(',').map(Number); ctx.rect(c * s, r * s, s, s); }
-  ctx.fill();
 }
 
 let renderQueued = false;
@@ -463,243 +550,161 @@ function render() {
   requestAnimationFrame(() => { renderQueued = false; draw(); });
 }
 
+function drawGrid(W, H) {
+  let g = gridSize();
+  while (g * view.z < 8) g *= 5;
+  const [x0, y0] = toWorld(0, 0), [x1, y1] = toWorld(W, H);
+  ctx.lineWidth = 1;
+  for (let x = Math.floor(x0 / g) * g; x <= x1; x += g) {
+    const sx = Math.round(x * view.z + view.x) + .5;
+    ctx.strokeStyle = Math.round(x / g) % 5 ? 'rgba(220,236,255,.05)' : 'rgba(220,236,255,.11)';
+    ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx, H); ctx.stroke();
+  }
+  for (let y = Math.floor(y0 / g) * g; y <= y1; y += g) {
+    const sy = Math.round(y * view.z + view.y) + .5;
+    ctx.strokeStyle = Math.round(y / g) % 5 ? 'rgba(220,236,255,.05)' : 'rgba(220,236,255,.11)';
+    ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(W, sy); ctx.stroke();
+  }
+}
+
 function draw() {
   const W = cv.width / dpr, H = cv.height / dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = '#0d2e52';
+  ctx.fillStyle = '#123b66';
   ctx.fillRect(0, 0, W, H);
-  ctx.translate(view.x, view.y);
-  const s = CELL * view.z;
+  drawGrid(W, H);
   const now = performance.now();
   let animating = false;
+  const problems = playing ? new Map() : tileProblems();
 
-  // Sheet + grid
-  ctx.fillStyle = '#123b66';
-  ctx.fillRect(0, 0, cols * s, rows * s);
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= cols; i++) {
-    ctx.strokeStyle = i % 5 ? 'rgba(220,236,255,.06)' : 'rgba(220,236,255,.14)';
-    ctx.beginPath(); ctx.moveTo(i * s + .5, 0); ctx.lineTo(i * s + .5, rows * s); ctx.stroke();
-  }
-  for (let j = 0; j <= rows; j++) {
-    ctx.strokeStyle = j % 5 ? 'rgba(220,236,255,.06)' : 'rgba(220,236,255,.14)';
-    ctx.beginPath(); ctx.moveTo(0, j * s + .5); ctx.lineTo(cols * s, j * s + .5); ctx.stroke();
-  }
-  ctx.strokeStyle = 'rgba(220,236,255,.5)';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(0, 0, cols * s, rows * s);
-
-  // Areas
-  for (const a of areas) {
-    const explored = playing ? play.explored.has(a.id) : a.explored;
-    let alpha = 1;
-    if (playing && play.reveal.has(a.id)) {
-      alpha = Math.max(0, Math.min(1, (now - play.reveal.get(a.id)) / 700));
-      if (alpha < 1) animating = true; else play.reveal.delete(a.id);
-    }
-    if (!explored || alpha < 1) {
-      ctx.globalAlpha = 1 - (explored ? alpha : 0);
-      fillArea(a, s, 'rgba(5,18,36,.55)');
-      fillArea(a, s, hatchPattern());
-      if (!playing) fillArea(a, s, hexA(a.color, .10));
-      ctx.setLineDash([6, 5]);
-      ctx.strokeStyle = 'rgba(220,236,255,.45)';
-      ctx.lineWidth = 1.5;
-      strokeAreaOutline(a, s);
-      ctx.setLineDash([]);
-    }
-    if (explored) {
-      ctx.globalAlpha = alpha;
-      fillArea(a, s, 'rgba(220,236,255,.10)');
-      if (!playing) fillArea(a, s, hexA(a.color, .16));
-      ctx.strokeStyle = 'rgba(235,244,255,.95)';
-      ctx.lineWidth = Math.max(2, 3 * view.z);
-      strokeAreaOutline(a, s);
-    }
-    ctx.globalAlpha = 1;
-    if (!playing && a.id === selArea) {
-      ctx.strokeStyle = '#ffd166';
-      ctx.lineWidth = 2.5;
-      ctx.setLineDash([8, 4]);
-      strokeAreaOutline(a, s);
-      ctx.setLineDash([]);
-    }
+  // Outline: the interior is "unknown" until tiles cover it
+  if (outline.length >= 3) {
+    pathPoly(outline);
+    ctx.fillStyle = 'rgba(5,18,36,.45)'; ctx.fill();
+    ctx.fillStyle = hatchPattern(); ctx.fill();
   }
 
   // Tiles
   for (const t of tiles) {
-    const a = areaById(t.area);
-    if (playing && (!a || !play.explored.has(a.id))) continue;
-    let alpha = 1;
-    if (playing && play.reveal.has(t.area)) alpha = Math.max(0, Math.min(1, (now - play.reveal.get(t.area)) / 700));
-    ctx.globalAlpha = alpha;
-    drawTile(t, s, now);
-    ctx.globalAlpha = 1;
-    if (playing && play.flip.has(t.id)) animating = true;
-  }
-
-  // Area names
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  for (const a of areas) {
-    if (playing && !play.explored.has(a.id)) continue;
-    const p = areaLabelPos(a);
-    if (!p) continue;
-    // In the editor, put the name on a cell without a tile when possible
-    const fs = Math.max(9, Math.min(15, 11 * view.z));
-    ctx.font = `600 ${fs}px Cinzel, serif`;
-    // When a tile sits on the label spot, put the name just above the area
-    let x = p.x * s, y = p.y * s;
-    if (tileAt(Math.floor(p.x), Math.floor(p.y))) {
-      let minR = Infinity, minC = Infinity, maxC = -1;
-      for (const k of a.cells) { const [c, r] = k.split(',').map(Number); minR = Math.min(minR, r); minC = Math.min(minC, c); maxC = Math.max(maxC, c); }
-      x = (minC + maxC + 1) / 2 * s; y = minR * s - fs * .9;
-    }
-    ctx.fillStyle = 'rgba(13,46,82,.75)';
-    const tw = ctx.measureText(a.name).width;
-    ctx.fillRect(x - tw / 2 - 4, y - fs * .7, tw + 8, fs * 1.4);
-    ctx.fillStyle = playing ? 'rgba(235,244,255,.9)' : a.color;
-    ctx.fillText(a.name, x, y);
-  }
-  // Unexplored placeholders in test mode
-  if (playing) {
-    for (const a of areas) {
-      if (play.explored.has(a.id)) continue;
-      const p = areaLabelPos(a);
-      if (!p) continue;
-      ctx.font = `600 ${Math.max(10, 14 * view.z)}px Cinzel, serif`;
-      ctx.fillStyle = 'rgba(220,236,255,.4)';
-      ctx.fillText('UNEXPLORED', p.x * s, p.y * s);
-    }
-  }
-
-  // "Opens" links (editor only)
-  if (!playing) {
-    const all = document.getElementById('showLinks').checked;
-    for (const t of tiles) {
-      if (!t.opens.length || (!all && t.id !== selTile)) continue;
-      const sel = t.id === selTile;
-      const fx = (t.c + t.w / 2) * s, fy = (t.r + t.h / 2) * s;
-      for (const id of t.opens) {
-        const a = areaById(id);
-        const p = a && areaLabelPos(a);
-        if (!p) continue;
-        drawArrow(fx, fy, p.x * s, p.y * s, sel ? '#ffd166' : 'rgba(255,209,102,.45)', sel ? 2.5 : 1.5);
+    if (t.pts.length < 3) continue;
+    if (playing) {
+      if (!play.explored.has(t.id)) continue;
+      let alpha = 1;
+      if (play.reveal.has(t.id)) {
+        alpha = Math.max(0, Math.min(1, (now - play.reveal.get(t.id)) / 700));
+        if (alpha < 1) animating = true; else play.reveal.delete(t.id);
       }
-    }
+      ctx.globalAlpha = alpha;
+      if (drawPlayTile(t, now)) animating = true;
+      ctx.globalAlpha = 1;
+    } else drawEditTile(t, problems.get(t.id));
   }
 
-  // Drag previews
-  if (drag && drag.kind === 'tile' && drag.rect) {
-    const R = drag.rect;
-    ctx.fillStyle = drag.valid ? 'rgba(255,209,102,.25)' : 'rgba(239,71,111,.25)';
-    ctx.strokeStyle = drag.valid ? '#ffd166' : '#ef476f';
-    ctx.lineWidth = 2;
-    ctx.fillRect(R.c * s, R.r * s, R.w * s, R.h * s);
-    ctx.strokeRect(R.c * s, R.r * s, R.w * s, R.h * s);
-  }
-  if (!playing && hover && inBounds(hover.c, hover.r) && (tool === 'paint' || tool === 'erase' || tool === 'tile')) {
-    ctx.strokeStyle = tool === 'erase' ? '#ef476f' : '#ffd166';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(hover.c * s + 1, hover.r * s + 1, s - 2, s - 2);
+  // Outline stroke on top so the perimeter is always crisp
+  if (outline.length >= 2) {
+    pathPoly(outline);
+    ctx.strokeStyle = 'rgba(240,247,255,.95)';
+    ctx.lineWidth = 3.5;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
   }
 
+  if (!playing) {
+    drawEffects();
+    if (sel) drawHandles();
+    if (mode === 'draw') drawDrawing();
+  }
   if (animating) render();
 }
 
-function drawArrow(x1, y1, x2, y2, color, w) {
-  const ang = Math.atan2(y2 - y1, x2 - x1);
-  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = w;
-  ctx.setLineDash([7, 5]);
-  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-  ctx.setLineDash([]);
-  const h = 6 + w * 2;
-  ctx.beginPath();
-  ctx.moveTo(x2, y2);
-  ctx.lineTo(x2 - h * Math.cos(ang - .4), y2 - h * Math.sin(ang - .4));
-  ctx.lineTo(x2 - h * Math.cos(ang + .4), y2 - h * Math.sin(ang + .4));
-  ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.arc(x1, y1, 3 + w, 0, Math.PI * 2); ctx.fill();
+function tileFont(t) {
+  const { p, r } = labelInfo(t.pts);
+  const rs = r * view.z;
+  return { c: S(p), rs, fs: Math.max(8, Math.min(15, rs * .42)) };
 }
 
-function tileText(t) { return t.label || t.chunk || ''; }
-
-function drawTile(t, s, now) {
-  const pad = Math.max(2, 3 * view.z);
-  const x = t.c * s + pad, y = t.r * s + pad, w = t.w * s - pad * 2, h = t.h * s - pad * 2;
-  const rad = Math.min(8, 5 * view.z);
-  ctx.save();
-  let faceUp = true;
-  if (playing) {
-    faceUp = play.flipped.has(t.id);
-    if (play.flip.has(t.id)) {
-      // Flip: squash to 0 showing the back, then grow showing the face
-      const p = Math.min(1, (now - play.flip.get(t.id)) / 420);
-      if (p >= 1) play.flip.delete(t.id);
-      const sx = Math.abs(Math.cos(p * Math.PI));
-      faceUp = p >= .5;
-      ctx.translate(x + w / 2, y + h / 2);
-      ctx.scale(Math.max(.02, sx), 1 + .08 * Math.sin(p * Math.PI));
-      ctx.translate(-(x + w / 2), -(y + h / 2));
-    }
-  }
-  const problem = tileProblem(t);
+function drawEditTile(t, problem) {
+  const isSel = sel && sel.kind === 'tile' && sel.id === t.id;
   const kind = chunkKind(t.chunk);
-  const fs = Math.max(8, Math.min(14, Math.min(w / 5.5, h / 2.4)));
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  pathPoly(t.pts);
+  if (t.start) { ctx.fillStyle = '#123b66'; ctx.fill(); ctx.fillStyle = 'rgba(220,236,255,.20)'; ctx.fill(); }
+  else { ctx.fillStyle = 'rgba(5,18,36,.35)'; ctx.fill(); ctx.fillStyle = hatchPattern(); ctx.fill(); }
+  if (kind === 'problem') { ctx.fillStyle = 'rgba(255,209,102,.13)'; ctx.fill(); }
+  else if (kind === 'given') { ctx.fillStyle = 'rgba(76,201,240,.13)'; ctx.fill(); }
+  // Pick mode: tint the current targets
+  const st = selTileObj();
+  if (mode === 'pick' && st && t.id !== st.id) {
+    if (st.opens.includes(t.id)) { ctx.fillStyle = 'rgba(126,224,138,.38)'; ctx.fill(); }
+    if (st.cancels.includes(t.id)) { ctx.fillStyle = 'rgba(255,107,107,.38)'; ctx.fill(); }
+  }
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = isSel ? 3 : 1.6;
+  ctx.strokeStyle = isSel ? '#ffd166' : problem ? '#ff6b6b' : 'rgba(235,244,255,.85)';
+  if (problem && !isSel) ctx.setLineDash([6, 4]);
+  ctx.stroke();
+  ctx.setLineDash([]);
 
-  if (playing && !faceUp) {
-    // Back of the tile: a sign to tap
-    roundRect(x, y, w, h, rad);
-    ctx.fillStyle = 'rgba(220,236,255,.16)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(235,244,255,.95)';
-    ctx.lineWidth = 1.6;
-    ctx.stroke();
-    const r = Math.min(w, h) * .28;
-    ctx.beginPath();
-    ctx.arc(x + w / 2, y + h / 2, r, 0, Math.PI * 2);
-    ctx.lineWidth = 1.4;
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(235,244,255,.95)';
-    ctx.font = `600 ${Math.max(9, r * 1.2)}px Cinzel, serif`;
-    ctx.fillText('?', x + w / 2, y + h / 2 + 1);
+  const { c, rs, fs } = tileFont(t);
+  if (rs < 10) return;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const lines = [[tileName(t), `600 ${fs}px monospace`, 'rgba(240,247,255,.95)']];
+  if (rs > 22) lines.push([(kind === 'problem' ? 'PUZZLE' : kind === 'given' ? 'GIVEN' : 'EMPTY') + (t.start ? ' · START' : ''),
+    `${Math.max(7, fs * .7)}px Cinzel, serif`, t.start ? '#a8e6a0' : 'rgba(220,236,255,.7)']);
+  const fx = hasEffects(t) ? [t.opens.length ? '→' + t.opens.length : '', t.cancels.length ? '✕' + t.cancels.length : ''].filter(Boolean).join('  ') : '';
+  if (fx && rs > 30) lines.push([fx, `600 ${Math.max(8, fs * .75)}px sans-serif`, '#ffd166']);
+  const lh = fs * 1.25;
+  lines.forEach(([txt, font, color], i) => {
+    ctx.font = font; ctx.fillStyle = color;
+    ctx.fillText(fitText(txt, rs * 1.9), c[0], c[1] + (i - (lines.length - 1) / 2) * lh);
+  });
+}
+
+// Returns true while a flip animation is running
+function drawPlayTile(t, now) {
+  const { c, rs, fs } = tileFont(t);
+  ctx.save();
+  let faceUp = play.flipped.has(t.id), anim = false;
+  if (play.flip.has(t.id)) {
+    const p = Math.min(1, (now - play.flip.get(t.id)) / 420);
+    if (p >= 1) play.flip.delete(t.id); else anim = true;
+    faceUp = p >= .5;
+    ctx.translate(c[0], c[1]);
+    ctx.scale(Math.max(.02, Math.abs(Math.cos(p * Math.PI))), 1);
+    ctx.translate(-c[0], -c[1]);
+  }
+  const locked = play.locked.has(t.id), solved = play.solved.has(t.id);
+  pathPoly(t.pts);
+  ctx.fillStyle = '#123b66'; ctx.fill();   // cover the outline's "unknown" hatching
+  ctx.fillStyle = locked ? 'rgba(30,38,50,.92)' : solved ? 'rgba(122,204,96,.32)' : faceUp ? 'rgba(235,244,255,.85)' : 'rgba(220,236,255,.18)';
+  ctx.fill();
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = locked ? 'rgba(160,170,185,.8)' : solved ? '#7acc60' : 'rgba(240,247,255,.95)';
+  ctx.stroke();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (locked) {
+    ctx.font = `${Math.max(12, Math.min(30, rs * .8))}px sans-serif`;
+    ctx.fillText('🔒', c[0], c[1]);
+  } else if (!faceUp) {
+    // The sign to tap
+    const r = Math.max(7, Math.min(rs * .55, 26));
+    ctx.beginPath(); ctx.arc(c[0], c[1], r, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(240,247,255,.95)'; ctx.lineWidth = 1.6; ctx.stroke();
+    ctx.fillStyle = 'rgba(240,247,255,.95)';
+    ctx.font = `600 ${r * 1.15}px Cinzel, serif`;
+    ctx.fillText('?', c[0], c[1] + 1);
   } else {
-    roundRect(x, y, w, h, rad);
-    const solved = playing && play.solved.has(t.id);
-    ctx.fillStyle = playing ? (solved ? 'rgba(122,204,96,.30)' : 'rgba(235,244,255,.85)')
-      : (kind === 'problem' ? 'rgba(255,209,102,.20)' : kind === 'given' ? 'rgba(76,201,240,.20)' : 'rgba(220,236,255,.10)');
-    ctx.fill();
-    ctx.lineWidth = (!playing && t.id === selTile) ? 3 : 1.6;
-    ctx.strokeStyle = (!playing && t.id === selTile) ? '#ffd166'
-      : (!playing && problem) ? '#ef476f'
-      : solved ? '#7acc60' : 'rgba(235,244,255,.95)';
-    if (!playing && !t.chunk) ctx.setLineDash([4, 3]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = playing ? (solved ? '#d8ffd0' : '#123b66') : 'rgba(235,244,255,.95)';
+    const kind = chunkKind(t.chunk);
+    ctx.fillStyle = solved ? '#e0ffd8' : '#123b66';
     ctx.font = `600 ${fs}px monospace`;
-    const txt = tileText(t) || (playing ? '' : '·');
-    ctx.fillText(fitText(txt, w - 4), x + w / 2, y + h / 2 - (kind && h > fs * 3 ? fs * .45 : 0));
-    if (kind && h > fs * 3) {
+    ctx.fillText(fitText(tileName(t), rs * 1.9), c[0], c[1] - (rs > 22 ? fs * .45 : 0));
+    if (rs > 22) {
       ctx.font = `${Math.max(7, fs * .7)}px Cinzel, serif`;
-      ctx.fillText(kind === 'problem' ? 'PUZZLE' : 'GIVEN', x + w / 2, y + h / 2 + fs * .75);
-    }
-    if (!playing && t.opens.length) {
-      ctx.fillStyle = '#ffd166';
-      ctx.font = `600 ${Math.max(8, fs * .8)}px sans-serif`;
-      ctx.textAlign = 'right';
-      ctx.fillText('→' + t.opens.length, x + w - 3, y + fs * .6 + 2);
-    }
-    if (solved) {
-      ctx.fillStyle = '#7acc60';
-      ctx.font = `700 ${Math.max(9, fs)}px sans-serif`;
-      ctx.textAlign = 'right';
-      ctx.fillText('✓', x + w - 3, y + fs * .6 + 2);
+      ctx.fillText(solved ? 'SOLVED ✓' : kind === 'given' ? 'GIVEN' : 'PUZZLE', c[0], c[1] + fs * .75);
     }
   }
   ctx.restore();
+  return anim;
 }
 function fitText(txt, maxW) {
   if (ctx.measureText(txt).width <= maxW) return txt;
@@ -707,166 +712,223 @@ function fitText(txt, maxW) {
   return txt + '…';
 }
 
-// ── Editing operations ────────────────────────────────────────────────────────
-function addArea(explored) {
-  const n = areas.length;
-  const a = { id: uid('a'), name: (explored ? 'Room ' : 'Unexplored ') + (n + 1),
-    color: AREA_COLORS[n % AREA_COLORS.length], explored, cells: new Set() };
-  areas.push(a);
-  selArea = a.id; selTile = null;
-  setTool('paint');
-  pushHistory();
-  refreshAll();
-  setStatus(`New area "${a.name}" — paint its cells on the blueprint.`);
+function drawArrow(a, b, color, w, dashed) {
+  const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+  const L = dist(a, b);
+  if (L < 20) return;
+  const s = [a[0] + Math.cos(ang) * 8, a[1] + Math.sin(ang) * 8];
+  const e = [b[0] - Math.cos(ang) * 10, b[1] - Math.sin(ang) * 10];
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = w;
+  if (dashed) ctx.setLineDash([7, 5]);
+  ctx.beginPath(); ctx.moveTo(s[0], s[1]); ctx.lineTo(e[0], e[1]); ctx.stroke();
+  ctx.setLineDash([]);
+  const h = 7 + w * 2;
+  ctx.beginPath();
+  ctx.moveTo(e[0], e[1]);
+  ctx.lineTo(e[0] - h * Math.cos(ang - .42), e[1] - h * Math.sin(ang - .42));
+  ctx.lineTo(e[0] - h * Math.cos(ang + .42), e[1] - h * Math.sin(ang + .42));
+  ctx.closePath(); ctx.fill();
 }
-function deleteArea() {
-  const a = areaById(selArea);
-  if (!a) return;
-  const n = tiles.filter(t => t.area === a.id).length;
-  if (!confirm(`Delete "${a.name}"${n ? ` and its ${n} tile(s)` : ''}?`)) return;
-  areas = areas.filter(x => x !== a);
-  tiles = tiles.filter(t => t.area !== a.id);
-  for (const t of tiles) t.opens = t.opens.filter(id => id !== a.id);
-  selArea = null;
-  rebuildOwner();
-  pushHistory();
-  refreshAll();
-}
-function setCell(c, r, areaId) {
-  if (!inBounds(c, r)) return false;
-  const k = key(c, r);
-  const cur = owner.get(k);
-  if (cur === areaId) return false;
-  if (cur) areaById(cur).cells.delete(k);
-  if (areaId) { areaById(areaId).cells.add(k); owner.set(k, areaId); }
-  else owner.delete(k);
-  return true;
-}
-// Bresenham between successive pointer cells so fast strokes leave no gaps
-function lineCells(c0, r0, c1, r1, fn) {
-  const dc = Math.abs(c1 - c0), dr = Math.abs(r1 - r0);
-  const sc = c0 < c1 ? 1 : -1, sr = r0 < r1 ? 1 : -1;
-  let err = dc - dr;
-  for (;;) {
-    fn(c0, r0);
-    if (c0 === c1 && r0 === r1) break;
-    const e2 = 2 * err;
-    if (e2 > -dr) { err -= dr; c0 += sc; }
-    if (e2 < dc) { err += dc; r0 += sr; }
+function drawEffects() {
+  const all = document.getElementById('showLinks').checked;
+  const st = selTileObj();
+  for (const t of tiles) {
+    if (!hasEffects(t) || (!all && (!st || st.id !== t.id))) continue;
+    const isSel = st && st.id === t.id;
+    const from = S(labelInfo(t.pts).p);
+    for (const id of t.opens) { const o = tileById(id); if (o) drawArrow(from, S(labelInfo(o.pts).p), isSel ? '#7ee08a' : 'rgba(126,224,138,.5)', isSel ? 2.5 : 1.5, false); }
+    for (const id of t.cancels) { const o = tileById(id); if (o) drawArrow(from, S(labelInfo(o.pts).p), isSel ? '#ff6b6b' : 'rgba(255,107,107,.5)', isSel ? 2.5 : 1.5, true); }
   }
 }
-function normRect(a, b) {
-  const c = Math.max(0, Math.min(a.c, b.c)), r = Math.max(0, Math.min(a.r, b.r));
-  const c2 = Math.min(cols - 1, Math.max(a.c, b.c)), r2 = Math.min(rows - 1, Math.max(a.r, b.r));
-  return { c, r, w: c2 - c + 1, h: r2 - r + 1 };
-}
-function rectValidFor(R, areaId, ignore) {
-  if (!areaId) return false;
-  for (let r = R.r; r < R.r + R.h; r++) for (let c = R.c; c < R.c + R.w; c++)
-    if (owner.get(key(c, r)) !== areaId) return false;
-  return !tiles.some(t => t !== ignore && rectsOverlap(t, R));
-}
-function fillAreaWithTiles() {
-  const a = areaById(selArea);
-  if (!a || !a.cells.size) return;
-  const w = Math.max(1, +document.getElementById('fillW').value || 1);
-  const h = Math.max(1, +document.getElementById('fillH').value || 1);
-  let minC = Infinity, minR = Infinity, maxC = -1, maxR = -1;
-  for (const k of a.cells) {
-    const [c, r] = k.split(',').map(Number);
-    minC = Math.min(minC, c); minR = Math.min(minR, r); maxC = Math.max(maxC, c); maxR = Math.max(maxR, r);
+function drawHandles() {
+  const pts = selPts();
+  if (!pts || mode === 'draw') return;
+  if (sel.kind === 'outline') {
+    pathPoly(pts);
+    ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 3; ctx.setLineDash([9, 5]); ctx.stroke(); ctx.setLineDash([]);
   }
-  let added = 0;
-  for (let r = minR; r + h - 1 <= maxR; r += h)
-    for (let c = minC; c + w - 1 <= maxC; c += w) {
-      const R = { c, r, w, h };
-      if (rectValidFor(R, a.id, null)) { tiles.push({ id: uid('t'), area: a.id, ...R, chunk: '', label: '', opens: [] }); added++; }
+  if (mode === 'pick') return;
+  // "+" handles at each edge's midpoint (add a corner)
+  for (let i = 0; i < pts.length; i++) {
+    const m = S([(pts[i][0] + pts[(i + 1) % pts.length][0]) / 2, (pts[i][1] + pts[(i + 1) % pts.length][1]) / 2]);
+    ctx.beginPath(); ctx.arc(m[0], m[1], HR * .8, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(13,46,82,.85)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,209,102,.8)'; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(m[0] - HR * .45, m[1]); ctx.lineTo(m[0] + HR * .45, m[1]);
+    ctx.moveTo(m[0], m[1] - HR * .45); ctx.lineTo(m[0], m[1] + HR * .45);
+    ctx.stroke();
+  }
+  pts.forEach((p, i) => {
+    const s = S(p);
+    ctx.beginPath(); ctx.arc(s[0], s[1], i === selVertex ? HR * 1.3 : HR, 0, Math.PI * 2);
+    ctx.fillStyle = i === selVertex ? '#ffd166' : '#fff8e0'; ctx.fill();
+    ctx.strokeStyle = '#7a6030'; ctx.lineWidth = 1.5; ctx.stroke();
+  });
+}
+function drawDrawing() {
+  const col = drawTarget === 'outline' ? '#ffffff' : '#ffd166';
+  if (drawPts.length) {
+    ctx.beginPath();
+    drawPts.forEach((p, i) => { const s = S(p); i ? ctx.lineTo(s[0], s[1]) : ctx.moveTo(s[0], s[1]); });
+    ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.stroke();
+    if (hoverW) {
+      const h = S(snapPoint(hoverW, null)), l = S(drawPts[drawPts.length - 1]);
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(l[0], l[1]); ctx.lineTo(h[0], h[1]); ctx.stroke();
+      ctx.setLineDash([]);
     }
+    drawPts.forEach((p, i) => {
+      const s = S(p);
+      ctx.beginPath(); ctx.arc(s[0], s[1], i === 0 && drawPts.length >= 3 ? HR * 1.5 : HR * .8, 0, Math.PI * 2);
+      ctx.fillStyle = i === 0 ? 'rgba(126,224,138,.9)' : col; ctx.fill();
+    });
+  }
+  if (hoverW) {
+    const h = S(snapPoint(hoverW, null));
+    ctx.beginPath(); ctx.arc(h[0], h[1], HR * .7, 0, Math.PI * 2);
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+}
+
+// ── Editing operations ────────────────────────────────────────────────────────
+const MODE_HINTS = {
+  select: 'Tap a tile to edit it. Drag empty space to pan; pinch or scroll to zoom.',
+  tile: 'Tap to place the new tile\'s corners. Tap the first (green) corner or press Finish to close it.',
+  outline: 'Tap to place the outline\'s corners around the whole map. Tap the first corner or Finish to close it.',
+  pick: 'Tap tiles on the blueprint to add or remove them.',
+};
+function setMode(m) {
+  if (mode === 'draw' && m !== 'draw') drawPts = [];
+  if (m !== 'pick') pickMode = null;
+  mode = m;
+  document.getElementById('mSelect').classList.toggle('active', m === 'select' && !(sel && sel.kind === 'outline'));
+  document.getElementById('mDrawTile').classList.toggle('active', m === 'draw' && drawTarget === 'tile');
+  document.getElementById('mDrawOutline').classList.toggle('active', m === 'draw' && drawTarget === 'outline');
+  document.getElementById('mEditOutline').classList.toggle('active', m === 'select' && !!sel && sel.kind === 'outline');
+  document.getElementById('modeHint').textContent = MODE_HINTS[m === 'draw' ? drawTarget : m];
+  document.getElementById('drawBar').classList.toggle('show', m === 'draw');
+  document.getElementById('pickBar').classList.toggle('show', m === 'pick');
+  cv.style.cursor = m === 'select' ? 'default' : 'crosshair';
+  updateDrawBar();
+  updateUndoButtons();
+  refreshPanels();
+  render();
+}
+function startDraw(target) {
+  if (playing) return;
+  if (target === 'outline' && outline.length && !confirm('Replace the current outline with a new one?')) return;
+  drawTarget = target;
+  drawPts = [];
+  sel = null; selVertex = null;
+  setMode('draw');
+  if (innerWidth <= 760) document.body.classList.remove('side-open');
+}
+function updateDrawBar() {
+  document.getElementById('drawMsg').textContent = drawTarget === 'outline'
+    ? `Outline: ${drawPts.length} corner(s)` : `New tile: ${drawPts.length} corner(s)`;
+  document.getElementById('drawFinish').disabled = drawPts.length < 3;
+}
+function addDrawPoint(w) {
+  if (drawPts.length >= 3 && dist(S(drawPts[0]), S(w)) < HIT) { finishDraw(); return; }
+  const p = snapPoint(w, null);
+  if (drawPts.length && same(p, drawPts[drawPts.length - 1])) return;
+  drawPts.push(p);
+  updateDrawBar(); render();
+}
+function undoDrawPoint() { drawPts.pop(); updateDrawBar(); render(); }
+function cancelDraw() { drawPts = []; setMode('select'); }
+function finishDraw() {
+  if (drawPts.length < 3) { setStatus('A shape needs at least 3 corners.'); return; }
+  if (Math.abs(polyArea(drawPts)) < 1) { setStatus('That shape has no area — place the corners apart.'); return; }
+  if (drawTarget === 'outline') {
+    outline = drawPts;
+    sel = { kind: 'outline' };
+  } else {
+    const t = { id: 't' + (nextId++), pts: drawPts, start: false, chunk: '', label: '', opens: [], cancels: [] };
+    tiles.push(t);
+    sel = { kind: 'tile', id: t.id };
+    setStatus(`${tileName(t)} added — set its content and effects in the sidebar.`);
+    if (innerWidth <= 760) document.body.classList.add('side-open');
+  }
+  drawPts = []; selVertex = null;
   pushHistory();
+  setMode('select');
   refreshAll();
-  setStatus(added ? `Added ${added} tile(s) to "${a.name}".` : 'No room for tiles of that size.');
+}
+function selectOutline() {
+  if (!outline.length) { setStatus('No outline yet — use Draw outline first.'); return; }
+  sel = { kind: 'outline' }; selVertex = null;
+  setMode('select');
+}
+function deleteOutline() {
+  if (!confirm('Delete the map outline?')) return;
+  outline = []; sel = null; selVertex = null;
+  pushHistory(); refreshAll(); setMode('select');
+}
+function removeCorner() {
+  const pts = selPts();
+  if (!pts || selVertex === null) { setStatus('Tap a corner first, then remove it.'); return; }
+  if (pts.length <= 3) { setStatus('A shape needs at least 3 corners.'); return; }
+  pts.splice(selVertex, 1);
+  selVertex = null;
+  pushHistory(); refreshAll();
+}
+// Add a corner on edge i of a shape. With shared corners on, a neighbour that
+// shares the same edge gets the corner too so the two keep fitting together.
+function insertOnEdge(ref, i, p) {
+  const pts = polyOf(ref);
+  const a = pts[i], b = pts[(i + 1) % pts.length];
+  pts.splice(i + 1, 0, [p[0], p[1]]);
+  if (linkedOn()) for (const Q of allPolys()) {
+    if (Q.ref === ref) continue;
+    const m = Q.pts.length;
+    for (let j = 0; j < m; j++) {
+      const c = Q.pts[j], d = Q.pts[(j + 1) % m];
+      if ((same(c, a) && same(d, b)) || (same(c, b) && same(d, a))) { Q.pts.splice(j + 1, 0, [p[0], p[1]]); break; }
+    }
+  }
+  return i + 1;
 }
 function deleteSelectedTile() {
-  if (!selTile) return;
-  tiles = tiles.filter(t => t.id !== selTile);
-  selTile = null;
-  pushHistory();
-  refreshAll();
+  const t = selTileObj();
+  if (!t) return;
+  tiles = tiles.filter(x => x !== t);
+  for (const o of tiles) { o.opens = o.opens.filter(id => id !== t.id); o.cancels = o.cancels.filter(id => id !== t.id); }
+  sel = null; selVertex = null;
+  pushHistory(); setMode('select'); refreshAll();
 }
-function applyGridSize() {
-  const c = Math.max(8, Math.min(200, +document.getElementById('gridCols').value || cols));
-  const r = Math.max(8, Math.min(200, +document.getElementById('gridRows').value || rows));
-  const lost = [...owner.keys()].some(k => { const [x, y] = k.split(',').map(Number); return x >= c || y >= r; });
-  if (lost && !confirm('Shrinking cuts off painted cells. Continue?')) return;
-  cols = c; rows = r;
-  for (const a of areas) for (const k of [...a.cells]) {
-    const [x, y] = k.split(',').map(Number);
-    if (x >= c || y >= r) a.cells.delete(k);
-  }
-  rebuildOwner();
-  pushHistory();
-  refreshAll();
-  fitView();
+function tileAt(w) {
+  for (let i = tiles.length - 1; i >= 0; i--) if (tiles[i].pts.length >= 3 && pip(w, tiles[i].pts)) return tiles[i];
+  return null;
+}
+function togglePick(kind) {
+  const t = selTileObj();
+  if (!kind || !t || pickMode === kind) { setMode('select'); return; }
+  pickMode = kind;
+  setMode('pick');
+  document.getElementById('pickMsg').textContent = kind === 'opens'
+    ? `Tap tiles that solving ${tileName(t)} OPENS` : `Tap tiles that solving ${tileName(t)} CANCELS`;
+  if (innerWidth <= 760) document.body.classList.remove('side-open');
+}
+function pickTile(w) {
+  const st = selTileObj(), t = tileAt(w);
+  if (!st || !t) return;
+  if (t.id === st.id) { setStatus('A tile can\'t affect itself.'); return; }
+  const list = st[pickMode], other = pickMode === 'opens' ? 'cancels' : 'opens';
+  if (list.includes(t.id)) st[pickMode] = list.filter(id => id !== t.id);
+  else { st[pickMode] = [...list, t.id]; st[other] = st[other].filter(id => id !== t.id); }
+  pushHistory(); refreshAll();
 }
 function newBlueprint() {
   if (!confirm('Start a new, empty blueprint? Unsaved changes are lost.')) return;
-  fromData({ version: 1, name: 'Untitled Blueprint', cols: 48, rows: 30, areas: [], tiles: [] });
+  fromData({ version: 2, name: 'Untitled Blueprint', outline: [], tiles: [] });
   history = []; hIdx = -1;
   pushHistory(); markSaved();
-  refreshAll(); fitView();
+  setMode('select'); refreshAll(); fitView();
 }
 
-// ── Sidebar UI ────────────────────────────────────────────────────────────────
-const TOOL_HINTS = {
-  select: 'Tap a tile to edit it (drag to move). Tap an empty part of an area to select the area.',
-  pan: 'Drag to move around. Pinch or scroll to zoom.',
-  paint: 'Drag over the blueprint to outline the selected area. Painting over another area takes those cells.',
-  erase: 'Drag to remove cells from any area.',
-  tile: 'Drag a rectangle inside an area to make a flip tile. It must stay inside one area and not overlap other tiles.',
-};
-function setTool(t) {
-  tool = t;
-  document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
-  document.getElementById('toolHint').textContent = TOOL_HINTS[t];
-  cv.style.cursor = t === 'pan' ? 'grab' : t === 'select' ? 'default' : 'crosshair';
-  render();
-}
-document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
-
-function renderAreaList() {
-  const el = document.getElementById('areaList');
-  el.innerHTML = areas.length ? '' : '<div class="hint">No areas yet. Add an explored area for the starting rooms and unexplored ones for what gets opened later.</div>';
-  for (const a of areas) {
-    const d = document.createElement('div');
-    d.className = 'area-item' + (a.id === selArea ? ' sel' : '');
-    const nt = tiles.filter(t => t.area === a.id).length;
-    d.innerHTML = `<span class="dot"></span><span class="nm"></span><span class="hint" style="font-size:10px">${a.cells.size}▦ ${nt}▣</span>` +
-      `<span class="badge ${a.explored ? 'start' : 'locked'}">${a.explored ? 'START' : 'LOCKED'}</span>`;
-    d.querySelector('.dot').style.background = a.color;
-    d.querySelector('.nm').textContent = a.name;
-    d.onclick = () => { selArea = a.id; selTile = null; refreshAll(); };
-    el.appendChild(d);
-  }
-}
-function renderAreaProps() {
-  const a = areaById(selArea);
-  document.getElementById('areaProps').style.display = a && !selTile ? '' : 'none';
-  if (!a) return;
-  document.getElementById('apName').value = a.name;
-  document.getElementById('apExplored').checked = a.explored;
-  document.getElementById('apColor').value = a.color;
-  const by = tiles.filter(t => t.opens.includes(a.id));
-  document.getElementById('apOpenedBy').textContent = a.explored
-    ? 'Open from the start.'
-    : by.length ? by.map(t => `${tileText(t) || 'empty tile'} (in ${areaById(t.area)?.name || '?'})`).join(', ')
-      : 'Nothing opens this area yet — select a tile and tick this area under "Solving this tile opens".';
-}
-document.getElementById('apName').oninput = e => { const a = areaById(selArea); if (a) { a.name = e.target.value || 'Area'; renderAreaList(); render(); } };
-document.getElementById('apName').onchange = () => { pushHistory(); refreshAll(); };
-document.getElementById('apExplored').onchange = e => { const a = areaById(selArea); if (a) { a.explored = e.target.checked; pushHistory(); refreshAll(); } };
-document.getElementById('apColor').oninput = e => { const a = areaById(selArea); if (a) { a.color = e.target.value; renderAreaList(); render(); } };
-document.getElementById('apColor').onchange = () => pushHistory();
-
+// ── Sidebar ───────────────────────────────────────────────────────────────────
 function buildChunkSelect() {
   const sel = document.getElementById('tpChunk');
   sel.innerHTML = '<option value="">— empty —</option>';
@@ -888,319 +950,364 @@ function buildChunkSelect() {
     sel.appendChild(g);
   }
 }
-function renderTileProps() {
-  const t = tileById(selTile);
-  document.getElementById('tileProps').style.display = t ? '' : 'none';
-  if (!t) return;
-  const sel = document.getElementById('tpChunk');
-  if (t.chunk && !CHUNK_IDS.has(t.chunk) && ![...sel.options].some(o => o.value === t.chunk)) {
-    const o = document.createElement('option');
-    o.value = t.chunk; o.textContent = t.chunk + ' (missing)';
-    sel.appendChild(o);
+function renderChips(el, ids, cls, key) {
+  el.innerHTML = '';
+  if (!ids.length) { el.innerHTML = '<span class="hint">none</span>'; return; }
+  for (const id of ids) {
+    const o = tileById(id);
+    if (!o) continue;
+    const c = document.createElement('span');
+    c.className = 'chip ' + cls;
+    c.textContent = tileName(o);
+    const x = document.createElement('b');
+    x.textContent = '×';
+    x.title = 'Remove';
+    x.onclick = () => { const t = selTileObj(); t[key] = t[key].filter(v => v !== id); pushHistory(); refreshAll(); };
+    c.appendChild(x);
+    el.appendChild(c);
   }
-  sel.value = t.chunk || '';
-  document.getElementById('tpLabel').value = t.label || '';
-  const box = document.getElementById('tpOpens');
-  box.innerHTML = '';
-  const others = areas.filter(a => a.id !== t.area);
-  if (!others.length) box.innerHTML = '<div class="hint">Add more areas to link them here.</div>';
-  for (const a of others) {
-    const l = document.createElement('label');
-    l.className = 'chk';
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = t.opens.includes(a.id);
-    cb.onchange = () => {
-      t.opens = cb.checked ? [...t.opens, a.id] : t.opens.filter(id => id !== a.id);
-      pushHistory(); refreshAll();
-    };
-    const dot = document.createElement('span');
-    dot.className = 'dot';
-    dot.style.cssText = `width:9px;height:9px;border-radius:50%;background:${a.color};flex-shrink:0`;
-    const nm = document.createElement('span');
-    nm.textContent = a.name + (a.explored ? ' (already open)' : '');
-    l.append(cb, dot, nm);
-    box.appendChild(l);
-  }
-  const a = areaById(t.area);
-  const prob = tileProblem(t);
-  document.getElementById('tpInfo').innerHTML = '';
-  const info = document.getElementById('tpInfo');
-  info.textContent = `In "${a ? a.name : '?'}" · ${t.w}×${t.h} cells at (${t.c}, ${t.r})`;
-  if (prob) { const w = document.createElement('div'); w.style.color = '#e0a060'; w.textContent = '⚠ This tile ' + prob + '.'; info.appendChild(w); }
 }
-document.getElementById('tpChunk').onchange = e => { const t = tileById(selTile); if (t) { t.chunk = e.target.value; pushHistory(); refreshAll(); } };
-document.getElementById('tpLabel').oninput = e => { const t = tileById(selTile); if (t) { t.label = e.target.value; render(); } };
+function refreshPanels() {
+  const t = selTileObj();
+  document.getElementById('tilePanel').style.display = t ? '' : 'none';
+  document.getElementById('outlinePanel').style.display = sel && sel.kind === 'outline' ? '' : 'none';
+  document.querySelectorAll('.rmCorner').forEach(b => b.disabled = selVertex === null || !selPts() || selPts().length <= 3);
+  if (!t) return;
+  document.getElementById('tpHead').textContent = tileName(t) + (t.start ? '  · starting tile' : '');
+  const s = document.getElementById('tpChunk');
+  if (t.chunk && ![...s.options].some(o => o.value === t.chunk)) {
+    const o = document.createElement('option'); o.value = t.chunk; o.textContent = t.chunk + ' (missing)'; s.appendChild(o);
+  }
+  s.value = t.chunk || '';
+  if (document.activeElement !== document.getElementById('tpLabel')) document.getElementById('tpLabel').value = t.label || '';
+  document.getElementById('tpStart').checked = !!t.start;
+  const fx = hasEffects(t);
+  document.getElementById('fxSection').style.display = fx ? '' : 'none';
+  document.getElementById('fxGivenNote').style.display = fx ? 'none' : '';
+  renderChips(document.getElementById('tpOpens'), t.opens, 'open', 'opens');
+  renderChips(document.getElementById('tpCancels'), t.cancels, 'cancel', 'cancels');
+  document.getElementById('pickOpensBtn').classList.toggle('active', pickMode === 'opens');
+  document.getElementById('pickCancelsBtn').classList.toggle('active', pickMode === 'cancels');
+  document.getElementById('pickOpensBtn').textContent = pickMode === 'opens' ? 'Done picking' : 'Pick tiles to open';
+  document.getElementById('pickCancelsBtn').textContent = pickMode === 'cancels' ? 'Done picking' : 'Pick tiles to cancel';
+}
+document.getElementById('tpChunk').onchange = e => { const t = selTileObj(); if (t) { t.chunk = e.target.value; if (!hasEffects(t) && mode === 'pick') setMode('select'); pushHistory(); refreshAll(); } };
+document.getElementById('tpLabel').oninput = e => { const t = selTileObj(); if (t) { t.label = e.target.value; render(); } };
 document.getElementById('tpLabel').onchange = () => { pushHistory(); refreshAll(); };
+document.getElementById('tpStart').onchange = e => { const t = selTileObj(); if (t) { t.start = e.target.checked; pushHistory(); refreshAll(); } };
+document.getElementById('gridSize').onchange = () => render();
 
+// Per-tile shape problems (shown as red dashed outlines and in Checks)
+function tileProblems() {
+  const out = new Map();
+  for (const t of tiles) {
+    if (t.pts.length < 3 || Math.abs(polyArea(t.pts)) < 1) out.set(t.id, 'has no area');
+    else if (selfCrossing(t.pts)) out.set(t.id, 'has edges that cross each other');
+    else if (outsideOutline(t.pts)) out.set(t.id, 'pokes outside the map outline');
+  }
+  for (let i = 0; i < tiles.length; i++) for (let j = i + 1; j < tiles.length; j++) {
+    if (tiles[i].pts.length < 3 || tiles[j].pts.length < 3) continue;
+    if (polysOverlap(tiles[i].pts, tiles[j].pts)) {
+      if (!out.has(tiles[i].id)) out.set(tiles[i].id, 'overlaps ' + tileName(tiles[j]));
+      if (!out.has(tiles[j].id)) out.set(tiles[j].id, 'overlaps ' + tileName(tiles[i]));
+    }
+  }
+  return out;
+}
+// Tiles guaranteed to be explored by the time each tile can be explored —
+// used to warn when a puzzle cancels a tile that might not be open yet
+function guaranteedExplored() {
+  const ids = tiles.map(t => t.id);
+  const startSet = new Set(tiles.filter(t => t.start).map(t => t.id));
+  const must = new Map(tiles.map(t => [t.id, t.start ? startSet : new Set(ids)]));
+  for (let iter = 0; iter < tiles.length + 2; iter++) {
+    let changed = false;
+    for (const x of tiles) {
+      if (x.start) continue;
+      const openers = tiles.filter(p => hasEffects(p) && p.opens.includes(x.id));
+      if (!openers.length) continue;
+      let acc = null;
+      for (const p of openers) {
+        const s = new Set([...must.get(p.id), ...p.opens, p.id]);
+        acc = acc ? new Set([...acc].filter(v => s.has(v))) : s;
+      }
+      if (acc.size !== must.get(x.id).size) { must.set(x.id, acc); changed = true; }
+    }
+    if (!changed) break;
+  }
+  return must;
+}
 function renderChecks() {
   const out = [];
-  const warn = (msg, sel) => out.push({ msg, sel });
-  if (!areas.length) warn('No areas yet.');
-  if (areas.length && !areas.some(a => a.explored)) warn('No area is explored at the start — the player would see nothing.');
-  for (const a of areas) {
-    if (!a.cells.size) warn(`"${a.name}" has no cells painted.`, { area: a.id });
-    else if (!tiles.some(t => t.area === a.id)) warn(`"${a.name}" has no flip tiles.`, { area: a.id });
-    if (!a.explored && !tiles.some(t => t.opens.includes(a.id))) warn(`"${a.name}" is unexplored but no tile opens it.`, { area: a.id });
+  const warn = (msg, id) => out.push({ msg, id });
+  if (outline.length < 3) warn('Draw the map outline first (Draw outline).');
+  if (!tiles.length) warn('No tiles yet — use Add tile.');
+  if (tiles.length && !tiles.some(t => t.start)) warn('No starting tiles — the player would see an empty map.');
+  const probs = tileProblems();
+  for (const [id, p] of probs) warn(`${tileName(tileById(id))} ${p}.`, id);
+  if (outline.length >= 3 && tiles.length) {
+    const oa = Math.abs(polyArea(outline));
+    const ta = tiles.filter(t => t.pts.length >= 3 && !probs.has(t.id)).reduce((s, t) => s + Math.abs(polyArea(t.pts)), 0);
+    const gap = (oa - ta) / oa * 100;
+    if (gap > 0.5 && !probs.size) warn(`About ${Math.round(gap)}% of the map isn't covered by any tile.`);
   }
-  // Reachability: walk from the start areas through tiles that are themselves reachable
-  const reach = new Set(areas.filter(a => a.explored).map(a => a.id));
+  // Reachability: start tiles, then whatever solvable puzzles open
+  const reach = new Set(tiles.filter(t => t.start).map(t => t.id));
   for (let changed = true; changed;) {
     changed = false;
-    for (const t of tiles) if (reach.has(t.area)) for (const id of t.opens) if (!reach.has(id)) { reach.add(id); changed = true; }
+    for (const t of tiles) if (reach.has(t.id) && hasEffects(t)) for (const id of t.opens) if (!reach.has(id)) { reach.add(id); changed = true; }
   }
-  for (const a of areas) if (!reach.has(a.id) && tiles.some(t => t.opens.includes(a.id)))
-    warn(`"${a.name}" can't be reached — the tiles that open it are in areas that are never opened.`, { area: a.id });
   for (const t of tiles) {
-    const p = tileProblem(t);
-    if (p) warn(`Tile ${tileText(t) || '(empty)'} ${p}.`, { tile: t.id });
+    if (t.start) continue;
+    const openers = tiles.filter(p => hasEffects(p) && p.opens.includes(t.id));
+    if (!openers.length) warn(`${tileName(t)} isn't a starting tile and nothing opens it.`, t.id);
+    else if (!reach.has(t.id)) warn(`${tileName(t)} can never be reached — the tiles that open it are never opened.`, t.id);
   }
-  const empty = tiles.filter(t => !t.chunk).length;
-  if (empty) warn(`${empty} tile(s) have no puzzle or given yet.`, { tile: tiles.find(t => !t.chunk).id });
-  const seen = new Map();
+  const must = guaranteedExplored();
+  for (const t of tiles) {
+    if (!hasEffects(t) || !reach.has(t.id)) continue;
+    for (const id of t.cancels) if (!must.get(t.id).has(id))
+      warn(`${tileName(t)} cancels ${tileName(tileById(id))}, which may still be unexplored then — if so, nothing happens to it.`, t.id);
+  }
+  for (const t of tiles) if (!hasEffects(t) && (t.opens.length || t.cancels.length))
+    warn(`${tileName(t)} is a given, so its opens/cancels are ignored.`, t.id);
+  const empty = tiles.filter(t => !t.chunk);
+  if (empty.length) warn(`${empty.length} tile(s) have no puzzle or given yet.`, empty[0].id);
+  const seen = new Set();
   for (const t of tiles) if (t.chunk) {
-    if (seen.has(t.chunk)) warn(`${t.chunk} is used by more than one tile.`, { tile: t.id });
-    seen.set(t.chunk, t.id);
-    if (!CHUNK_IDS.has(t.chunk)) warn(`${t.chunk} no longer exists in the puzzle data.`, { tile: t.id });
+    if (seen.has(t.chunk)) warn(`${t.chunk} is used by more than one tile.`, t.id);
+    seen.add(t.chunk);
+    if (!CHUNK_IDS.has(t.chunk)) warn(`${t.chunk} no longer exists in the puzzle data.`, t.id);
   }
   const el = document.getElementById('checks');
   el.innerHTML = '';
-  if (!out.length) { el.innerHTML = '<div class="ok">✓ Everything is linked up.</div>'; return; }
-  for (const w of out.slice(0, 30)) {
+  if (!out.length) { el.innerHTML = '<div class="ok">✓ Everything checks out.</div>'; return; }
+  for (const w of out.slice(0, 40)) {
     const d = document.createElement('div');
     d.className = 'warn';
     d.textContent = '⚠ ' + w.msg;
-    if (w.sel) {
-      d.dataset.sel = '1';
-      d.onclick = () => { selTile = w.sel.tile || null; selArea = w.sel.area || (w.sel.tile && tileById(w.sel.tile)?.area) || null; refreshAll(); };
-    }
+    if (w.id) { d.dataset.sel = '1'; d.onclick = () => { sel = { kind: 'tile', id: w.id }; selVertex = null; setMode('select'); refreshAll(); }; }
     el.appendChild(d);
   }
-  if (out.length > 30) el.insertAdjacentHTML('beforeend', `<div class="hint">…and ${out.length - 30} more</div>`);
+  if (out.length > 40) el.insertAdjacentHTML('beforeend', `<div class="hint">…and ${out.length - 40} more</div>`);
 }
 
 function refreshAll() {
-  if (selTile && !tileById(selTile)) selTile = null;
-  if (selArea && !areaById(selArea)) selArea = null;
-  renderAreaList();
-  renderAreaProps();
-  renderTileProps();
+  if (sel && sel.kind === 'tile' && !tileById(sel.id)) sel = null;
+  if (sel && sel.kind === 'outline' && !outline.length) sel = null;
+  const pts = selPts();
+  if (selVertex !== null && (!pts || selVertex >= pts.length)) selVertex = null;
+  refreshPanels();
   renderChecks();
-  document.getElementById('gridCols').value = cols;
-  document.getElementById('gridRows').value = rows;
   document.getElementById('mapNameLbl').textContent = bpName + (isDirty() ? ' •' : '');
+  document.getElementById('mSelect').classList.toggle('active', mode === 'select' && !(sel && sel.kind === 'outline'));
+  document.getElementById('mEditOutline').classList.toggle('active', mode === 'select' && !!sel && sel.kind === 'outline');
+  updateStatus();
   render();
 }
 
-let statusMsg = '', hover = null;
+let statusMsg = '';
 function setStatus(m) { statusMsg = m; updateStatus(); }
 function updateStatus() {
-  let s = '';
-  if (hover && inBounds(hover.c, hover.r)) {
-    const a = areaById(owner.get(key(hover.c, hover.r)));
-    s = `(${hover.c}, ${hover.r})${a ? ' · ' + a.name : ''}  `;
-  }
-  document.getElementById('status').textContent = s + (statusMsg || (playing
-    ? 'TEST MODE — tap a tile to flip it and open its puzzle.'
-    : `${areas.length} areas · ${tiles.length} tiles`));
+  const base = playing ? 'TEST MODE — tap a sign to flip the tile.'
+    : `${tiles.length} tiles · ${tiles.filter(t => t.start).length} starting`;
+  document.getElementById('status').textContent = statusMsg || base;
 }
 
 // ── Pointer input ─────────────────────────────────────────────────────────────
 const pointers = new Map();
-let drag = null;        // current gesture
+let gesture = null;
 let spaceDown = false;
-
-function localXY(e) { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+function localXY(e) { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
 
 cv.addEventListener('pointerdown', e => {
   cv.setPointerCapture(e.pointerId);
-  const p = localXY(e);
-  pointers.set(e.pointerId, p);
+  const s = localXY(e);
+  pointers.set(e.pointerId, s);
+  statusMsg = '';
   if (pointers.size === 2) {
-    // Second finger: abandon the edit in progress and pinch-zoom instead
-    if (drag && drag.changed && drag.kind !== 'pan') restore(history[hIdx]);
+    // A second finger turns any gesture into pinch-zoom and undoes its edit
+    if (gesture && gesture.dirty) restore(history[hIdx]);
     const [a, b] = [...pointers.values()];
-    drag = { kind: 'pinch', d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+    gesture = { type: 'pinch', d: dist(a, b), m: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] };
     return;
   }
   if (pointers.size > 2) return;
-  const cell = toCell(p.x, p.y);
-  if (playing) { drag = { kind: 'playtap', sx: p.x, sy: p.y, lx: p.x, ly: p.y, moved: false }; return; }
-  if (tool === 'pan' || spaceDown || e.button === 1 || e.button === 2) {
-    drag = { kind: 'pan', lx: p.x, ly: p.y };
-    cv.style.cursor = 'grabbing';
-    return;
+  const w = toWorld(s[0], s[1]);
+  gesture = { type: 'tap', start: s, last: s, w0: w, moved: false, dirty: false, touch: e.pointerType === 'touch' };
+  if (e.button === 1 || e.button === 2 || spaceDown) { gesture.type = 'pan'; return; }
+  if (!playing && mode === 'select' && sel) {
+    const pts = selPts();
+    let vi = -1, best = HIT;
+    pts.forEach((p, i) => { const d = dist(S(p), s); if (d < best) { best = d; vi = i; } });
+    if (vi >= 0) { gesture.type = 'vertex'; gesture.vi = vi; selVertex = vi; refreshPanels(); render(); return; }
+    for (let i = 0; i < pts.length; i++) {
+      const m = [(pts[i][0] + pts[(i + 1) % pts.length][0]) / 2, (pts[i][1] + pts[(i + 1) % pts.length][1]) / 2];
+      if (dist(S(m), s) < HIT * .9) { gesture.type = 'mid'; gesture.ei = i; gesture.mp = m; return; }
+    }
+    if (sel.kind === 'tile' && pip(w, pts)) gesture.type = 'body';
   }
-  if (tool === 'paint' || tool === 'erase') {
-    if (tool === 'paint' && !areaById(selArea)) { setStatus('Select or add an area first, then paint its cells.'); drag = null; return; }
-    drag = { kind: 'paint', area: tool === 'paint' ? selArea : null, last: cell, changed: false };
-    drag.changed = setCell(cell.c, cell.r, drag.area) || drag.changed;
-    render();
-    return;
-  }
-  if (tool === 'tile') {
-    const areaId = owner.get(key(cell.c, cell.r));
-    if (!inBounds(cell.c, cell.r) || !areaId) { setStatus('Start the tile inside an area.'); drag = null; return; }
-    drag = { kind: 'tile', start: cell, area: areaId };
-    drag.rect = normRect(cell, cell);
-    drag.valid = rectValidFor(drag.rect, areaId, null);
-    render();
-    return;
-  }
-  // select
-  const t = tileAt(cell.c, cell.r);
-  if (t) {
-    selTile = t.id; selArea = t.area;
-    drag = { kind: 'move', tile: t, sc: cell.c, sr: cell.r, oc: t.c, or: t.r, changed: false };
-  } else {
-    const a = owner.get(key(cell.c, cell.r));
-    selTile = null; selArea = a || null;
-    drag = { kind: 'pan', lx: p.x, ly: p.y, quiet: true };
-  }
-  refreshAll();
 });
 
 cv.addEventListener('pointermove', e => {
-  const p = localXY(e);
-  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, p);
-  const cell = toCell(p.x, p.y);
-  if (!hover || hover.c !== cell.c || hover.r !== cell.r) { hover = cell; updateStatus(); if (!drag) render(); }
-  if (!drag) return;
-  if (drag.kind === 'pinch') {
+  const s = localXY(e);
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, s);
+  if (e.pointerType === 'mouse') { hoverW = toWorld(s[0], s[1]); if (mode === 'draw' && !gesture) render(); }
+  if (!gesture) return;
+  if (gesture.type === 'pinch') {
     if (pointers.size < 2) return;
     const [a, b] = [...pointers.values()];
-    const d = Math.hypot(a.x - b.x, a.y - b.y);
-    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-    view.x += mx - drag.mx; view.y += my - drag.my;
-    zoomAt(mx, my, d / (drag.d || d));
-    drag.d = d; drag.mx = mx; drag.my = my;
+    const d = dist(a, b), m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    view.x += m[0] - gesture.m[0]; view.y += m[1] - gesture.m[1];
+    zoomAt(m[0], m[1], d / (gesture.d || d));
+    gesture.d = d; gesture.m = m;
     return;
   }
-  if (drag.kind === 'pan' || drag.kind === 'playtap') {
-    if (drag.kind === 'playtap') {
-      if (Math.hypot(p.x - drag.sx, p.y - drag.sy) > 8) drag.moved = true;
-      if (!drag.moved) return;
+  if (!gesture.moved) {
+    if (dist(s, gesture.start) < (gesture.touch ? 10 : 4)) return;
+    gesture.moved = true;
+    if (gesture.type === 'mid') {
+      gesture.vi = insertOnEdge(selRef(), gesture.ei, gesture.mp);
+      selVertex = gesture.vi;
+      gesture.type = 'vertex';
+      gesture.dirty = true;
     }
-    view.x += p.x - drag.lx; view.y += p.y - drag.ly;
-    drag.lx = p.x; drag.ly = p.y;
-    render();
-    return;
+    if (gesture.type === 'vertex') {
+      const p = selPts()[gesture.vi];
+      gesture.refs = linkedOn() ? coincident(p) : [{ ref: selRef(), i: gesture.vi }];
+      gesture.exclude = new Set(gesture.refs.map(r => r.ref + ':' + r.i));
+    } else if (gesture.type === 'body') {
+      gesture.orig = selPts().map(p => [...p]);
+    } else if (gesture.type === 'tap') gesture.type = 'pan';
   }
-  if (drag.kind === 'paint') {
-    lineCells(drag.last.c, drag.last.r, cell.c, cell.r, (c, r) => { drag.changed = setCell(c, r, drag.area) || drag.changed; });
-    drag.last = cell;
-    render();
-    return;
+  const w = toWorld(s[0], s[1]);
+  if (gesture.type === 'pan') {
+    view.x += s[0] - gesture.last[0]; view.y += s[1] - gesture.last[1];
+  } else if (gesture.type === 'vertex') {
+    const p = snapPoint(w, gesture.exclude);
+    for (const r of gesture.refs) { const pts = polyOf(r.ref); if (pts && pts[r.i]) pts[r.i] = [p[0], p[1]]; }
+    gesture.dirty = true;
+  } else if (gesture.type === 'body') {
+    let dx = w[0] - gesture.w0[0], dy = w[1] - gesture.w0[1];
+    // Snap the moved tile's corners onto other shapes' corners, else to the grid
+    const t = selTileObj(), r = SNAP_PX / view.z;
+    let best = null, bd = r;
+    for (const v of gesture.orig) for (const P of allPolys()) {
+      if (P.ref === t.id) continue;
+      for (const q of P.pts) { const d = dist([v[0] + dx, v[1] + dy], q); if (d < bd) { bd = d; best = [q[0] - v[0], q[1] - v[1]]; } }
+    }
+    if (best) [dx, dy] = best;
+    else if (gridOn()) {
+      const g = gridSize(), v = gesture.orig[0];
+      dx = Math.round((v[0] + dx) / g) * g - v[0]; dy = Math.round((v[1] + dy) / g) * g - v[1];
+    }
+    t.pts = gesture.orig.map(p => [p[0] + dx, p[1] + dy]);
+    gesture.dirty = true;
   }
-  if (drag.kind === 'tile') {
-    drag.rect = normRect(drag.start, cell);
-    drag.valid = rectValidFor(drag.rect, drag.area, null);
-    render();
-    return;
-  }
-  if (drag.kind === 'move') {
-    const t = drag.tile;
-    t.c = Math.max(0, Math.min(cols - t.w, drag.oc + cell.c - drag.sc));
-    t.r = Math.max(0, Math.min(rows - t.h, drag.or + cell.r - drag.sr));
-    drag.changed = t.c !== drag.oc || t.r !== drag.or;
-    render();
-  }
+  gesture.last = s;
+  render();
 });
 
 function endPointer(e) {
   pointers.delete(e.pointerId);
-  if (!drag) return;
-  if (drag.kind === 'pinch') { if (pointers.size === 0) drag = null; return; }
+  if (!gesture) return;
+  if (gesture.type === 'pinch') { if (pointers.size === 0) gesture = null; return; }
   if (pointers.size > 0) return;
-  const d = drag; drag = null;
-  if (d.kind === 'pan') { setTool(tool); return; }
-  if (d.kind === 'playtap') { if (!d.moved) playTap(localXY(e)); return; }
-  if (d.kind === 'paint') { if (d.changed) { pushHistory(); refreshAll(); } return; }
-  if (d.kind === 'tile') {
-    if (d.valid) {
-      const t = { id: uid('t'), area: d.area, ...d.rect, chunk: '', label: '', opens: [] };
-      tiles.push(t);
-      selTile = t.id; selArea = d.area;
-      pushHistory();
-      setStatus('Tile added — pick its puzzle or given in the sidebar.');
-    } else setStatus('A tile has to fit inside one area without overlapping another tile.');
-    refreshAll();
-    if (d.valid && innerWidth <= 760) document.body.classList.add('side-open');
+  const g = gesture; gesture = null;
+  if (!g.moved) { handleTap(g); return; }
+  if (g.dirty) { pushHistory(); refreshAll(); }
+}
+function handleTap(g) {
+  const w = g.w0;
+  if (playing) { playTap(w); return; }
+  if (mode === 'draw') { addDrawPoint(w); return; }
+  if (mode === 'pick') { pickTile(w); return; }
+  if (g.type === 'vertex') { refreshPanels(); return; }
+  if (g.type === 'mid') {
+    selVertex = insertOnEdge(selRef(), g.ei, g.mp);
+    pushHistory(); refreshAll();
     return;
   }
-  if (d.kind === 'move') {
-    const t = d.tile;
-    if (d.changed) {
-      // The tile may move into another area — it adopts the area under it if it fits there
-      const target = owner.get(key(t.c, t.r));
-      if (target && rectValidFor(t, target, t)) {
-        if (target !== t.area) { t.area = target; t.opens = t.opens.filter(id => id !== target); }
-        pushHistory();
-      } else { t.c = d.oc; t.r = d.or; setStatus('Tiles must stay inside an area without overlapping.'); }
-    }
-    refreshAll();
-  }
+  const t = tileAt(w);
+  selVertex = null;
+  if (t) sel = { kind: 'tile', id: t.id };
+  else if (outline.length >= 3 && edgeDist(w, outline) * view.z < HIT) sel = { kind: 'outline' };
+  else sel = null;
+  refreshAll();
+  if (t && innerWidth <= 760) document.body.classList.add('side-open');
 }
 cv.addEventListener('pointerup', endPointer);
 cv.addEventListener('pointercancel', endPointer);
-cv.addEventListener('pointerleave', () => { if (!drag) { hover = null; updateStatus(); render(); } });
+cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') { hoverW = null; render(); } });
 cv.addEventListener('contextmenu', e => e.preventDefault());
 cv.addEventListener('wheel', e => {
   e.preventDefault();
-  const p = localXY(e);
-  if (e.ctrlKey || Math.abs(e.deltaY) > Math.abs(e.deltaX)) zoomAt(p.x, p.y, Math.exp(-e.deltaY * (e.ctrlKey ? .01 : .0015)));
+  const s = localXY(e);
+  if (e.ctrlKey || Math.abs(e.deltaY) >= Math.abs(e.deltaX)) zoomAt(s[0], s[1], Math.exp(-e.deltaY * (e.ctrlKey ? .01 : .0015)));
   else { view.x -= e.deltaX; render(); }
 }, { passive: false });
 
 document.addEventListener('keydown', e => {
   const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); quickSave(); return; }
-  if (typing || playing) { if (e.key === 'Escape' && document.getElementById('tileView').classList.contains('open')) closeTileView(); return; }
+  if (playing) { if (e.key === 'Escape') closeTileView(); return; }
+  if (typing) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
-  if (e.key === ' ') { spaceDown = true; cv.style.cursor = 'grab'; e.preventDefault(); return; }
+  if (e.key === ' ') { spaceDown = true; e.preventDefault(); return; }
+  if (mode === 'draw') {
+    if (e.key === 'Enter') finishDraw();
+    else if (e.key === 'Escape') cancelDraw();
+    else if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); undoDrawPoint(); }
+    return;
+  }
+  if (e.key === 'Escape') { if (mode === 'pick') setMode('select'); else { sel = null; selVertex = null; refreshAll(); } return; }
+  if (e.key === 'Backspace' || e.key === 'Delete') {
+    e.preventDefault();
+    if (selVertex !== null) removeCorner(); else if (selTileObj()) deleteSelectedTile();
+    return;
+  }
   const k = e.key.toLowerCase();
-  if (k === 'v') setTool('select');
-  else if (k === 'b') setTool('paint');
-  else if (k === 'e') setTool('erase');
-  else if (k === 't') setTool('tile');
-  else if (k === 'h') setTool('pan');
-  else if (e.key === 'Delete' || e.key === 'Backspace') { if (selTile) deleteSelectedTile(); }
-  else if (e.key === 'Escape') { selTile = null; selArea = null; refreshAll(); }
+  if (k === 'v') setMode('select');
+  else if (k === 't') startDraw('tile');
 });
-document.addEventListener('keyup', e => { if (e.key === ' ') { spaceDown = false; setTool(tool); } });
+document.addEventListener('keyup', e => { if (e.key === ' ') spaceDown = false; });
 
 // ── Test mode ─────────────────────────────────────────────────────────────────
-// Plays the blueprint the way the phone game will: only explored areas show
-// their tiles face down; tapping one flips it and opens its puzzle. Marking a
-// tile solved opens the areas it is linked to.
+// Plays the blueprint the way the phone game will: the player sees only the
+// outline and the explored tiles. Tapping a sign flips the tile and opens its
+// screen; solving a puzzle cancels (locks) explored targets and opens new tiles.
 let playing = false;
 let play = null;
 let openTile = null;
 
 function resetPlay() {
-  play = { explored: new Set(areas.filter(a => a.explored).map(a => a.id)),
-    flipped: new Set(), solved: new Set(), flip: new Map(), reveal: new Map() };
+  play = { explored: new Set(tiles.filter(t => t.start).map(t => t.id)),
+    flipped: new Set(), solved: new Set(), locked: new Set(), flip: new Map(), reveal: new Map() };
   closeTileView();
+  statusMsg = '';
   render(); updateStatus();
 }
 function togglePlay() {
+  if (!playing && mode !== 'select') setMode('select');
   playing = !playing;
-  // The sidebar hides/shows, shifting the canvas — keep the blueprint still on screen
   const left0 = cv.getBoundingClientRect().left;
   document.body.classList.toggle('playing', playing);
-  view.x += left0 - cv.getBoundingClientRect().left;
   document.body.classList.remove('side-open');
+  view.x += left0 - cv.getBoundingClientRect().left;   // keep the map still as the sidebar hides
+  document.getElementById('playBar').classList.toggle('show', playing);
   document.getElementById('playBtn').textContent = playing ? '■ Stop' : '▶ Test';
   document.getElementById('playBtn').classList.toggle('active', playing);
   statusMsg = '';
   if (playing) resetPlay(); else { closeTileView(); refreshAll(); }
   updateStatus();
 }
-function playTap(p) {
-  const cell = toCell(p.x, p.y);
-  const t = tileAt(cell.c, cell.r);
-  if (!t || !play.explored.has(t.area)) return;
+function playTap(w) {
+  let t = null;
+  for (let i = tiles.length - 1; i >= 0; i--)
+    if (play.explored.has(tiles[i].id) && tiles[i].pts.length >= 3 && pip(w, tiles[i].pts)) { t = tiles[i]; break; }
+  if (!t) return;
+  if (play.locked.has(t.id)) { setStatus(`${tileName(t)} is locked.`); return; }
   if (!play.flipped.has(t.id)) {
     play.flipped.add(t.id);
     play.flip.set(t.id, performance.now());
@@ -1211,17 +1318,17 @@ function playTap(p) {
 function openTileView(t) {
   openTile = t;
   const frame = document.getElementById('tvFrame');
-  const has = !!t.chunk;
-  document.getElementById('tvTitle').textContent = (tileText(t) || 'Empty tile') +
-    (chunkKind(t.chunk) ? ' · ' + (chunkKind(t.chunk) === 'problem' ? 'Puzzle' : 'Given') : '');
+  const has = !!t.chunk, kind = chunkKind(t.chunk);
+  document.getElementById('tvTitle').textContent = tileName(t) + (kind ? ' · ' + (kind === 'problem' ? 'Puzzle' : 'Given') : '');
   frame.style.display = has ? '' : 'none';
   document.getElementById('tvEmpty').style.display = has ? 'none' : '';
   if (has) frame.src = 'puzzles_curated.html?chunk=' + encodeURIComponent(t.chunk);
   const btn = document.getElementById('tvSolve');
-  const names = t.opens.map(id => areaById(id)?.name).filter(Boolean);
-  btn.style.display = (chunkKind(t.chunk) === 'given' && !t.opens.length) ? 'none' : '';
-  btn.disabled = play.solved.has(t.id);
-  btn.textContent = play.solved.has(t.id) ? 'Solved ✓' : names.length ? `Mark solved → opens ${names.join(', ')}` : 'Mark solved';
+  btn.style.display = hasEffects(t) ? '' : 'none';
+  const solved = play.solved.has(t.id);
+  btn.disabled = solved;
+  const fx = [t.opens.length ? `opens ${t.opens.length}` : '', t.cancels.length ? `cancels ${t.cancels.length}` : ''].filter(Boolean).join(', ');
+  btn.textContent = solved ? 'Solved ✓' : 'Mark solved' + (fx ? ` (${fx})` : '');
   document.getElementById('tileView').classList.add('open');
 }
 function closeTileView() {
@@ -1233,14 +1340,16 @@ function solveOpenTile() {
   const t = openTile;
   if (!t) return;
   play.solved.add(t.id);
-  const opened = [];
+  let locked = 0, opened = 0;
+  for (const id of t.cancels)   // only explored tiles can be cancelled
+    if (play.explored.has(id) && !play.locked.has(id)) { play.locked.add(id); locked++; }
   for (const id of t.opens) if (!play.explored.has(id)) {
     play.explored.add(id);
     play.reveal.set(id, performance.now() + 250);
-    opened.push(areaById(id)?.name);
+    opened++;
   }
   closeTileView();
-  setStatus(opened.length ? `Opened: ${opened.join(', ')}` : 'Tile solved.');
+  setStatus(`${tileName(t)} solved` + (opened ? ` · ${opened} new tile(s) opened` : '') + (locked ? ` · ${locked} tile(s) locked` : ''));
   render();
 }
 
@@ -1383,7 +1492,7 @@ async function mpSave() {
     if (slugify(name) !== slugify(bpName) && await ghSha(GH.dir + '/' + slugify(name) + '.json') &&
         !confirm(`"${slugify(name)}" already exists on the website. Overwrite it?`)) { mpStatus(''); return; }
     await writeCloud(name);
-    mpStatus(`Saved "${name}" ✓ — Ctrl+S / Save updates it from now on.`, true);
+    mpStatus(`Saved "${name}" ✓ — Save / Ctrl+S updates it from now on.`, true);
     refreshList();
   } catch (e) { mpStatus('Save to website failed: ' + writeFixMsg(e)); }
 }
@@ -1416,7 +1525,7 @@ function loadData(d) {
   fromData(d);
   history = []; hIdx = -1;
   pushHistory(); markSaved();
-  refreshAll(); fitView();
+  setMode('select'); refreshAll(); fitView();
 }
 function exportJSON() {
   const blob = new Blob([JSON.stringify(toData(), null, 1)], { type: 'application/json' });
@@ -1443,7 +1552,7 @@ window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault
 buildChunkSelect();
 new ResizeObserver(resizeCanvas).observe(document.getElementById('canvasWrap'));
 pushHistory(); markSaved();
-setTool('select');
+setMode('select');
 resizeCanvas();
 refreshAll();
 fitView();
