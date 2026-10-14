@@ -659,14 +659,74 @@ function drawEditTile(t, problem) {
   });
 }
 
-// Returns true while a flip animation is running
+// Test-mode look: tiles are inset so gaps show between them, drift gently
+// left and right, and shake briefly when tapped before they flip
+const TILE_GAP_PX = 10;    // gap between neighbouring tiles, screen px
+const FLOAT_PX = 2.5;      // how far a tile drifts each way, screen px
+const FLOAT_MS = 3600;     // one full left-right-left drift
+const SHAKE_MS = 300;
+function tilePhase(id) {
+  let h = 0;
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return (h % 1000) / 1000 * Math.PI * 2;
+}
+// Shrink a polygon by moving every edge inward by d (world units). Falls back
+// to scaling about the label point when the inset would collapse the shape.
+const insetCache = new Map();
+function insetPoly(pts, d) {
+  const key = pts.join(';') + '|' + d.toFixed(3);
+  if (insetCache.has(key)) return insetCache.get(key);
+  if (insetCache.size > 3000) insetCache.clear();
+  const n = pts.length, sgn = polyArea(pts) > 0 ? 1 : -1;
+  const lines = [];
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i + 1) % n];
+    const L = dist(a, b) || 1;
+    const nx = -(b[1] - a[1]) / L * sgn, ny = (b[0] - a[0]) / L * sgn;   // inward normal
+    lines.push([[a[0] + nx * d, a[1] + ny * d], [b[0] + nx * d, b[1] + ny * d]]);
+  }
+  let out = [];
+  for (let i = 0; i < n; i++) {
+    const [p1, p2] = lines[(i - 1 + n) % n], [p3, p4] = lines[i];
+    const den = (p1[0] - p2[0]) * (p3[1] - p4[1]) - (p1[1] - p2[1]) * (p3[0] - p4[0]);
+    let q;
+    if (Math.abs(den) < 1e-9) q = p3;   // straight-through corner
+    else {
+      const tt = ((p1[0] - p3[0]) * (p3[1] - p4[1]) - (p1[1] - p3[1]) * (p3[0] - p4[0])) / den;
+      q = [p1[0] + tt * (p2[0] - p1[0]), p1[1] + tt * (p2[1] - p1[1])];
+    }
+    const m = dist(q, pts[i]);   // very sharp corner: cap how far the corner moves
+    if (m > d * 3) q = [pts[i][0] + (q[0] - pts[i][0]) * d * 3 / m, pts[i][1] + (q[1] - pts[i][1]) * d * 3 / m];
+    out.push(q);
+  }
+  const { p: lp, r } = labelInfo(pts);
+  if (r <= d * 1.5 || polyArea(out) * polyArea(pts) <= 0 || selfCrossing(out)) {
+    const k = Math.max(.5, 1 - d / Math.max(r, 1e-6));
+    out = pts.map(v => [lp[0] + (v[0] - lp[0]) * k, lp[1] + (v[1] - lp[1]) * k]);
+  }
+  insetCache.set(key, out);
+  return out;
+}
+
+// Returns true while the tile is animating (always, in test mode — tiles float)
 function drawPlayTile(t, now) {
   const { c, rs, fs } = tileFont(t);
   ctx.save();
-  let faceUp = play.flipped.has(t.id), anim = false;
+  // Float: every tile drifts left and right a little, each on its own phase
+  let dx = FLOAT_PX * Math.sin(now / FLOAT_MS * Math.PI * 2 + tilePhase(t.id));
+  let rot = 0;
+  // Shake after a tap, before the flip
+  if (play.shake.has(t.id)) {
+    const e = (now - play.shake.get(t.id)) / SHAKE_MS;
+    if (e >= 1) play.shake.delete(t.id);
+    else { const k = 1 - e; dx += 5 * k * Math.sin(e * Math.PI * 14); rot = .05 * k * Math.sin(e * Math.PI * 10); }
+  }
+  ctx.translate(dx, 0);
+  if (rot) { ctx.translate(c[0], c[1]); ctx.rotate(rot); ctx.translate(-c[0], -c[1]); }
+  let faceUp = play.flipped.has(t.id), anim = true;
   if (play.flip.has(t.id)) {
     const p = Math.min(1, (now - play.flip.get(t.id)) / 420);
-    if (p >= 1) play.flip.delete(t.id); else anim = true;
+    if (p >= 1) play.flip.delete(t.id);
     faceUp = p >= .5;
     ctx.translate(c[0], c[1]);
     ctx.scale(Math.max(.02, Math.abs(Math.cos(p * Math.PI))), 1);
@@ -674,7 +734,7 @@ function drawPlayTile(t, now) {
   }
   // Solved and cancelled tiles look exactly the same: locked
   const locked = play.locked.has(t.id) || play.solved.has(t.id);
-  pathPoly(t.pts);
+  pathPoly(insetPoly(t.pts, TILE_GAP_PX / 2 / view.z));
   ctx.fillStyle = '#123b66'; ctx.fill();   // cover the outline's "unknown" hatching
   ctx.fillStyle = locked ? 'rgba(30,38,50,.92)' : faceUp ? 'rgba(235,244,255,.85)' : 'rgba(220,236,255,.18)';
   ctx.fill();
@@ -1285,7 +1345,7 @@ let openTile = null;
 
 function resetPlay() {
   play = { explored: new Set(tiles.filter(t => t.start).map(t => t.id)),
-    flipped: new Set(), solved: new Set(), locked: new Set(), flip: new Map(), reveal: new Map() };
+    flipped: new Set(), solved: new Set(), locked: new Set(), flip: new Map(), reveal: new Map(), shake: new Map(), busy: false };
   closeTileView();
   statusMsg = '';
   render(); updateStatus();
@@ -1311,12 +1371,18 @@ function playTap(w) {
   if (!t) return;
   // Solved puzzles lock themselves, just like cancelled tiles
   if (play.locked.has(t.id) || play.solved.has(t.id)) { setStatus(`${tileName(t)} is locked.`); return; }
-  if (!play.flipped.has(t.id)) {
+  if (play.busy) return;   // a tile is already shaking/flipping
+  play.busy = true;
+  const P = play;   // ignore these timers if the test is stopped or restarted
+  play.shake.set(t.id, performance.now());
+  render();
+  setTimeout(() => {
+    if (!playing || play !== P) return;
+    if (play.flipped.has(t.id)) { play.busy = false; openTileView(t); return; }
     play.flipped.add(t.id);
     play.flip.set(t.id, performance.now());
-    render();
-    setTimeout(() => openTileView(t), 450);
-  } else openTileView(t);
+    setTimeout(() => { if (!playing || play !== P) return; play.busy = false; openTileView(t); }, 450);
+  }, SHAKE_MS);
 }
 function openTileView(t) {
   openTile = t;
