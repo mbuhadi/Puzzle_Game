@@ -714,8 +714,8 @@ function drawEditTile(t, problem) {
 // Test-mode look: tiles are inset so gaps show between them, drift gently
 // left and right, and shake briefly when tapped before they flip
 const TILE_GAP_PX = 10;    // gap between neighbouring tiles, screen px
-const FLOAT_MIN_PX = .5;   // how far a tile drifts from its resting spot, screen px —
-const FLOAT_MAX_PX = 1;    //   each tile gets its own amount in this range
+const FLOAT_MIN_PX = .75; // how far a tile drifts from its resting spot, screen px —
+const FLOAT_MAX_PX = 1.25; //   each tile gets its own amount in this range
 const CORNER_PX = 4;       // corner rounding radius, screen px
 const FLOAT_MS = 6000;     // one full there-and-back drift
 const FLOAT_TURN_MS = 17000; // the drift direction turns a full circle in about this long
