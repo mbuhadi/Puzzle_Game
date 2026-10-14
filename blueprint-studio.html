@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Blueprint Studio</title>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cinzel+Decorative:wght@400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cinzel+Decorative:wght@400&family=Gochi+Hand&display=swap" rel="stylesheet">
 <style>
 /* Blueprint Studio — a second map studio (map-editor.html is the old one).
    The map is a blueprint: an outline cut into flip tiles of any shape. Each
@@ -778,6 +778,51 @@ function insetPoly(pts, d) {
   return out;
 }
 
+// A chalk "?" — a hand-drawn font, softened with a faint smudge and
+// eaten into with tiny gaps like chalk dragged over a board. Built once per
+// size (the texture stays put as the tile floats) and redrawn once the
+// chalk font has loaded.
+const chalkCache = new Map();
+function chalkMark(size) {
+  const px = Math.round(size * dpr);
+  const key = px;
+  if (chalkCache.has(key)) return chalkCache.get(key);
+  const c = document.createElement('canvas');
+  c.width = Math.round(px * 1.1); c.height = Math.round(px * 1.3);
+  const g = c.getContext('2d');
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = `${px}px 'Gochi Hand', 'Comic Sans MS', cursive`;
+  let seed = px * 9301 + 49297;
+  const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+  const cx = c.width / 2, cy = c.height / 2 + px * .04;
+  // dusty halo, then the stroke itself drawn twice slightly offset
+  g.fillStyle = 'rgba(235,242,250,.10)';
+  for (let i = 0; i < 6; i++) g.fillText('?', cx + (rnd() - .5) * px * .06, cy + (rnd() - .5) * px * .06);
+  g.fillStyle = 'rgba(245,248,252,.9)';
+  g.fillText('?', cx, cy);
+  g.fillStyle = 'rgba(245,248,252,.35)';
+  g.fillText('?', cx + px * .012, cy - px * .01);
+  // chalk grain: knock out small specks and short streaks
+  g.globalCompositeOperation = 'destination-out';
+  const n = Math.round(c.width * c.height / 7);
+  for (let i = 0; i < n; i++) {
+    g.fillStyle = `rgba(0,0,0,${.2 + rnd() * .75})`;
+    g.fillRect(rnd() * c.width, rnd() * c.height, Math.max(1, rnd() * px * .018), Math.max(1, rnd() * px * .018));
+  }
+  g.lineCap = 'round';
+  for (let i = 0; i < n / 14; i++) {   // streaks where the chalk skipped
+    const x = rnd() * c.width, y = rnd() * c.height, L = px * (.04 + rnd() * .1);
+    g.strokeStyle = `rgba(0,0,0,${.3 + rnd() * .5})`;
+    g.lineWidth = Math.max(1, px * .01 * rnd());
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + L, y - L * .45); g.stroke();
+  }
+  g.globalCompositeOperation = 'source-over';
+  chalkCache.set(key, c);
+  return c;
+}
+if (document.fonts && document.fonts.load)
+  document.fonts.load("40px 'Gochi Hand'").then(() => { chalkCache.clear(); render(); }).catch(() => {});
+
 // Returns true while the tile is animating (always, in test mode — tiles float)
 function drawPlayTile(t, now) {
   const { c, rs, fs } = tileFont(t);
@@ -836,13 +881,10 @@ function drawPlayTile(t, now) {
     const k = r * Math.SQRT1_2;
     ctx.beginPath(); ctx.moveTo(c[0] - k, c[1] - k); ctx.lineTo(c[0] + k, c[1] + k); ctx.stroke();
   } else if (!faceUp) {
-    // The sign to tap
-    const r = Math.max(7, Math.min(rs * .55, 26));
-    ctx.beginPath(); ctx.arc(c[0], c[1], r, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(240,247,255,.95)'; ctx.lineWidth = 1.6; ctx.stroke();
-    ctx.fillStyle = 'rgba(240,247,255,.95)';
-    ctx.font = `600 ${r * 1.15}px Cinzel, serif`;
-    ctx.fillText('?', c[0], c[1] + 1);
+    // The sign to tap: a big chalk-drawn question mark
+    const size = Math.max(22, Math.min(rs * 1.6, 110));
+    const mark = chalkMark(size);
+    ctx.drawImage(mark, c[0] - mark.width / dpr / 2, c[1] - mark.height / dpr / 2, mark.width / dpr, mark.height / dpr);
   } else {
     const kind = chunkKind(t.chunk);
     ctx.fillStyle = '#123b66';
