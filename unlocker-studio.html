@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Unlocker Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cinzel+Decorative:wght@400&display=swap" rel="stylesheet">
+<style>
+/* Unlocker Studio — design constant unlockers (combination locks) from cropped
+   pictures. Designs are saved to unlockers/<name>.json and pictures to
+   unlocker_assets/<name>.png; Blueprint Studio attaches them to a blueprint
+   and defines their combinations. Rendering is shared: unlocker_runtime.js. */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --gold: #c8a84b; --gold-dim: #7a6030;
+  --bg: #0e0d0a; --bg2: #14120e; --bg3: #1e1a12; --border: #2e2a1e;
+  --text: #d4ba88; --dim: #6a5c3a; --hover: #231d0e;
+}
+html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Cinzel', serif; }
+#app { display: flex; flex-direction: column; height: 100%; }
+#topbar { height: 46px; flex-shrink: 0; background: var(--bg2); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 4px; padding: 0 8px; overflow-x: auto; }
+.tb-title { font-family: 'Cinzel Decorative', serif; font-size: 12px; color: var(--gold); letter-spacing: 2px; margin-right: 8px; white-space: nowrap; }
+.tb-grow { flex: 1; }
+#nameLbl { font-size: 11px; color: var(--dim); white-space: nowrap; }
+#main { flex: 1; display: flex; overflow: hidden; min-height: 0; position: relative; }
+#sidebar { width: 290px; flex-shrink: 0; background: var(--bg2); border-right: 1px solid var(--border);
+  overflow-y: auto; padding: 10px 9px 40px; display: flex; flex-direction: column; gap: 12px; z-index: 5; }
+.sec-title { font-size: 9px; letter-spacing: 2.5px; color: var(--dim); margin-bottom: 6px; }
+.divider { height: 1px; background: var(--border); }
+.hint { font-family: sans-serif; font-size: 11px; color: var(--dim); line-height: 1.5; }
+button { background: var(--bg3); border: 1px solid var(--border); color: var(--text); font-family: 'Cinzel', serif;
+  font-size: 11px; padding: 7px 8px; cursor: pointer; border-radius: 3px; letter-spacing: .5px; white-space: nowrap; touch-action: manipulation; }
+button:hover { border-color: var(--gold-dim); color: var(--gold); }
+button.active { border-color: var(--gold); color: var(--gold); background: var(--hover); }
+button:disabled { opacity: .35; cursor: default; }
+button.danger:hover { border-color: #7a3030; color: #cc7070; }
+button.play { border-color: #3a6a30; color: #7acc60; }
+button.play.active, button.play:hover { border-color: #5a9a48; color: #aaee88; background: #142010; }
+button.wide { width: 100%; }
+.row { display: flex; gap: 4px; align-items: center; }
+.row > * { flex: 1; min-width: 0; }
+input[type=text], input[type=number], input[type=password], select {
+  width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+  font-family: 'Cinzel', serif; font-size: 12px; padding: 6px; border-radius: 3px; }
+input[type=number] { font-family: monospace; }
+input[type=color] { width: 100%; height: 30px; background: none; border: 1px solid var(--border); border-radius: 3px; }
+input:focus, select:focus { outline: none; border-color: var(--gold-dim); }
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.field > span { font-size: 9px; letter-spacing: 1.5px; color: var(--dim); }
+.el-item { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 3px;
+  cursor: pointer; font-size: 11px; margin-bottom: 3px; background: var(--bg3); }
+.el-item.sel { border-color: var(--gold); color: var(--gold); background: var(--hover); }
+.lib { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.lib-item { position: relative; border: 1px solid var(--border); border-radius: 4px; background: #0a0908; aspect-ratio: 1; overflow: hidden; }
+.lib-item img { width: 100%; height: 100%; object-fit: contain; }
+.lib-item .nm { position: absolute; left: 0; right: 0; bottom: 0; font-family: sans-serif; font-size: 9px; padding: 2px 3px;
+  background: rgba(0,0,0,.7); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lib-item .x { position: absolute; top: 1px; right: 1px; padding: 0 5px; font-size: 11px; line-height: 16px; background: rgba(0,0,0,.7); }
+.sym-list { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.sym-chip { display: inline-flex; align-items: center; gap: 3px; border: 1px solid var(--border); border-radius: 4px; padding: 2px; background: var(--bg); }
+.sym-chip img { width: 28px; height: 28px; object-fit: contain; }
+.sym-chip b { cursor: pointer; padding: 0 4px; font-weight: 400; font-size: 12px; }
+
+#stageWrap { flex: 1; position: relative; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: repeating-conic-gradient(#171512 0 25%, #1d1a15 0 50%) 0 0 / 24px 24px; }
+#stageBox { position: relative; width: 600px; max-width: 100%; }
+#overlay { position: absolute; inset: 0; pointer-events: none; }
+.sel-box { position: absolute; border: 1.5px dashed rgba(255,209,102,.7); pointer-events: auto; cursor: move; touch-action: none; }
+.sel-box.sel { border: 2px solid #ffd166; background: rgba(255,209,102,.08); }
+.sel-box .lbl { position: absolute; left: 0; top: -17px; font-family: sans-serif; font-size: 10px; color: #ffd166; white-space: nowrap; }
+.sel-box .hd { position: absolute; right: -9px; bottom: -9px; width: 18px; height: 18px; border-radius: 50%; background: #ffd166;
+  border: 2px solid #7a6030; cursor: nwse-resize; touch-action: none; }
+#status { position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 10px; font-family: monospace; font-size: 11px;
+  color: var(--text); background: rgba(14,13,10,.85); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.preview #overlay { display: none; }
+
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75); display: none; align-items: center; justify-content: center; z-index: 40; padding: 12px; }
+.overlay.open { display: flex; }
+.panel { background: var(--bg2); border: 1px solid var(--gold-dim); border-radius: 8px; padding: 14px; width: min(460px, 100%);
+  max-height: 92vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.panel h3 { font-size: 13px; color: var(--gold); letter-spacing: 2px; font-weight: 400; }
+.mp-item { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+.mp-item .nm { flex: 1; font-size: 12px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; }
+.mp-item .nm:hover { color: var(--gold); }
+#mpStatus, #cropStatus { font-family: sans-serif; font-size: 11px; min-height: 14px; }
+#cropPanel { width: min(1000px, 100%); height: min(92vh, 860px); max-height: none; }
+#cropCanvasWrap { flex: 1; position: relative; min-height: 200px; background: repeating-conic-gradient(#171512 0 25%, #1d1a15 0 50%) 0 0 / 20px 20px; border-radius: 6px; }
+#cropCv { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+#saveFlash { position: fixed; top: 54px; right: 14px; font-size: 12px; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 50; }
+#saveFlash.show { opacity: 1; }
+#sideToggle { display: none; }
+@media (max-width: 760px) {
+  #sideToggle { display: inline-block; }
+  #sidebar { position: absolute; left: 0; top: 0; bottom: 0; transform: translateX(-100%); transition: transform .2s; box-shadow: 4px 0 18px rgba(0,0,0,.5); }
+  body.side-open #sidebar { transform: none; }
+  .tb-title, #nameLbl { display: none; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <button id="sideToggle" onclick="document.body.classList.toggle('side-open')">☰</button>
+    <a href="index.html" style="text-decoration:none"><span class="tb-title">Unlocker Studio</span></a>
+    <span id="nameLbl"></span>
+    <button id="undoBtn" onclick="undo()" title="Undo (Ctrl+Z)">↶</button>
+    <button id="redoBtn" onclick="redo()" title="Redo (Ctrl+Y)">↷</button>
+    <span class="tb-grow"></span>
+    <button onclick="openPanel()">My Unlockers</button>
+    <button onclick="quickSave()" title="Save to website (Ctrl+S)">Save</button>
+    <button class="play" id="previewBtn" onclick="togglePreview()">▶ Try it</button>
+  </div>
+  <div id="main">
+    <div id="sidebar">
+      <div>
+        <div class="sec-title">PICTURES</div>
+        <button class="wide" onclick="document.getElementById('upFile').click()">⬆ Upload &amp; crop a picture</button>
+        <input type="file" id="upFile" accept="image/*" style="display:none" onchange="startCrop(event)">
+        <div class="lib" id="lib" style="margin-top:6px"></div>
+      </div>
+      <div class="divider"></div>
+      <div>
+        <div class="sec-title">UNLOCKER</div>
+        <div class="field"><span>NAME</span><input type="text" id="dName" maxlength="40"></div>
+        <div class="field"><span>SIZE (W × H)</span><div class="row"><input type="number" id="dW" min="100" max="2000"><input type="number" id="dH" min="100" max="2000"></div></div>
+        <div class="field"><span>BACKGROUND PICTURE</span><select id="dBg" class="pic-select"></select></div>
+        <div class="field"><span>BACKGROUND COLOUR</span><input type="color" id="dBgColor"></div>
+        <div class="field"><span>CORNER ICON (SHOWN DURING PLAY)</span><select id="dIcon" class="pic-select"></select></div>
+        <div class="field"><span>ARROW PICTURE (DRAW IT POINTING UP)</span><select id="dArrow" class="pic-select"></select></div>
+        <div class="field"><span>ARROW COLOUR (DEFAULT ARROWS)</span><input type="color" id="dArrowColor"></div>
+      </div>
+      <div class="divider"></div>
+      <div>
+        <div class="sec-title">PARTS</div>
+        <div id="elList"></div>
+        <button class="wide" onclick="addDial()">+ Add dial</button>
+      </div>
+      <div id="dialPanel" style="display:none">
+        <div class="divider" style="margin-bottom:10px"></div>
+        <div class="sec-title">SELECTED DIAL</div>
+        <div class="field"><span>ARROWS</span><select id="pOrient"><option value="v">Up / down</option><option value="h">Left / right</option></select></div>
+        <div class="field"><span>SYMBOLS</span><select id="pPreset">
+          <option value="digits">Numbers 0–9</option><option value="binary">Binary 0 / 1</option>
+          <option value="letters">Letters A–Z</option><option value="shapes">Shapes ● ▲ ■ ◆ ★ ♥ ✚ ☾</option>
+          <option value="custom">Custom text…</option><option value="pictures">Pictures…</option></select></div>
+        <div class="field" id="customField"><span>CUSTOM SYMBOLS (SEPARATE WITH SPACES)</span><input type="text" id="pCustom" placeholder="e.g. N E S W"></div>
+        <div class="field" id="picField"><span>PICTURE SYMBOLS (IN ORDER)</span><div class="sym-list" id="pPics"></div>
+          <div class="row"><select id="pPicAdd" class="pic-select"></select><button style="flex:0 0 auto" onclick="addPicSymbol()">Add</button></div></div>
+        <div class="field"><span>TEXT COLOUR / FONT</span><div class="row"><input type="color" id="pColor"><select id="pFont"><option value="serif">Serif</option><option value="mono">Mono</option><option value="sans">Sans</option></select></div></div>
+        <div class="field"><span>DIAL BACKING</span><select id="pBox"><option value="dark">Dark</option><option value="light">Light</option><option value="none">None (see-through)</option></select></div>
+        <button class="danger wide" onclick="deleteDial()">Delete dial</button>
+      </div>
+      <div id="submitPanel" style="display:none">
+        <div class="divider" style="margin-bottom:10px"></div>
+        <div class="sec-title">SUBMIT BUTTON</div>
+        <div class="field"><span>LABEL</span><input type="text" id="sLabel" maxlength="20"></div>
+        <div class="field"><span>COLOUR</span><input type="color" id="sColor"></div>
+        <div class="field"><span>PICTURE (REPLACES THE LABEL)</span><select id="sImg" class="pic-select"></select></div>
+      </div>
+      <div class="divider"></div>
+      <div>
+        <div class="row"><button onclick="exportJSON()">Export</button><button onclick="document.getElementById('importFile').click()">Import</button></div>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
+        <button class="danger wide" style="margin-top:4px" onclick="newDesign()">New unlocker</button>
+      </div>
+    </div>
+    <div id="stageWrap">
+      <div id="stageBox"><div id="stageHost"></div><div id="overlay"></div></div>
+      <div id="status"></div>
+    </div>
+  </div>
+</div>
+<div id="saveFlash"></div>
+
+<div id="bpOverlay" class="overlay" onclick="if(event.target===this)closePanel()">
+  <div class="panel">
+    <h3>MY UNLOCKERS</h3>
+    <div class="row"><input type="text" id="mpName" placeholder="unlocker name…" maxlength="40"><button onclick="mpSave()" style="flex:0 0 auto">Save to Website</button></div>
+    <div id="mpStatus"></div>
+    <div class="divider"></div>
+    <div class="sec-title">ON THE WEBSITE</div>
+    <div id="mpList"></div>
+    <div id="mpAuth"></div>
+    <button onclick="closePanel()">Close</button>
+  </div>
+</div>
+
+<div id="cropOverlay" class="overlay">
+  <div class="panel" id="cropPanel">
+    <h3>CROP PICTURE</h3>
+    <div class="hint">Drag inside the box to move it, drag a corner to resize, or drag outside it to draw a new box.</div>
+    <div id="cropCanvasWrap"><canvas id="cropCv"></canvas></div>
+    <div class="row" style="flex:0 0 auto">
+      <select id="cropAspect" style="flex:0 0 150px"><option value="0">Free shape</option><option value="1">Square 1:1</option>
+        <option value="1.3333">4:3</option><option value="1.5">3:2</option><option value="1.7778">16:9</option>
+        <option value="0.75">3:4 (tall)</option><option value="stage">Same as the unlocker</option></select>
+      <input type="text" id="cropName" placeholder="picture name…" maxlength="40">
+    </div>
+    <div id="cropStatus"></div>
+    <div class="row" style="flex:0 0 auto">
+      <button onclick="cropWhole()">Whole picture</button>
+      <button class="play" onclick="saveCrop()">Save picture</button>
+      <button onclick="closeCrop()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="unlocker_runtime.js"></script>
+<script>
+// ── Design state ──────────────────────────────────────────────────────────────
+let design = UL.normalize({ name: 'Untitled Unlocker' });
+let sel = null;           // 'submit' | dial id | null
+let preview = false;
+let library = [];         // repo paths of uploaded pictures (unlocker_assets/*.png)
+const $ = id => document.getElementById(id);
+const dialById = id => design.dials.find(d => d.id === id) || null;
+const picName = p => p.replace(/^.*\//, '').replace(/\.\w+$/, '');
+
+// ── History ───────────────────────────────────────────────────────────────────
+let history = [], hIdx = -1;
+function pushHistory() {
+  const s = JSON.stringify(design);
+  if (history[hIdx] === s) return;
+  history = history.slice(0, hIdx + 1); history.push(s);
+  if (history.length > 120) history.shift();
+  hIdx = history.length - 1;
+  updateUndo();
+}
+function updateUndo() { $('undoBtn').disabled = hIdx <= 0; $('redoBtn').disabled = hIdx >= history.length - 1; }
+function undo() { if (hIdx > 0) { hIdx--; design = JSON.parse(history[hIdx]); if (sel && sel !== 'submit' && !dialById(sel)) sel = null; refresh(); updateUndo(); } }
+function redo() { if (hIdx < history.length - 1) { hIdx++; design = JSON.parse(history[hIdx]); refresh(); updateUndo(); } }
+
+// ── Stage ─────────────────────────────────────────────────────────────────────
+let ctrl = null;
+function fitStage() {
+  const wrap = $('stageWrap').getBoundingClientRect();
+  const maxW = wrap.width - 48, maxH = wrap.height - 70;
+  const w = Math.max(120, Math.min(maxW, maxH * design.w / design.h));
+  $('stageBox').style.width = w + 'px';
+}
+function renderStage() {
+  fitStage();
+  ctrl = UL.render($('stageHost'), design, {
+    static: !preview,
+    onSubmit: code => { ctrl.flashOk(); setStatus('Entered: ' + UL.codeText(design, code) + '  — combinations and what they unlock are set per blueprint in Blueprint Studio.'); },
+  });
+  renderOverlay();
+}
+function scale() { return $('stageBox').getBoundingClientRect().width / design.w; }
+function renderOverlay() {
+  const ov = $('overlay');
+  ov.innerHTML = '';
+  if (preview) return;
+  const parts = [...design.dials.map((d, i) => ({ id: d.id, r: d, label: 'Dial ' + (i + 1) })), { id: 'submit', r: design.submit, label: 'Submit' }];
+  for (const p of parts) {
+    const b = document.createElement('div');
+    b.className = 'sel-box' + (sel === p.id ? ' sel' : '');
+    const pc = (v, of) => (v / of * 100) + '%';
+    Object.assign(b.style, { left: pc(p.r.x, design.w), top: pc(p.r.y, design.h), width: pc(p.r.w, design.w), height: pc(p.r.h, design.h) });
+    b.innerHTML = `<span class="lbl">${p.label}</span><span class="hd"></span>`;
+    b.addEventListener('pointerdown', e => startDrag(e, p.id, e.target.classList.contains('hd') ? 'resize' : 'move'));
+    ov.appendChild(b);
+  }
+}
+let drag = null;
+function partRect(id) { return id === 'submit' ? design.submit : dialById(id); }
+function startDrag(e, id, kind) {
+  e.preventDefault(); e.stopPropagation();
+  sel = id;
+  const r = partRect(id);
+  drag = { id, kind, sx: e.clientX, sy: e.clientY, o: { x: r.x, y: r.y, w: r.w, h: r.h }, moved: false };
+  e.target.setPointerCapture(e.pointerId);
+  refreshPanels(); renderOverlay();
+}
+const snap = v => Math.round(v / 5) * 5;
+document.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const k = scale(), dx = (e.clientX - drag.sx) / k, dy = (e.clientY - drag.sy) / k, r = partRect(drag.id), o = drag.o;
+  if (Math.abs(dx) + Math.abs(dy) > 1) drag.moved = true;
+  if (drag.kind === 'move') {
+    r.x = Math.max(0, Math.min(design.w - r.w, snap(o.x + dx)));
+    r.y = Math.max(0, Math.min(design.h - r.h, snap(o.y + dy)));
+  } else {
+    r.w = Math.max(20, Math.min(design.w - r.x, snap(o.w + dx)));
+    r.h = Math.max(20, Math.min(design.h - r.y, snap(o.h + dy)));
+  }
+  renderStage();
+});
+document.addEventListener('pointerup', () => { if (drag) { if (drag.moved) pushHistory(); drag = null; refresh(); } });
+$('stageWrap').addEventListener('pointerdown', e => { if (!preview && e.target.id === 'stageWrap') { sel = null; refresh(); } });
+new ResizeObserver(() => renderStage()).observe($('stageWrap'));
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+function fillPicSelects() {
+  document.querySelectorAll('.pic-select').forEach(s => {
+    const v = s.value;
+    s.innerHTML = s.id === 'pPicAdd' ? '<option value="">— choose a picture —</option>' : '<option value="">— none —</option>';
+    for (const p of library) { const o = document.createElement('option'); o.value = p; o.textContent = picName(p); s.appendChild(o); }
+    s.value = v;
+  });
+}
+function refreshPanels() {
+  $('dName').value = design.name; $('dW').value = design.w; $('dH').value = design.h;
+  $('dBg').value = design.bg; $('dBgColor').value = design.bgColor; $('dIcon').value = design.icon;
+  $('dArrow').value = design.arrowImg; $('dArrowColor').value = design.arrowColor;
+  const el = $('elList'); el.innerHTML = '';
+  design.dials.forEach((d, i) => {
+    const it = document.createElement('div');
+    it.className = 'el-item' + (sel === d.id ? ' sel' : '');
+    it.textContent = `Dial ${i + 1} — ${d.symbols.length} symbols, ${d.orient === 'h' ? 'left/right' : 'up/down'}`;
+    it.onclick = () => { sel = d.id; refresh(); };
+    el.appendChild(it);
+  });
+  const sb = document.createElement('div');
+  sb.className = 'el-item' + (sel === 'submit' ? ' sel' : '');
+  sb.textContent = 'Submit button';
+  sb.onclick = () => { sel = 'submit'; refresh(); };
+  el.appendChild(sb);
+  const d = sel && sel !== 'submit' ? dialById(sel) : null;
+  $('dialPanel').style.display = d ? '' : 'none';
+  $('submitPanel').style.display = sel === 'submit' ? '' : 'none';
+  if (d) {
+    $('pOrient').value = d.orient; $('pPreset').value = d.preset || 'digits';
+    $('customField').style.display = d.preset === 'custom' ? '' : 'none';
+    $('picField').style.display = d.preset === 'pictures' ? '' : 'none';
+    if (document.activeElement !== $('pCustom')) $('pCustom').value = d.preset === 'custom' ? d.symbols.map(s => s.t).join(' ') : '';
+    $('pColor').value = d.color; $('pFont').value = d.font; $('pBox').value = d.box;
+    const pl = $('pPics'); pl.innerHTML = '';
+    if (d.preset === 'pictures') d.symbols.forEach((s, i) => {
+      const c = document.createElement('span'); c.className = 'sym-chip';
+      const im = document.createElement('img'); UL.setImg(im, s.img);
+      const x = document.createElement('b'); x.textContent = '×';
+      x.onclick = () => { d.symbols.splice(i, 1); changed(); };
+      c.append(im, x); pl.appendChild(c);
+    });
+  }
+  if (sel === 'submit') { $('sLabel').value = design.submit.label; $('sColor').value = design.submit.color; $('sImg').value = design.submit.img; }
+  $('nameLbl').textContent = design.name + (isDirty() ? ' •' : '');
+}
+function refresh() { refreshPanels(); renderStage(); }
+function changed() { pushHistory(); refresh(); }
+const bind = (id, fn, ev = 'change') => $(id).addEventListener(ev, e => { fn(e.target.value); changed(); });
+bind('dName', v => design.name = v.trim() || 'Untitled Unlocker');
+bind('dW', v => design.w = Math.max(100, Math.min(2000, +v || 600)));
+bind('dH', v => design.h = Math.max(100, Math.min(2000, +v || 400)));
+bind('dBg', v => design.bg = v);
+bind('dBgColor', v => design.bgColor = v, 'input');
+bind('dIcon', v => design.icon = v);
+bind('dArrow', v => design.arrowImg = v);
+bind('dArrowColor', v => design.arrowColor = v, 'input');
+const curDial = () => dialById(sel);
+bind('pOrient', v => { const d = curDial(); if (d.orient !== v) { d.orient = v; [d.w, d.h] = [d.h, d.w]; d.w = Math.min(d.w, design.w - d.x); d.h = Math.min(d.h, design.h - d.y); } });
+bind('pPreset', v => {
+  const d = curDial(); d.preset = v;
+  if (UL.PRESETS[v]) d.symbols = UL.PRESETS[v].map(t => ({ t }));
+  else if (v === 'custom') d.symbols = [{ t: 'A' }, { t: 'B' }, { t: 'C' }];
+  else d.symbols = [];
+});
+bind('pCustom', v => { const d = curDial(); const parts = v.trim().split(/\s+/).filter(Boolean); d.symbols = (parts.length ? parts : ['?']).map(t => ({ t })); });
+bind('pColor', v => curDial().color = v, 'input');
+bind('pFont', v => curDial().font = v);
+bind('pBox', v => curDial().box = v);
+bind('sLabel', v => design.submit.label = v || 'SUBMIT', 'input');
+bind('sColor', v => design.submit.color = v, 'input');
+bind('sImg', v => design.submit.img = v);
+function addPicSymbol() {
+  const p = $('pPicAdd').value, d = curDial();
+  if (!p || !d) return;
+  d.symbols.push({ img: p });
+  $('pPicAdd').value = '';
+  changed();
+}
+function addDial() {
+  const n = design.dials.length;
+  const id = 'd' + (1 + Math.max(0, ...design.dials.map(d => +d.id.slice(1) || 0)));
+  design.dials.push({ id, x: Math.min(design.w - 90, 40 + n * 100), y: 40, w: 80, h: 170, orient: 'v', preset: 'digits',
+    symbols: UL.PRESETS.digits.map(t => ({ t })), color: '#ffffff', font: 'serif', box: 'dark' });
+  sel = id;
+  changed();
+}
+function deleteDial() { design.dials = design.dials.filter(d => d.id !== sel); sel = null; changed(); }
+function togglePreview() {
+  preview = !preview;
+  document.body.classList.toggle('preview', preview);
+  $('previewBtn').textContent = preview ? '■ Stop' : '▶ Try it';
+  $('previewBtn').classList.toggle('active', preview);
+  setStatus(preview ? 'Tap the arrows to change each dial, then Submit.' : '');
+  renderStage();
+}
+function setStatus(m) { $('status').textContent = m || `${design.dials.length} dial(s) · ${design.w}×${design.h}`; }
+
+// ── GitHub (same token as the other studios) ─────────────────────────────────
+const GH = { owner: 'mbuhadi', repo: 'Puzzle_Game', dir: 'unlockers', assets: 'unlocker_assets' };
+function ghToken() { return localStorage.getItem('ghToken') || ''; }
+function ghApi(path) { return `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${path}`; }
+function ghHeaders() { const h = { Accept: 'application/vnd.github+json' }; if (ghToken()) h.Authorization = 'Bearer ' + ghToken(); return h; }
+async function ghErrMsg(r) { try { return (await r.json()).message || r.statusText; } catch (e) { return r.statusText || 'HTTP ' + r.status; } }
+function b64EncodeUtf8(str) { return btoa(unescape(encodeURIComponent(str))); }
+function b64DecodeUtf8(b64) { return decodeURIComponent(escape(atob(b64.replace(/\s/g, '')))); }
+async function ghSha(path) { const r = await fetch(ghApi(path), { headers: ghHeaders(), cache: 'no-store' }); return r.ok ? (await r.json()).sha : null; }
+async function ghPut(path, b64, message) {
+  const sha = await ghSha(path);
+  const body = { message, content: b64 };
+  if (sha) body.sha = sha;
+  const r = await fetch(ghApi(path), { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(await ghErrMsg(r));
+}
+async function ghDelete(path, message) {
+  const sha = await ghSha(path);
+  if (!sha) throw new Error('file not found');
+  const r = await fetch(ghApi(path), { method: 'DELETE', headers: ghHeaders(), body: JSON.stringify({ message, sha }) });
+  if (!r.ok) throw new Error(await ghErrMsg(r));
+}
+function slugify(n) { return n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'item'; }
+const TOKEN_FIX_HINT = `create a new token with Repository access "Only select repositories" → ${GH.repo}, and Permissions → Contents → "Read and write".`;
+
+// ── Picture library ───────────────────────────────────────────────────────────
+async function loadLibrary() {
+  try {
+    const r = await fetch(ghApi(GH.assets), { headers: ghHeaders(), cache: 'no-store' });
+    const files = r.status === 404 ? [] : r.ok ? await r.json() : [];
+    const fromRepo = files.filter(f => f.type === 'file' && /\.(png|jpe?g|webp|gif)$/i.test(f.name)).map(f => GH.assets + '/' + f.name);
+    library = [...new Set([...fromRepo, ...library])].sort();
+  } catch (e) { setStatus('Couldn’t load pictures: ' + e.message); }
+  renderLibrary();
+}
+function renderLibrary() {
+  const el = $('lib'); el.innerHTML = '';
+  if (!library.length) el.innerHTML = '<div class="hint" style="grid-column:1/-1">No pictures yet — upload one and crop it.</div>';
+  for (const p of library) {
+    const it = document.createElement('div'); it.className = 'lib-item'; it.title = picName(p);
+    const im = document.createElement('img'); UL.setImg(im, p);
+    const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = picName(p);
+    const x = document.createElement('button'); x.className = 'x danger'; x.textContent = '×'; x.title = 'Delete picture';
+    x.onclick = () => deletePicture(p);
+    it.append(im, nm, x); el.appendChild(it);
+  }
+  fillPicSelects();
+  refreshPanels();
+}
+async function deletePicture(p) {
+  if (!ghToken()) { openPanel(); mpStatus('Connect a GitHub token first — deleting writes to the repo.'); return; }
+  if (!confirm(`Delete the picture "${picName(p)}" from the website? Unlockers using it will show a gap.`)) return;
+  try { await ghDelete(p, `Delete picture ${picName(p)} from Unlocker Studio`); library = library.filter(x => x !== p); renderLibrary(); }
+  catch (e) { alert('Delete failed: ' + e.message); }
+}
+
+// ── Crop tool ─────────────────────────────────────────────────────────────────
+const ccv = $('cropCv'), cctx = ccv.getContext('2d');
+let crop = null;   // { img, r:{x,y,w,h} in image px, view:{s,ox,oy} }
+function startCrop(e) {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    crop = { img, r: { x: img.width * .1, y: img.height * .1, w: img.width * .8, h: img.height * .8 } };
+    $('cropName').value = file.name.replace(/\.\w+$/, '').slice(0, 40);
+    $('cropStatus').textContent = '';
+    $('cropOverlay').classList.add('open');
+    requestAnimationFrame(drawCrop);
+  };
+  img.src = URL.createObjectURL(file);
+}
+function closeCrop() { $('cropOverlay').classList.remove('open'); crop = null; }
+function cropAspect() { const v = $('cropAspect').value; return v === 'stage' ? design.w / design.h : +v; }
+$('cropAspect').onchange = () => { if (!crop) return; const a = cropAspect(); if (a) { const r = crop.r; const cx = r.x + r.w / 2, cy = r.y + r.h / 2; if (r.w / r.h > a) r.w = r.h * a; else r.h = r.w / a; r.x = cx - r.w / 2; r.y = cy - r.h / 2; clampCrop(); } drawCrop(); };
+function clampCrop() {
+  const r = crop.r, W = crop.img.width, H = crop.img.height;
+  r.w = Math.min(r.w, W); r.h = Math.min(r.h, H);
+  r.x = Math.max(0, Math.min(W - r.w, r.x)); r.y = Math.max(0, Math.min(H - r.h, r.y));
+}
+function drawCrop() {
+  if (!crop) return;
+  const d = window.devicePixelRatio || 1, b = ccv.getBoundingClientRect();
+  ccv.width = b.width * d; ccv.height = b.height * d;
+  cctx.setTransform(d, 0, 0, d, 0, 0);
+  const { img, r } = crop;
+  const s = Math.min((b.width - 20) / img.width, (b.height - 20) / img.height);
+  const ox = (b.width - img.width * s) / 2, oy = (b.height - img.height * s) / 2;
+  crop.view = { s, ox, oy };
+  cctx.clearRect(0, 0, b.width, b.height);
+  cctx.drawImage(img, ox, oy, img.width * s, img.height * s);
+  cctx.fillStyle = 'rgba(0,0,0,.6)';
+  const X = ox + r.x * s, Y = oy + r.y * s, Wd = r.w * s, Ht = r.h * s;
+  cctx.beginPath(); cctx.rect(ox, oy, img.width * s, img.height * s); cctx.rect(X, Y, Wd, Ht); cctx.fill('evenodd');
+  cctx.strokeStyle = '#ffd166'; cctx.lineWidth = 2; cctx.strokeRect(X, Y, Wd, Ht);
+  cctx.strokeStyle = 'rgba(255,209,102,.35)'; cctx.lineWidth = 1;
+  for (let i = 1; i < 3; i++) { cctx.beginPath(); cctx.moveTo(X + Wd * i / 3, Y); cctx.lineTo(X + Wd * i / 3, Y + Ht); cctx.moveTo(X, Y + Ht * i / 3); cctx.lineTo(X + Wd, Y + Ht * i / 3); cctx.stroke(); }
+  cctx.fillStyle = '#ffd166';
+  for (const [hx, hy] of [[X, Y], [X + Wd, Y], [X, Y + Ht], [X + Wd, Y + Ht]]) { cctx.beginPath(); cctx.arc(hx, hy, 8, 0, Math.PI * 2); cctx.fill(); }
+  $('cropStatus').style.color = 'var(--dim)';
+  $('cropStatus').textContent = `${Math.round(r.w)} × ${Math.round(r.h)} px`;
+}
+let cdrag = null;
+ccv.addEventListener('pointerdown', e => {
+  if (!crop) return;
+  ccv.setPointerCapture(e.pointerId);
+  const b = ccv.getBoundingClientRect(), { s, ox, oy } = crop.view, r = crop.r;
+  const px = (e.clientX - b.left - ox) / s, py = (e.clientY - b.top - oy) / s;
+  const hit = 22 / s;
+  const corners = [['nw', r.x, r.y], ['ne', r.x + r.w, r.y], ['sw', r.x, r.y + r.h], ['se', r.x + r.w, r.y + r.h]];
+  const c = corners.find(([, cx, cy]) => Math.hypot(px - cx, py - cy) < hit);
+  if (c) cdrag = { kind: c[0], o: { ...r } };
+  else if (px > r.x && px < r.x + r.w && py > r.y && py < r.y + r.h) cdrag = { kind: 'move', px, py, o: { ...r } };
+  else cdrag = { kind: 'new', ax: Math.max(0, Math.min(crop.img.width, px)), ay: Math.max(0, Math.min(crop.img.height, py)) };
+});
+ccv.addEventListener('pointermove', e => {
+  if (!cdrag || !crop) return;
+  const b = ccv.getBoundingClientRect(), { s, ox, oy } = crop.view, r = crop.r, W = crop.img.width, H = crop.img.height;
+  const px = Math.max(0, Math.min(W, (e.clientX - b.left - ox) / s)), py = Math.max(0, Math.min(H, (e.clientY - b.top - oy) / s));
+  const a = cropAspect();
+  if (cdrag.kind === 'move') { r.x = cdrag.o.x + px - cdrag.px; r.y = cdrag.o.y + py - cdrag.py; clampCrop(); }
+  else {
+    // Resize from the fixed (opposite) corner
+    let fx, fy;
+    if (cdrag.kind === 'new') { fx = cdrag.ax; fy = cdrag.ay; }
+    else { const o = cdrag.o; fx = cdrag.kind.includes('w') ? o.x + o.w : o.x; fy = cdrag.kind.includes('n') ? o.y + o.h : o.y; }
+    let w = Math.abs(px - fx), h = Math.abs(py - fy);
+    if (a) { if (w / Math.max(h, 1) > a) h = w / a; else w = h * a; }
+    w = Math.max(8, w); h = Math.max(8, h);
+    const sx = px < fx ? -1 : 1, sy = py < fy ? -1 : 1;
+    r.x = sx < 0 ? fx - w : fx; r.y = sy < 0 ? fy - h : fy; r.w = w; r.h = h;
+    // keep inside the picture (shrinking keeps the aspect)
+    const maxW = sx < 0 ? fx : W - fx, maxH = sy < 0 ? fy : H - fy;
+    let k = Math.min(1, maxW / r.w, maxH / r.h);
+    if (k < 1) { r.w *= k; r.h *= k; r.x = sx < 0 ? fx - r.w : fx; r.y = sy < 0 ? fy - r.h : fy; }
+  }
+  drawCrop();
+});
+ccv.addEventListener('pointerup', () => { cdrag = null; });
+new ResizeObserver(() => crop && drawCrop()).observe($('cropCanvasWrap'));
+function cropWhole() { if (!crop) return; crop.r = { x: 0, y: 0, w: crop.img.width, h: crop.img.height }; $('cropAspect').value = '0'; drawCrop(); }
+async function saveCrop() {
+  if (!crop) return;
+  const name = $('cropName').value.trim();
+  const st = $('cropStatus');
+  st.style.color = '#cc7070';
+  if (!name) { st.textContent = 'Give the picture a name first.'; return; }
+  if (!ghToken()) { st.textContent = 'Connect a GitHub token first (My Unlockers → paste token) — pictures are saved to the website.'; return; }
+  const path = GH.assets + '/' + slugify(name) + '.png';
+  if (library.includes(path) && !confirm(`A picture called "${slugify(name)}" already exists. Replace it?`)) return;
+  const r = crop.r, MAX = 1400;
+  const k = Math.min(1, MAX / Math.max(r.w, r.h));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(r.w * k)); c.height = Math.max(1, Math.round(r.h * k));
+  const g = c.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(crop.img, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height);
+  const dataUrl = c.toDataURL('image/png');
+  st.style.color = '#b8a06a'; st.textContent = 'Saving picture to the website…';
+  try {
+    await ghPut(path, dataUrl.split(',')[1], `Save picture "${name}" from Unlocker Studio`);
+    UL.prime(path, dataUrl);   // show it right away, before GitHub Pages publishes it
+    library = [...new Set([...library, path])].sort();
+    renderLibrary();
+    closeCrop();
+    setStatus(`Saved picture "${picName(path)}" — pick it from the menus in the sidebar.`);
+  } catch (e) { st.style.color = '#cc7070'; st.textContent = 'Save failed: ' + e.message; }
+}
+
+// ── Save / load designs ──────────────────────────────────────────────────────
+let savedBaseline = '';
+function markSaved() { savedBaseline = JSON.stringify(design); }
+function isDirty() { return JSON.stringify(design) !== savedBaseline; }
+function showFlash(msg, color) {
+  const f = $('saveFlash'); f.textContent = msg; f.style.color = color || '#4a9a60'; f.classList.add('show');
+  clearTimeout(showFlash._t); showFlash._t = setTimeout(() => f.classList.remove('show'), 1800);
+}
+function mpStatus(msg, ok) { const el = $('mpStatus'); el.textContent = msg || ''; el.style.color = ok ? '#4a9a60' : '#cc7070'; }
+function openPanel() { $('mpName').value = design.name !== 'Untitled Unlocker' ? design.name : ''; mpStatus(''); $('bpOverlay').classList.add('open'); renderAuth(); refreshList(); }
+function closePanel() { $('bpOverlay').classList.remove('open'); }
+function renderAuth() {
+  const el = $('mpAuth');
+  el.innerHTML = ghToken()
+    ? `<div class="row"><span class="hint" style="color:#4a9a60">GitHub token connected ✓ — saving enabled</span><button style="flex:0 0 auto" onclick="forgetToken()">Disconnect</button></div>`
+    : `<div class="hint" style="margin-bottom:5px">Loading needs no setup. To <b style="color:var(--text)">save</b> (designs and pictures), paste the same GitHub token the other studios use:<br>
+       GitHub → Settings → Developer settings → Fine-grained tokens. Repository access: <b style="color:var(--text)">only ${GH.owner}/${GH.repo}</b> · Permissions: <b style="color:var(--text)">Contents — Read and write</b>.</div>
+       <div class="row"><input id="mpToken" type="password" placeholder="github_pat_…" autocomplete="off"><button style="flex:0 0 auto" onclick="connectToken()">Connect</button></div>`;
+}
+async function connectToken() {
+  const t = $('mpToken').value.trim();
+  if (!t) { mpStatus('Paste a token first.'); return; }
+  localStorage.setItem('ghToken', t);
+  mpStatus('Checking token…', true);
+  try {
+    const r = await fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}`, { headers: ghHeaders() });
+    if (!r.ok) throw new Error(await ghErrMsg(r));
+    if (!(await r.json()).permissions?.push) throw new Error('the token can read but not write the repo — ' + TOKEN_FIX_HINT);
+  } catch (e) { localStorage.removeItem('ghToken'); mpStatus('Token rejected: ' + e.message); return; }
+  renderAuth(); refreshList(); mpStatus('Connected ✓', true);
+}
+function forgetToken() { localStorage.removeItem('ghToken'); renderAuth(); }
+async function refreshList() {
+  const list = $('mpList');
+  list.innerHTML = '<div class="hint">loading…</div>';
+  try {
+    const names = await UL.listDesigns();
+    list.innerHTML = names.length ? '' : '<div class="hint">no unlockers on the website yet</div>';
+    for (const n of names) {
+      const row = document.createElement('div'); row.className = 'mp-item';
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = n; nm.onclick = () => loadCloud(n);
+      const del = document.createElement('button'); del.className = 'danger'; del.textContent = 'Delete'; del.onclick = () => deleteCloud(n);
+      const ld = document.createElement('button'); ld.textContent = 'Load'; ld.onclick = () => loadCloud(n);
+      row.append(del, nm, ld); list.appendChild(row);
+    }
+  } catch (e) { list.innerHTML = `<div class="hint" style="color:#cc7070">Couldn’t reach GitHub: ${e.message}</div>`; }
+}
+async function writeCloud(name) {
+  design.name = name;
+  const data = JSON.parse(JSON.stringify(design));
+  await ghPut(GH.dir + '/' + slugify(name) + '.json', b64EncodeUtf8(JSON.stringify({ updated: Date.now(), data })), `Save unlocker "${name}" from Unlocker Studio`);
+  savedBaseline = JSON.stringify(data);
+  refreshPanels();
+}
+async function quickSave() {
+  if (!ghToken()) { openPanel(); mpStatus('Connect a GitHub token below to enable saving.'); return; }
+  if (design.name === 'Untitled Unlocker') { openPanel(); mpStatus('Name the unlocker, then press "Save to Website".'); return; }
+  showFlash('saving…', '#b8a06a');
+  try { await writeCloud(design.name); showFlash('saved to website ✓'); }
+  catch (e) { showFlash('save failed ✗', '#cc7070'); alert('Save failed: ' + e.message); }
+}
+async function mpSave() {
+  const name = $('mpName').value.trim();
+  if (!name) { mpStatus('Enter a name first.'); return; }
+  if (!ghToken()) { mpStatus('Connect a GitHub token below first.'); return; }
+  mpStatus('Saving…', true);
+  try {
+    if (slugify(name) !== slugify(design.name) && await ghSha(GH.dir + '/' + slugify(name) + '.json') &&
+        !confirm(`"${slugify(name)}" already exists. Overwrite it?`)) { mpStatus(''); return; }
+    await writeCloud(name);
+    mpStatus(`Saved "${name}" ✓`, true); refreshList();
+  } catch (e) { mpStatus('Save failed: ' + e.message); }
+}
+async function loadCloud(n) {
+  if (isDirty() && !confirm('Load this unlocker? Unsaved changes are lost.')) return;
+  try { loadDesign(await UL.loadDesign(n)); closePanel(); }
+  catch (e) { mpStatus('Load failed: ' + e.message); }
+}
+async function deleteCloud(n) {
+  if (!ghToken()) { mpStatus('Connect a GitHub token below first.'); return; }
+  if (!confirm(`Delete the unlocker "${n}" from the website? Blueprints using it will lose it.`)) return;
+  try { await ghDelete(GH.dir + '/' + n + '.json', `Delete unlocker ${n} from Unlocker Studio`); mpStatus('Deleted ✓', true); refreshList(); }
+  catch (e) { mpStatus('Delete failed: ' + e.message); }
+}
+function loadDesign(d) {
+  design = UL.normalize(d);
+  for (const dl of design.dials) if (!dl.preset) dl.preset = dl.symbols.some(s => s.img) ? 'pictures' : 'custom';
+  sel = null; history = []; hIdx = -1; pushHistory(); markSaved(); refresh();
+}
+function newDesign() { if (!isDirty() || confirm('Start a new unlocker? Unsaved changes are lost.')) loadDesign({ name: 'Untitled Unlocker' }); }
+function exportJSON() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(design, null, 1)], { type: 'application/json' }));
+  a.download = slugify(design.name) + '.json'; a.click(); URL.revokeObjectURL(a.href);
+}
+function importJSON(e) {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = ev => { try { const d = JSON.parse(ev.target.result); loadDesign(d.data || d); } catch (err) { alert('Could not import: ' + err.message); } };
+  rd.readAsText(f);
+}
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); quickSave(); return; }
+  if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+  else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+  else if ((e.key === 'Delete' || e.key === 'Backspace') && sel && sel !== 'submit') { e.preventDefault(); deleteDial(); }
+});
+window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault(); e.returnValue = ''; } });
+
+// ── Boot: a starter design with three number dials ───────────────────────────
+loadDesign({ name: 'Untitled Unlocker', dials: [
+  { id: 'd1', x: 135, y: 70, w: 90, h: 190, preset: 'digits' },
+  { id: 'd2', x: 255, y: 70, w: 90, h: 190, preset: 'digits' },
+  { id: 'd3', x: 375, y: 70, w: 90, h: 190, preset: 'digits' }] });
+setStatus();
+loadLibrary();
+</script>
+</body>
+</html>

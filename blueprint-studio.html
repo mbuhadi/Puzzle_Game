@@ -105,6 +105,24 @@ body.playing .edit-only { display: none; }
 #tvEmpty { flex: 1; display: flex; align-items: center; justify-content: center; font-family: sans-serif; color: var(--dim); font-size: 13px; text-align: center; }
 #tvTitle { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Constant unlockers: sidebar cards, play-mode corner icons */
+.ul-card { border: 1px solid var(--border); border-radius: 4px; padding: 6px; margin-bottom: 6px; background: var(--bg3); }
+.ul-card .hdr { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--gold); margin-bottom: 4px; }
+.ul-card .hdr img { width: 26px; height: 26px; object-fit: contain; }
+.ul-card .hdr span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combo { border-top: 1px solid var(--border); padding: 6px 0 4px; }
+.combo.picking { background: var(--hover); }
+.combo .code { font-family: monospace; font-size: 13px; color: var(--text); }
+.combo .btns { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 4px; }
+.combo button { padding: 4px 6px; font-size: 10px; }
+.combo .chips { margin-top: 3px; }
+#ulBar { position: absolute; top: 8px; right: 8px; display: none; flex-direction: column; gap: 6px; z-index: 4; }
+body.playing #ulBar.has { display: flex; }
+.ul-icon { width: 44px; height: 44px; padding: 3px; border-radius: 8px; border: 1px solid var(--gold-dim); background: rgba(14,13,10,.85);
+  display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.ul-icon img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.ul-icon span { font-size: 18px; color: var(--gold); }
+#ulHost { width: 100%; }
 #sideToggle { display: none; }
 @media (max-width: 760px) {
   #sideToggle { display: inline-block; }
@@ -188,6 +206,14 @@ body.playing .edit-only { display: none; }
       <div class="divider"></div>
 
       <div>
+        <div class="sec-title">CONSTANT UNLOCKERS</div>
+        <div id="ulList"></div>
+        <div class="row" style="margin-top:4px"><select id="ulAddSel"></select><button style="flex:0 0 auto" onclick="attachUnlocker()">Add</button></div>
+        <div class="hint" style="margin-top:4px">Design them in <a href="unlocker-studio.html" style="color:var(--gold)">Unlocker Studio</a>. They stay in the top-right corner all game; each combination can be entered once and opens / cancels tiles.</div>
+      </div>
+      <div class="divider"></div>
+
+      <div>
         <div class="sec-title">CHECKS</div>
         <div class="checks" id="checks"></div>
         <label class="chk" style="margin-top:4px"><input type="checkbox" id="showLinks" onchange="render()"> Show every tile's effects</label>
@@ -221,6 +247,7 @@ body.playing .edit-only { display: none; }
         <button onclick="resetPlay()">↺ Restart</button>
         <button class="play active" onclick="togglePlay()">■ Stop test</button>
       </div>
+      <div id="ulBar"></div>
       <div id="status"></div>
     </div>
   </div>
@@ -258,6 +285,19 @@ body.playing .edit-only { display: none; }
   </div>
 </div>
 
+<!-- Constant unlocker: play it (test mode) or set a combination (editor) -->
+<div id="ulView" class="overlay" onclick="if(event.target===this)closeUlView()">
+  <div class="panel" style="width:min(720px,100%)">
+    <div class="row" style="flex:0 0 auto">
+      <span id="ulTitle" style="font-size:12px;color:var(--gold);letter-spacing:1px"></span>
+      <button style="flex:0 0 auto" onclick="closeUlView()">Close</button>
+    </div>
+    <div id="ulHost"></div>
+    <div id="ulMsg" class="hint" style="min-height:16px;text-align:center"></div>
+  </div>
+</div>
+
+<script src="unlocker_runtime.js"></script>
 <script src="puzzles_studio.js"></script>
 <script src="puzzles_curated_data.js"></script>
 <script>
@@ -272,7 +312,11 @@ body.playing .edit-only { display: none; }
 let bpName = 'Untitled Blueprint';
 let outline = [];
 let tiles = [];
+// unlockers: { id, design (Unlocker Studio slug), combos: [{ id, code:[symbol index per dial], opens, cancels }] }
+// Constant unlockers stay available all game; each combo works once.
+let unlockers = [];
 let nextId = 1;
+const designs = new Map();   // slug → loaded design (or null while loading / missing)
 
 const CHUNKS = (typeof PUZZLE_CHUNKS !== 'undefined') ? PUZZLE_CHUNKS : [];
 const CHUNK_IDS = new Set(CHUNKS.map(c => c.id));
@@ -400,6 +444,8 @@ function toData() {
     outline: outline.map(p => [r2(p[0]), r2(p[1])]),
     tiles: tiles.map(t => ({ id: t.id, pts: t.pts.map(p => [r2(p[0]), r2(p[1])]), start: !!t.start,
       chunk: t.chunk || '', label: t.label || '', opens: [...t.opens], cancels: [...t.cancels] })),
+    unlockers: unlockers.map(u => ({ id: u.id, design: u.design,
+      combos: u.combos.map(c => ({ id: c.id, code: [...c.code], opens: [...c.opens], cancels: [...c.cancels] })) })),
   };
 }
 function fromData(d) {
@@ -413,8 +459,13 @@ function fromData(d) {
     t.opens = t.opens.filter(id => ids.has(id) && id !== t.id);
     t.cancels = t.cancels.filter(id => ids.has(id) && id !== t.id);
   }
-  nextId = 1 + Math.max(0, ...tiles.map(t => parseInt(t.id.replace(/\D/g, ''), 10) || 0));
-  sel = null; selVertex = null; pickMode = null;
+  unlockers = (d.unlockers || []).map(u => ({ id: String(u.id), design: String(u.design || ''),
+    combos: (u.combos || []).map(c => ({ id: String(c.id), code: (c.code || []).map(Number),
+      opens: (c.opens || []).map(String).filter(id => ids.has(id)), cancels: (c.cancels || []).map(String).filter(id => ids.has(id)) })) }));
+  const allIds = [...tiles.map(t => t.id), ...unlockers.map(u => u.id), ...unlockers.flatMap(u => u.combos.map(c => c.id))];
+  nextId = 1 + Math.max(0, ...allIds.map(id => parseInt(id.replace(/\D/g, ''), 10) || 0));
+  sel = null; selVertex = null; pickMode = null; pickCombo = null;
+  loadUnlockerDesigns();
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
@@ -482,6 +533,7 @@ let drawPts = [];
 let sel = null;               // { kind:'tile', id } | { kind:'outline' } | null
 let selVertex = null;         // index of the selected corner of the selected shape
 let pickMode = null;          // 'opens' | 'cancels' while picking effect targets
+let pickCombo = null;         // the unlocker combination being picked for (else the selected tile)
 let hoverW = null;            // mouse position in world units (for previews)
 
 const selTileObj = () => sel && sel.kind === 'tile' ? tileById(sel.id) : null;
@@ -632,7 +684,7 @@ function drawEditTile(t, problem) {
   if (kind === 'problem') { ctx.fillStyle = 'rgba(255,209,102,.13)'; ctx.fill(); }
   else if (kind === 'given') { ctx.fillStyle = 'rgba(76,201,240,.13)'; ctx.fill(); }
   // Pick mode: tint the current targets
-  const st = selTileObj();
+  const st = effectOwner();
   if (mode === 'pick' && st && t.id !== st.id) {
     if (st.opens.includes(t.id)) { ctx.fillStyle = 'rgba(126,224,138,.38)'; ctx.fill(); }
     if (st.cancels.includes(t.id)) { ctx.fillStyle = 'rgba(255,107,107,.38)'; ctx.fill(); }
@@ -898,7 +950,7 @@ const MODE_HINTS = {
 };
 function setMode(m) {
   if (mode === 'draw' && m !== 'draw') drawPts = [];
-  if (m !== 'pick') pickMode = null;
+  if (m !== 'pick') { pickMode = null; pickCombo = null; }
   mode = m;
   document.getElementById('mSelect').classList.toggle('active', m === 'select' && !(sel && sel.kind === 'outline'));
   document.getElementById('mDrawTile').classList.toggle('active', m === 'draw' && drawTarget === 'tile');
@@ -911,6 +963,7 @@ function setMode(m) {
   updateDrawBar();
   updateUndoButtons();
   refreshPanels();
+  renderUnlockers();
   render();
 }
 function startDraw(target) {
@@ -992,7 +1045,7 @@ function deleteSelectedTile() {
   const t = selTileObj();
   if (!t) return;
   tiles = tiles.filter(x => x !== t);
-  for (const o of tiles) { o.opens = o.opens.filter(id => id !== t.id); o.cancels = o.cancels.filter(id => id !== t.id); }
+  for (const o of [...tiles, ...allCombos()]) { o.opens = o.opens.filter(id => id !== t.id); o.cancels = o.cancels.filter(id => id !== t.id); }
   sel = null; selVertex = null;
   pushHistory(); setMode('select'); refreshAll();
 }
@@ -1000,17 +1053,21 @@ function tileAt(w) {
   for (let i = tiles.length - 1; i >= 0; i--) if (tiles[i].pts.length >= 3 && pip(w, tiles[i].pts)) return tiles[i];
   return null;
 }
-function togglePick(kind) {
-  const t = selTileObj();
-  if (!kind || !t || pickMode === kind) { setMode('select'); return; }
-  pickMode = kind;
+// Effects are picked either for the selected tile or for an unlocker combination
+function effectOwner() { return pickCombo || selTileObj(); }
+function togglePick(kind, combo) {
+  combo = combo || null;
+  const owner = combo || selTileObj();
+  if (!kind || !owner || (pickMode === kind && pickCombo === combo)) { setMode('select'); return; }
   setMode('pick');
-  document.getElementById('pickMsg').textContent = kind === 'opens'
-    ? `Tap tiles that solving ${tileName(t)} OPENS` : `Tap tiles that solving ${tileName(t)} CANCELS`;
+  pickMode = kind; pickCombo = combo;
+  const who = combo ? `entering ${comboLabel(combo)}` : `solving ${tileName(owner)}`;
+  document.getElementById('pickMsg').textContent = kind === 'opens' ? `Tap tiles that ${who} OPENS` : `Tap tiles that ${who} CANCELS`;
+  refreshAll();
   if (innerWidth <= 760) document.body.classList.remove('side-open');
 }
 function pickTile(w) {
-  const st = selTileObj(), t = tileAt(w);
+  const st = effectOwner(), t = tileAt(w);
   if (!st || !t) return;
   if (t.id === st.id) { setStatus('A tile can\'t affect itself.'); return; }
   const list = st[pickMode], other = pickMode === 'opens' ? 'cancels' : 'opens';
@@ -1084,10 +1141,11 @@ function refreshPanels() {
   document.getElementById('fxGivenNote').style.display = fx ? 'none' : '';
   renderChips(document.getElementById('tpOpens'), t.opens, 'open', 'opens');
   renderChips(document.getElementById('tpCancels'), t.cancels, 'cancel', 'cancels');
-  document.getElementById('pickOpensBtn').classList.toggle('active', pickMode === 'opens');
-  document.getElementById('pickCancelsBtn').classList.toggle('active', pickMode === 'cancels');
-  document.getElementById('pickOpensBtn').textContent = pickMode === 'opens' ? 'Done picking' : 'Pick tiles to open';
-  document.getElementById('pickCancelsBtn').textContent = pickMode === 'cancels' ? 'Done picking' : 'Pick tiles to cancel';
+  const tp = pickCombo ? null : pickMode;
+  document.getElementById('pickOpensBtn').classList.toggle('active', tp === 'opens');
+  document.getElementById('pickCancelsBtn').classList.toggle('active', tp === 'cancels');
+  document.getElementById('pickOpensBtn').textContent = tp === 'opens' ? 'Done picking' : 'Pick tiles to open';
+  document.getElementById('pickCancelsBtn').textContent = tp === 'cancels' ? 'Done picking' : 'Pick tiles to cancel';
 }
 document.getElementById('tpChunk').onchange = e => { const t = selTileObj(); if (t) { t.chunk = e.target.value; if (!hasEffects(t) && mode === 'pick') setMode('select'); pushHistory(); refreshAll(); } };
 document.getElementById('tpLabel').oninput = e => { const t = selTileObj(); if (t) { t.label = e.target.value; render(); } };
@@ -1123,12 +1181,13 @@ function guaranteedExplored() {
     for (const x of tiles) {
       if (x.start) continue;
       const openers = tiles.filter(p => hasEffects(p) && p.opens.includes(x.id));
-      if (!openers.length) continue;
+      const comboOpeners = allCombos().filter(c => c.opens.includes(x.id));
+      if (!openers.length && !comboOpeners.length) continue;
       let acc = null;
-      for (const p of openers) {
-        const s = new Set([...must.get(p.id), ...p.opens, p.id]);
-        acc = acc ? new Set([...acc].filter(v => s.has(v))) : s;
-      }
+      const meet = s => { acc = acc ? new Set([...acc].filter(v => s.has(v))) : s; };
+      for (const p of openers) meet(new Set([...must.get(p.id), ...p.opens, p.id]));
+      // unlocker combos can be entered from the very start
+      for (const c of comboOpeners) meet(new Set([...startSet, ...c.opens]));
       if (acc.size !== must.get(x.id).size) { must.set(x.id, acc); changed = true; }
     }
     if (!changed) break;
@@ -1149,15 +1208,16 @@ function renderChecks() {
     const gap = (oa - ta) / oa * 100;
     if (gap > 0.5 && !probs.size) warn(`About ${Math.round(gap)}% of the map isn't covered by any tile.`);
   }
-  // Reachability: start tiles, then whatever solvable puzzles open
-  const reach = new Set(tiles.filter(t => t.start).map(t => t.id));
+  // Reachability: start tiles and whatever unlocker combos open, then whatever
+  // solvable puzzles open
+  const reach = new Set([...tiles.filter(t => t.start).map(t => t.id), ...allCombos().flatMap(c => c.opens)]);
   for (let changed = true; changed;) {
     changed = false;
     for (const t of tiles) if (reach.has(t.id) && hasEffects(t)) for (const id of t.opens) if (!reach.has(id)) { reach.add(id); changed = true; }
   }
   for (const t of tiles) {
     if (t.start) continue;
-    const openers = tiles.filter(p => hasEffects(p) && p.opens.includes(t.id));
+    const openers = [...tiles.filter(p => hasEffects(p) && p.opens.includes(t.id)), ...allCombos().filter(c => c.opens.includes(t.id))];
     if (!openers.length) warn(`${tileName(t)} isn't a starting tile and nothing opens it.`, t.id);
     else if (!reach.has(t.id)) warn(`${tileName(t)} can never be reached — the tiles that open it are never opened.`, t.id);
   }
@@ -1166,6 +1226,21 @@ function renderChecks() {
     if (!hasEffects(t) || !reach.has(t.id)) continue;
     for (const id of t.cancels) if (!must.get(t.id).has(id))
       warn(`${tileName(t)} cancels ${tileName(tileById(id))}, which may still be unexplored then — if so, nothing happens to it.`, t.id);
+  }
+  const startSet = new Set(tiles.filter(t => t.start).map(t => t.id));
+  for (const u of unlockers) {
+    const d = designs.get(u.design), nm = unlockerName(u);
+    if (designs.has(u.design) && !d) warn(`Unlocker "${u.design}" couldn't be loaded from the website.`);
+    if (!u.combos.length) warn(`${nm} has no combinations yet.`);
+    const codes = new Set();
+    for (const c of u.combos) {
+      if (!c.opens.length && !c.cancels.length) warn(`${nm} ${comboLabel(c)} doesn't open or cancel anything.`);
+      const k = c.code.join(',');
+      if (codes.has(k)) warn(`${nm} has the combination ${comboLabel(c)} twice — only the first one will ever work.`);
+      codes.add(k);
+      for (const id of c.cancels) if (!startSet.has(id))
+        warn(`${nm} ${comboLabel(c)} cancels ${tileName(tileById(id))}, which may still be unexplored then — if so, nothing happens to it.`, id);
+    }
   }
   for (const t of tiles) if (!hasEffects(t) && (t.opens.length || t.cancels.length))
     warn(`${tileName(t)} is a given, so its opens/cancels are ignored.`, t.id);
@@ -1196,6 +1271,7 @@ function refreshAll() {
   const pts = selPts();
   if (selVertex !== null && (!pts || selVertex >= pts.length)) selVertex = null;
   refreshPanels();
+  renderUnlockers();
   renderChecks();
   document.getElementById('mapNameLbl').textContent = bpName + (isDirty() ? ' •' : '');
   document.getElementById('mSelect').classList.toggle('active', mode === 'select' && !(sel && sel.kind === 'outline'));
@@ -1348,7 +1424,7 @@ cv.addEventListener('wheel', e => {
 document.addEventListener('keydown', e => {
   const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); quickSave(); return; }
-  if (playing) { if (e.key === 'Escape') closeTileView(); return; }
+  if (playing) { if (e.key === 'Escape') { closeTileView(); closeUlView(); } return; }
   if (typing) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
@@ -1382,9 +1458,11 @@ let openTile = null;
 
 function resetPlay() {
   play = { explored: new Set(tiles.filter(t => t.start).map(t => t.id)),
-    flipped: new Set(), solved: new Set(), locked: new Set(), flip: new Map(), reveal: new Map(), shake: new Map(), stillAt: new Map(), busy: false };
+    flipped: new Set(), solved: new Set(), locked: new Set(), flip: new Map(), reveal: new Map(), shake: new Map(), stillAt: new Map(), usedCombos: new Set(), busy: false };
   closeTileView();
+  closeUlView();
   statusMsg = '';
+  renderUlBar();
   render(); updateStatus();
 }
 function togglePlay() {
@@ -1398,7 +1476,7 @@ function togglePlay() {
   document.getElementById('playBtn').textContent = playing ? '■ Stop' : '▶ Test';
   document.getElementById('playBtn').classList.toggle('active', playing);
   statusMsg = '';
-  if (playing) resetPlay(); else { closeTileView(); refreshAll(); }
+  if (playing) resetPlay(); else { closeTileView(); closeUlView(); refreshAll(); }
   updateStatus();
 }
 function playTap(w) {
@@ -1442,22 +1520,168 @@ function closeTileView() {
   document.getElementById('tvFrame').src = 'about:blank';
   openTile = null;
 }
+// Apply a solved puzzle's or entered combination's effects; returns a summary
+function applyEffects(src) {
+  let locked = 0, opened = 0;
+  for (const id of src.cancels)   // only explored, unsolved tiles can be cancelled
+    if (play.explored.has(id) && !play.locked.has(id) && !play.solved.has(id)) { play.locked.add(id); play.stillAt.set(id, performance.now()); locked++; }
+  for (const id of src.opens) if (!play.explored.has(id)) {
+    play.explored.add(id);
+    play.reveal.set(id, performance.now() + 250);
+    opened++;
+  }
+  render();
+  return (opened ? ` · ${opened} new tile(s) opened` : '') + (locked ? ` · ${locked} tile(s) locked` : '');
+}
 function solveOpenTile() {
   const t = openTile;
   if (!t) return;
   play.solved.add(t.id);
   play.stillAt.set(t.id, performance.now());
-  let locked = 0, opened = 0;
-  for (const id of t.cancels)   // only explored, unsolved tiles can be cancelled
-    if (play.explored.has(id) && !play.locked.has(id) && !play.solved.has(id)) { play.locked.add(id); play.stillAt.set(id, performance.now()); locked++; }
-  for (const id of t.opens) if (!play.explored.has(id)) {
-    play.explored.add(id);
-    play.reveal.set(id, performance.now() + 250);
-    opened++;
-  }
   closeTileView();
-  setStatus(`${tileName(t)} solved` + (opened ? ` · ${opened} new tile(s) opened` : '') + (locked ? ` · ${locked} tile(s) locked` : ''));
-  render();
+  setStatus(`${tileName(t)} solved` + applyEffects(t));
+}
+
+// ── Constant unlockers ────────────────────────────────────────────────────────
+// Designs come from Unlocker Studio (unlockers/<slug>.json). A blueprint
+// attaches designs and gives each one combinations; in test mode they sit in
+// the top-right corner for the whole game.
+const allCombos = () => unlockers.flatMap(u => u.combos);
+const unlockerName = u => (designs.get(u.design) || {}).name || u.design;
+function comboLabel(c) {
+  const u = unlockers.find(x => x.combos.includes(c)), d = u && designs.get(u.design);
+  return '[' + (d ? UL.codeText(d, c.code) : c.code.join(' · ')) + ']';
+}
+async function loadUnlockerDesigns() {
+  for (const u of unlockers) {
+    if (designs.has(u.design)) continue;
+    designs.set(u.design, null);
+    UL.loadDesign(u.design).then(d => { designs.set(u.design, d); refreshAll(); renderUlBar(); })
+      .catch(() => { refreshAll(); });
+  }
+}
+let designList = [];
+async function loadDesignList() {
+  try { designList = await UL.listDesigns(); } catch (e) { designList = []; }
+  const s = document.getElementById('ulAddSel');
+  s.innerHTML = designList.length ? '<option value="">— choose an unlocker —</option>' : '<option value="">no unlockers designed yet</option>';
+  for (const n of designList) { const o = document.createElement('option'); o.value = n; o.textContent = n; s.appendChild(o); }
+}
+function attachUnlocker() {
+  const slug = document.getElementById('ulAddSel').value;
+  if (!slug) { setStatus('Choose an unlocker to add (design them in Unlocker Studio).'); return; }
+  unlockers.push({ id: 'u' + (nextId++), design: slug, combos: [] });
+  loadUnlockerDesigns();
+  pushHistory(); refreshAll();
+}
+function detachUnlocker(u) {
+  if (u.combos.length && !confirm(`Remove ${unlockerName(u)} and its ${u.combos.length} combination(s) from this blueprint?`)) return;
+  unlockers = unlockers.filter(x => x !== u);
+  if (pickCombo && !allCombos().includes(pickCombo)) setMode('select');
+  pushHistory(); refreshAll();
+}
+function deleteCombo(u, c) {
+  u.combos = u.combos.filter(x => x !== c);
+  if (pickCombo === c) setMode('select');
+  pushHistory(); refreshAll();
+}
+function renderUnlockers() {
+  const el = document.getElementById('ulList');
+  el.innerHTML = unlockers.length ? '' : '<div class="hint">None on this blueprint yet.</div>';
+  for (const u of unlockers) {
+    const d = designs.get(u.design);
+    const card = document.createElement('div'); card.className = 'ul-card';
+    const hdr = document.createElement('div'); hdr.className = 'hdr';
+    if (d && d.icon) { const im = document.createElement('img'); UL.setImg(im, d.icon); hdr.appendChild(im); }
+    const nm = document.createElement('span'); nm.textContent = unlockerName(u) + (designs.has(u.design) && !d ? ' (loading…)' : ''); hdr.appendChild(nm);
+    const rm = document.createElement('button'); rm.className = 'danger'; rm.textContent = '×'; rm.title = 'Remove from this blueprint'; rm.style.padding = '2px 7px';
+    rm.onclick = () => detachUnlocker(u);
+    hdr.appendChild(rm);
+    card.appendChild(hdr);
+    for (const c of u.combos) {
+      const row = document.createElement('div'); row.className = 'combo' + (pickCombo === c ? ' picking' : '');
+      const code = document.createElement('div'); code.className = 'code'; code.textContent = comboLabel(c);
+      const chips = document.createElement('div'); chips.className = 'chips';
+      for (const [key, cls] of [['opens', 'open'], ['cancels', 'cancel']]) for (const id of c[key]) {
+        const t = tileById(id); if (!t) continue;
+        const ch = document.createElement('span'); ch.className = 'chip ' + cls; ch.textContent = (cls === 'open' ? '→ ' : '✕ ') + tileName(t);
+        const x = document.createElement('b'); x.textContent = '×'; x.onclick = () => { c[key] = c[key].filter(v => v !== id); pushHistory(); refreshAll(); };
+        ch.appendChild(x); chips.appendChild(ch);
+      }
+      const btns = document.createElement('div'); btns.className = 'btns';
+      const mk = (label, cls, fn, active) => { const b = document.createElement('button'); b.textContent = label; if (cls) b.className = cls; if (active) b.classList.add('active'); b.onclick = fn; btns.appendChild(b); };
+      const po = pickCombo === c && pickMode === 'opens', pc = pickCombo === c && pickMode === 'cancels';
+      mk(po ? 'Done' : 'Pick opens', 'pick-open', () => togglePick('opens', c), po);
+      mk(pc ? 'Done' : 'Pick cancels', 'pick-cancel', () => togglePick('cancels', c), pc);
+      mk('Change code', '', () => openUlSetter(u, c));
+      mk('Delete', 'danger', () => deleteCombo(u, c));
+      row.append(code, chips, btns);
+      card.appendChild(row);
+    }
+    const add = document.createElement('button'); add.className = 'wide'; add.textContent = '+ Add combination'; add.style.marginTop = '4px';
+    add.disabled = !d;
+    add.onclick = () => openUlSetter(u, null);
+    card.appendChild(add);
+    el.appendChild(card);
+  }
+}
+// Editor: set a combination by turning the real dials, then save it
+function openUlSetter(u, combo) {
+  const d = designs.get(u.design);
+  if (!d) return;
+  document.getElementById('ulTitle').textContent = `${unlockerName(u)} — ${combo ? 'change combination' : 'new combination'}`;
+  document.getElementById('ulMsg').textContent = 'Turn the dials to the combination, then press Save.';
+  document.getElementById('ulView').classList.add('open');
+  UL.render(document.getElementById('ulHost'), d, {
+    code: combo ? combo.code : [], submitLabel: 'SAVE',
+    onSubmit: code => {
+      const dup = u.combos.find(c => c !== combo && UL.sameCode(c.code, code));
+      if (dup) { document.getElementById('ulMsg').textContent = `${unlockerName(u)} already has ${comboLabel(dup)}.`; return; }
+      if (combo) combo.code = code;
+      else u.combos.push({ id: 'c' + (nextId++), code, opens: [], cancels: [] });
+      closeUlView();
+      pushHistory(); refreshAll();
+      setStatus(combo ? 'Combination changed.' : 'Combination added — now pick the tiles it opens or cancels.');
+    },
+  });
+}
+function closeUlView() {
+  document.getElementById('ulView').classList.remove('open');
+  document.getElementById('ulHost').innerHTML = '';
+}
+// Test mode: the corner icons and playing an unlocker
+function renderUlBar() {
+  const bar = document.getElementById('ulBar');
+  bar.innerHTML = '';
+  bar.classList.toggle('has', unlockers.length > 0);
+  for (const u of unlockers) {
+    const d = designs.get(u.design);
+    const b = document.createElement('button'); b.className = 'ul-icon'; b.title = unlockerName(u);
+    if (d && d.icon) { const im = document.createElement('img'); UL.setImg(im, d.icon); b.appendChild(im); }
+    else { const sp = document.createElement('span'); sp.textContent = '⚿'; b.appendChild(sp); }
+    b.onclick = () => openUlPlay(u);
+    bar.appendChild(b);
+  }
+}
+function openUlPlay(u) {
+  const d = designs.get(u.design);
+  if (!d || !playing) return;
+  const msg = document.getElementById('ulMsg');
+  document.getElementById('ulTitle').textContent = unlockerName(u);
+  msg.textContent = '';
+  document.getElementById('ulView').classList.add('open');
+  const ctl = UL.render(document.getElementById('ulHost'), d, {
+    onSubmit: code => {
+      const c = u.combos.find(x => UL.sameCode(x.code, code));
+      if (!c) { ctl.shake(); msg.textContent = 'Nothing happens.'; return; }
+      if (play.usedCombos.has(c.id)) { ctl.shake(); msg.textContent = 'That combination has already been used.'; return; }
+      play.usedCombos.add(c.id);
+      ctl.flashOk();
+      msg.textContent = 'Unlocked!';
+      const summary = applyEffects(c);
+      setTimeout(() => { closeUlView(); setStatus(`${unlockerName(u)} ${comboLabel(c)} entered` + summary); }, 650);
+    },
+  });
 }
 
 // ── Save / load (website = the GitHub repo behind the site) ──────────────────
@@ -1657,6 +1881,7 @@ window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 buildChunkSelect();
+loadDesignList();
 new ResizeObserver(resizeCanvas).observe(document.getElementById('canvasWrap'));
 pushHistory(); markSaved();
 setMode('select');
