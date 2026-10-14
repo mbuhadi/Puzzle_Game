@@ -666,7 +666,7 @@ const FLOAT_MIN_PX = 1;    // how far a tile drifts each way, screen px —
 const FLOAT_MAX_PX = 2;    //   each tile gets its own amount in this range
 const CORNER_PX = 4;       // corner rounding radius, screen px
 const FLOAT_MS = 3600;     // one full left-right-left drift
-const SHAKE_MS = 300;
+const SHAKE_MS = 150;
 const STILL_MS = 500;      // locked tiles ease to a stop over this long
 function tilePhase(id) {
   let h = 0;
@@ -741,7 +741,7 @@ function drawPlayTile(t, now) {
   if (play.shake.has(t.id)) {
     const e = (now - play.shake.get(t.id)) / SHAKE_MS;
     if (e >= 1) play.shake.delete(t.id);
-    else { const k = 1 - e; dx += 5 * k * Math.sin(e * Math.PI * 14); rot = .05 * k * Math.sin(e * Math.PI * 10); }
+    else { const k = 1 - e; dx += 5 * k * Math.sin(e * Math.PI * 7); rot = .05 * k * Math.sin(e * Math.PI * 5); }
   }
   ctx.translate(dx, 0);
   if (rot) { ctx.translate(c[0], c[1]); ctx.rotate(rot); ctx.translate(-c[0], -c[1]); }
