@@ -287,7 +287,7 @@ body.playing #ulBar.has { display: flex; }
 
 <!-- Constant unlocker: play it (test mode) or set a combination (editor) -->
 <div id="ulView" class="overlay" onclick="if(event.target===this)closeUlView()">
-  <div class="panel" style="width:min(720px,100%)">
+  <div class="panel" style="width:min(760px,100%)">
     <div class="row" style="flex:0 0 auto">
       <span id="ulTitle" style="font-size:12px;color:var(--gold);letter-spacing:1px"></span>
       <button style="flex:0 0 auto" onclick="closeUlView()">Close</button>
@@ -1592,7 +1592,7 @@ function renderUnlockers() {
     const d = designs.get(u.design);
     const card = document.createElement('div'); card.className = 'ul-card';
     const hdr = document.createElement('div'); hdr.className = 'hdr';
-    if (d && d.icon) { const im = document.createElement('img'); UL.setImg(im, d.icon); hdr.appendChild(im); }
+    if (d && (d.icon || d.body)) { const im = document.createElement('img'); UL.setImg(im, d.icon || d.body); hdr.appendChild(im); }
     const nm = document.createElement('span'); nm.textContent = unlockerName(u) + (designs.has(u.design) && !d ? ' (loading…)' : ''); hdr.appendChild(nm);
     const rm = document.createElement('button'); rm.className = 'danger'; rm.textContent = '×'; rm.title = 'Remove from this blueprint'; rm.style.padding = '2px 7px';
     rm.onclick = () => detachUnlocker(u);
@@ -1629,6 +1629,7 @@ function renderUnlockers() {
 function openUlSetter(u, combo) {
   const d = designs.get(u.design);
   if (!d) return;
+  fitUlHost(d);
   document.getElementById('ulTitle').textContent = `${unlockerName(u)} — ${combo ? 'change combination' : 'new combination'}`;
   document.getElementById('ulMsg').textContent = 'Turn the dials to the combination, then press Save.';
   document.getElementById('ulView').classList.add('open');
@@ -1645,6 +1646,10 @@ function openUlSetter(u, combo) {
     },
   });
 }
+// Size the lock so all of it fits on screen, whatever its shape
+function fitUlHost(d) {
+  document.getElementById('ulHost').style.cssText = `width: min(100%, calc((88vh - 110px) * ${d.w} / ${d.h})); margin: 0 auto;`;
+}
 function closeUlView() {
   document.getElementById('ulView').classList.remove('open');
   document.getElementById('ulHost').innerHTML = '';
@@ -1657,7 +1662,7 @@ function renderUlBar() {
   for (const u of unlockers) {
     const d = designs.get(u.design);
     const b = document.createElement('button'); b.className = 'ul-icon'; b.title = unlockerName(u);
-    if (d && d.icon) { const im = document.createElement('img'); UL.setImg(im, d.icon); b.appendChild(im); }
+    if (d && (d.icon || d.body)) { const im = document.createElement('img'); UL.setImg(im, d.icon || d.body); b.appendChild(im); }
     else { const sp = document.createElement('span'); sp.textContent = '⚿'; b.appendChild(sp); }
     b.onclick = () => openUlPlay(u);
     bar.appendChild(b);
@@ -1666,6 +1671,7 @@ function renderUlBar() {
 function openUlPlay(u) {
   const d = designs.get(u.design);
   if (!d || !playing) return;
+  fitUlHost(d);
   const msg = document.getElementById('ulMsg');
   document.getElementById('ulTitle').textContent = unlockerName(u);
   msg.textContent = '';

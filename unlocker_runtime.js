@@ -3,18 +3,23 @@
 
    A design (unlockers/<slug>.json, wrapped as {updated, data}) looks like:
    {
-     version: 1, name, w, h,            // stage size in design units
-     bg: 'unlocker_assets/x.png' | '',  // background picture (cropped upload)
-     bgColor: '#1e1a12',
-     icon: 'unlocker_assets/y.png' | '',// small corner icon in play mode
-     arrowImg: '' | path,               // an UP-pointing arrow picture; rotated
-                                        // automatically for down/left/right
-     arrowColor: '#ffffff',
-     submit: { x, y, w, h, label, img, color },
-     dials: [{ id, x, y, w, h, orient: 'v'|'h',
-               symbols: [{ t: '7' } | { img: path }],
+     version: 2, name, w, h,            // stage size in design units
+     body: 'unlocker_assets/body/x.png' | '', // the lock's body picture (may be
+                                        // shaped — its see-through parts show through)
+     bgColor: '#1e1a12',                // used when there is no body picture
+     icon: path | '',                   // small corner icon in play mode
+     arrowColor: '#ffffff',             // colour of the default triangle arrows
+     submit: { x, y, w, h, label, color, part, img, pressed },
+     dials: [{ id, x, y, w, h, orient: 'v'|'h', arrowSize (% of the dial),
+               set, symbols: [{ img: path } | { t: '7' }],
+               arrowSet, arrows: { next: path, prev: path | '' },
                color, font: 'serif'|'mono'|'sans', box: 'none'|'dark'|'light' }]
    }
+   set / arrowSet / submit.part name the Unlocker Studio parts they came from;
+   symbols / arrows / img / pressed are copies of those parts' pictures, so a
+   design renders on its own. Arrow pictures are drawn for an up/down dial:
+   "next" points up, "prev" points down (if missing, "next" is turned upside
+   down); on a left/right dial both are turned a quarter turn clockwise.
    A code is an array with one symbol index per dial. Pictures live in the repo
    as unlocker_assets/*.png; until GitHub Pages has published a freshly
    uploaded file, it is fetched through the GitHub API instead. */
@@ -69,11 +74,13 @@ const UL = (() => {
     return normalize(parsed.data || parsed);
   }
   function normalize(d) {
-    d = Object.assign({ version: 1, name: 'Unlocker', w: 600, h: 400, bg: '', bgColor: '#1e1a12', icon: '',
+    d = Object.assign({ version: 2, name: 'Unlocker', w: 600, h: 400, body: '', bgColor: '#1e1a12', icon: '',
       arrowImg: '', arrowColor: '#ffffff', dials: [] }, d || {});
-    d.submit = Object.assign({ x: d.w / 2 - 70, y: d.h - 70, w: 140, h: 48, label: 'SUBMIT', img: '', color: '#c8a84b' }, d.submit || {});
-    d.dials = (d.dials || []).map((x, i) => Object.assign({ id: 'd' + (i + 1), x: 40, y: 40, w: 90, h: 180, orient: 'v',
-      symbols: PRESETS.digits.map(t => ({ t })), color: '#ffffff', font: 'serif', box: 'dark' }, x));
+    if (!d.body && d.bg) d.body = d.bg;   // version 1 called the body "bg"
+    d.submit = Object.assign({ x: d.w / 2 - 70, y: d.h - 70, w: 140, h: 48, label: 'SUBMIT', img: '', pressed: '', part: '', color: '#c8a84b' }, d.submit || {});
+    d.dials = (d.dials || []).map((x, i) => Object.assign({ id: 'd' + (i + 1), x: 40, y: 40, w: 90, h: 180, orient: 'v', arrowSize: 26,
+      set: '', symbols: PRESETS.digits.map(t => ({ t })), arrowSet: '', arrows: { next: '', prev: '' },
+      color: '#ffffff', font: 'serif', box: 'dark' }, x));
     return d;
   }
   function symbolText(s) { return s ? (s.img ? '▣' : s.t) : '?'; }
@@ -94,15 +101,16 @@ const UL = (() => {
   45% { transform: translateX(-6px) } 60% { transform: translateX(5px) } 75% { transform: translateX(-3px) } }
 .ul-stage.ul-ok { animation: ulOk .5s; }
 @keyframes ulOk { 0% { filter: brightness(1) } 40% { filter: brightness(1.6) drop-shadow(0 0 12px #9f9) } 100% { filter: brightness(1) } }
-.ul-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.ul-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
 .ul-dial { position: absolute; display: flex; align-items: stretch; border-radius: 6px; overflow: hidden; }
 .ul-dial.v { flex-direction: column; }
 .ul-dial.box-dark { background: rgba(0,0,0,.45); box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
 .ul-dial.box-light { background: rgba(255,255,255,.75); box-shadow: inset 0 0 0 1px rgba(0,0,0,.2); }
-.ul-arrow { flex: 0 0 26%; display: flex; align-items: center; justify-content: center; background: none; border: none;
+.ul-arrow { flex: 0 0 26%; min-width: 0; min-height: 0; display: flex; align-items: center; justify-content: center; background: none; border: none;
   padding: 0; margin: 0; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 .ul-arrow:active { filter: brightness(1.5); transform: scale(.92); }
-.ul-arrow svg, .ul-arrow img { width: 70%; height: 70%; object-fit: contain; pointer-events: none; }
+.ul-arrow svg { width: 70%; height: 70%; pointer-events: none; }
+.ul-arrow img { width: 92%; height: 92%; object-fit: contain; pointer-events: none; }
 .ul-sym { flex: 1; container-type: size; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .ul-sym span { font-size: min(72cqh, 72cqw); line-height: 1; white-space: nowrap; }
 .ul-sym img { width: 86%; height: 86%; object-fit: contain; pointer-events: none; }
@@ -112,18 +120,25 @@ const UL = (() => {
 .ul-submit span { font-size: min(42cqh, 16cqw); letter-spacing: .1em; white-space: nowrap; }
 .ul-submit img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
 .ul-submit:active { transform: scale(.96); filter: brightness(1.3); }
+.ul-submit.img:active { filter: none; }
 .ul-static .ul-arrow, .ul-static .ul-submit { pointer-events: none; }`;
     document.head.appendChild(st);
   }
   const pct = (v, of) => (v / of * 100) + '%';
-  function arrowEl(design, dir, color) {
-    const rot = { up: 0, right: 90, down: 180, left: 270 }[dir];
-    if (design.arrowImg) {
+  // which: 'next' | 'prev'
+  function arrowEl(design, d, which, color) {
+    const horiz = d.orient === 'h';
+    const a = d.arrows && d.arrows.next ? d.arrows : design.arrowImg ? { next: design.arrowImg } : null;
+    if (a) {
+      let src = a.next, r = 0;
+      if (which === 'prev') { if (a.prev) src = a.prev; else r = 180; }
+      if (horiz) r += 90;
       const im = document.createElement('img');
-      setImg(im, design.arrowImg);
-      im.style.transform = `rotate(${rot}deg)`;
+      setImg(im, src);
+      if (r) im.style.transform = `rotate(${r}deg)`;
       return im;
     }
+    const rot = which === 'next' ? (horiz ? 90 : 0) : (horiz ? 270 : 180);
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
     svg.setAttribute('viewBox', '0 0 20 20');
@@ -147,7 +162,11 @@ const UL = (() => {
     stage.className = 'ul-stage' + (opts.static ? ' ul-static' : '');
     stage.style.aspectRatio = `${design.w} / ${design.h}`;
     stage.style.background = design.bgColor;
-    if (design.bg) { const bg = document.createElement('img'); bg.className = 'ul-bg'; setImg(bg, design.bg); stage.appendChild(bg); }
+    if (design.body) {
+      stage.style.background = 'none';   // a shaped body's see-through parts stay see-through
+      stage.style.borderRadius = '0';
+      const bg = document.createElement('img'); bg.className = 'ul-bg'; setImg(bg, design.body); stage.appendChild(bg);
+    }
     const code = design.dials.map((d, i) => Math.min((opts.code || [])[i] || 0, Math.max(0, d.symbols.length - 1)));
     const symEls = [];
     function paint(i) {
@@ -167,12 +186,13 @@ const UL = (() => {
         paint(i);
         opts.onChange && opts.onChange(code.slice());
       };
-      const mk = (dir, k) => {
+      const mk = k => {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'ul-arrow';
+        b.style.flexBasis = (d.arrowSize || 26) + '%';
         b.setAttribute('aria-label', k > 0 ? 'next' : 'previous');
-        b.appendChild(arrowEl(design, dir, d.box === 'light' ? '#222' : design.arrowColor));
+        b.appendChild(arrowEl(design, d, k > 0 ? 'next' : 'prev', d.box === 'light' ? '#222' : design.arrowColor));
         b.onclick = step(k);
         return b;
       };
@@ -180,8 +200,8 @@ const UL = (() => {
       sym.className = 'ul-sym';
       symEls[i] = sym;
       // Up / right moves forward through the symbols; down / left goes back
-      if (d.orient === 'h') el.append(mk('left', -1), sym, mk('right', 1));
-      else el.append(mk('up', 1), sym, mk('down', -1));
+      if (d.orient === 'h') el.append(mk(-1), sym, mk(1));
+      else el.append(mk(1), sym, mk(-1));
       stage.appendChild(el);
       paint(i);
     });
@@ -190,7 +210,14 @@ const UL = (() => {
     btn.type = 'button';
     btn.className = 'ul-submit' + (sb.img ? ' img' : '');
     Object.assign(btn.style, { left: pct(sb.x, design.w), top: pct(sb.y, design.h), width: pct(sb.w, design.w), height: pct(sb.h, design.h) });
-    if (sb.img && !opts.submitLabel) { const im = document.createElement('img'); setImg(im, sb.img); btn.appendChild(im); }
+    if (sb.img && !opts.submitLabel) {
+      const im = document.createElement('img'); setImg(im, sb.img); btn.appendChild(im);
+      if (sb.pressed) {   // swap to the pressed picture while held down
+        const down = () => setImg(im, sb.pressed), up = () => setImg(im, sb.img);
+        btn.addEventListener('pointerdown', down);
+        for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) btn.addEventListener(ev, up);
+      }
+    }
     else {
       const sp = document.createElement('span');
       sp.textContent = opts.submitLabel || sb.label || 'SUBMIT';
