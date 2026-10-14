@@ -662,13 +662,29 @@ function drawEditTile(t, problem) {
 // Test-mode look: tiles are inset so gaps show between them, drift gently
 // left and right, and shake briefly when tapped before they flip
 const TILE_GAP_PX = 10;    // gap between neighbouring tiles, screen px
-const FLOAT_PX = 2.5;      // how far a tile drifts each way, screen px
+const FLOAT_MIN_PX = 1;    // how far a tile drifts each way, screen px —
+const FLOAT_MAX_PX = 2;    //   each tile gets its own amount in this range
+const CORNER_PX = 4;       // corner rounding radius, screen px
 const FLOAT_MS = 3600;     // one full left-right-left drift
 const SHAKE_MS = 300;
 function tilePhase(id) {
   let h = 0;
   for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return (h % 1000) / 1000 * Math.PI * 2;
+}
+// Polygon path with rounded corners (radius r screen px, smaller where edges are short)
+function pathRounded(pts, r) {
+  const P = pts.map(S), n = P.length;
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  ctx.beginPath();
+  const start = mid(P[n - 1], P[0]);
+  ctx.moveTo(start[0], start[1]);
+  for (let i = 0; i < n; i++) {
+    const a = P[i], b = P[(i + 1) % n], prev = P[(i - 1 + n) % n];
+    const rr = Math.min(r, dist(a, prev) / 2, dist(a, b) / 2);
+    ctx.arcTo(a[0], a[1], b[0], b[1], rr);
+  }
+  ctx.closePath();
 }
 // Shrink a polygon by moving every edge inward by d (world units). Falls back
 // to scaling about the label point when the inset would collapse the shape.
@@ -713,7 +729,9 @@ function drawPlayTile(t, now) {
   const { c, rs, fs } = tileFont(t);
   ctx.save();
   // Float: every tile drifts left and right a little, each on its own phase
-  let dx = FLOAT_PX * Math.sin(now / FLOAT_MS * Math.PI * 2 + tilePhase(t.id));
+  const ph = tilePhase(t.id);
+  const amp = FLOAT_MIN_PX + (FLOAT_MAX_PX - FLOAT_MIN_PX) * ((ph * 7.3) % 1);
+  let dx = amp * Math.sin(now / FLOAT_MS * Math.PI * 2 + ph);
   let rot = 0;
   // Shake after a tap, before the flip
   if (play.shake.has(t.id)) {
@@ -734,7 +752,7 @@ function drawPlayTile(t, now) {
   }
   // Solved and cancelled tiles look exactly the same: locked
   const locked = play.locked.has(t.id) || play.solved.has(t.id);
-  pathPoly(insetPoly(t.pts, TILE_GAP_PX / 2 / view.z));
+  pathRounded(insetPoly(t.pts, TILE_GAP_PX / 2 / view.z), CORNER_PX);
   ctx.fillStyle = '#123b66'; ctx.fill();   // cover the outline's "unknown" hatching
   ctx.fillStyle = locked ? 'rgba(30,38,50,.92)' : faceUp ? 'rgba(235,244,255,.85)' : 'rgba(220,236,255,.18)';
   ctx.fill();
