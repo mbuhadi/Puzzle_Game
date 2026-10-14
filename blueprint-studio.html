@@ -672,14 +672,15 @@ function drawPlayTile(t, now) {
     ctx.scale(Math.max(.02, Math.abs(Math.cos(p * Math.PI))), 1);
     ctx.translate(-c[0], -c[1]);
   }
-  const locked = play.locked.has(t.id), solved = play.solved.has(t.id);
+  // Solved and cancelled tiles look exactly the same: locked
+  const locked = play.locked.has(t.id) || play.solved.has(t.id);
   pathPoly(t.pts);
   ctx.fillStyle = '#123b66'; ctx.fill();   // cover the outline's "unknown" hatching
-  ctx.fillStyle = locked ? 'rgba(30,38,50,.92)' : solved ? 'rgba(122,204,96,.32)' : faceUp ? 'rgba(235,244,255,.85)' : 'rgba(220,236,255,.18)';
+  ctx.fillStyle = locked ? 'rgba(30,38,50,.92)' : faceUp ? 'rgba(235,244,255,.85)' : 'rgba(220,236,255,.18)';
   ctx.fill();
   ctx.lineJoin = 'round';
   ctx.lineWidth = 2;
-  ctx.strokeStyle = locked ? 'rgba(160,170,185,.8)' : solved ? '#7acc60' : 'rgba(240,247,255,.95)';
+  ctx.strokeStyle = locked ? 'rgba(160,170,185,.8)' : 'rgba(240,247,255,.95)';
   ctx.stroke();
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   if (locked) {
@@ -695,16 +696,12 @@ function drawPlayTile(t, now) {
     ctx.fillText('?', c[0], c[1] + 1);
   } else {
     const kind = chunkKind(t.chunk);
-    ctx.fillStyle = solved ? '#e0ffd8' : '#123b66';
+    ctx.fillStyle = '#123b66';
     ctx.font = `600 ${fs}px monospace`;
     ctx.fillText(fitText(tileName(t), rs * 1.9), c[0], c[1] - (rs > 22 ? fs * .45 : 0));
     if (rs > 22) {
       ctx.font = `${Math.max(7, fs * .7)}px Cinzel, serif`;
-      ctx.fillText(solved ? 'SOLVED ✓' : kind === 'given' ? 'GIVEN' : 'PUZZLE', c[0], c[1] + fs * .75);
-    }
-    if (solved && rs > 14) {   // solved puzzles are locked too
-      ctx.font = `${Math.max(9, Math.min(16, rs * .35))}px sans-serif`;
-      ctx.fillText('🔒', c[0], c[1] - fs * 1.7);
+      ctx.fillText(kind === 'given' ? 'GIVEN' : 'PUZZLE', c[0], c[1] + fs * .75);
     }
   }
   ctx.restore();
@@ -1312,8 +1309,8 @@ function playTap(w) {
   for (let i = tiles.length - 1; i >= 0; i--)
     if (play.explored.has(tiles[i].id) && tiles[i].pts.length >= 3 && pip(w, tiles[i].pts)) { t = tiles[i]; break; }
   if (!t) return;
-  if (play.locked.has(t.id)) { setStatus(`${tileName(t)} is locked.`); return; }
-  if (play.solved.has(t.id)) { setStatus(`${tileName(t)} is solved and locked.`); return; }   // solved puzzles lock themselves
+  // Solved puzzles lock themselves, just like cancelled tiles
+  if (play.locked.has(t.id) || play.solved.has(t.id)) { setStatus(`${tileName(t)} is locked.`); return; }
   if (!play.flipped.has(t.id)) {
     play.flipped.add(t.id);
     play.flip.set(t.id, performance.now());
