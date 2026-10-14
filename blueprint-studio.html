@@ -766,8 +766,15 @@ function drawPlayTile(t, now) {
   ctx.stroke();
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   if (locked) {
-    ctx.font = `${Math.max(12, Math.min(30, rs * .8))}px sans-serif`;
-    ctx.fillText('🔒', c[0], c[1]);
+    // Locked sign: a grey circle with a diagonal line through it (like a
+    // no-smoking sign), the same size as the "?" sign it replaces
+    const r = Math.max(7, Math.min(rs * .55, 26));
+    ctx.strokeStyle = '#9aa3ae';
+    ctx.lineWidth = Math.max(1.6, r * .18);
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(c[0], c[1], r, 0, Math.PI * 2); ctx.stroke();
+    const k = r * Math.SQRT1_2;
+    ctx.beginPath(); ctx.moveTo(c[0] - k, c[1] - k); ctx.lineTo(c[0] + k, c[1] + k); ctx.stroke();
   } else if (!faceUp) {
     // The sign to tap
     const r = Math.max(7, Math.min(rs * .55, 26));
