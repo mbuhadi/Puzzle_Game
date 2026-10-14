@@ -667,6 +667,7 @@ const FLOAT_MAX_PX = 2;    //   each tile gets its own amount in this range
 const CORNER_PX = 4;       // corner rounding radius, screen px
 const FLOAT_MS = 3600;     // one full left-right-left drift
 const SHAKE_MS = 300;
+const STILL_MS = 500;      // locked tiles ease to a stop over this long
 function tilePhase(id) {
   let h = 0;
   for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -731,7 +732,10 @@ function drawPlayTile(t, now) {
   // Float: every tile drifts left and right a little, each on its own phase
   const ph = tilePhase(t.id);
   const amp = FLOAT_MIN_PX + (FLOAT_MAX_PX - FLOAT_MIN_PX) * ((ph * 7.3) % 1);
-  let dx = amp * Math.sin(now / FLOAT_MS * Math.PI * 2 + ph);
+  // Locked tiles (solved or cancelled) stop floating: the drift eases out over
+  // STILL_MS after locking, then the tile stays put at its resting position
+  const still = play.stillAt.has(t.id) ? Math.max(0, 1 - (now - play.stillAt.get(t.id)) / STILL_MS) : 1;
+  let dx = amp * still * Math.sin(now / FLOAT_MS * Math.PI * 2 + ph);
   let rot = 0;
   // Shake after a tap, before the flip
   if (play.shake.has(t.id)) {
@@ -1363,7 +1367,7 @@ let openTile = null;
 
 function resetPlay() {
   play = { explored: new Set(tiles.filter(t => t.start).map(t => t.id)),
-    flipped: new Set(), solved: new Set(), locked: new Set(), flip: new Map(), reveal: new Map(), shake: new Map(), busy: false };
+    flipped: new Set(), solved: new Set(), locked: new Set(), flip: new Map(), reveal: new Map(), shake: new Map(), stillAt: new Map(), busy: false };
   closeTileView();
   statusMsg = '';
   render(); updateStatus();
@@ -1427,9 +1431,10 @@ function solveOpenTile() {
   const t = openTile;
   if (!t) return;
   play.solved.add(t.id);
+  play.stillAt.set(t.id, performance.now());
   let locked = 0, opened = 0;
   for (const id of t.cancels)   // only explored, unsolved tiles can be cancelled
-    if (play.explored.has(id) && !play.locked.has(id) && !play.solved.has(id)) { play.locked.add(id); locked++; }
+    if (play.explored.has(id) && !play.locked.has(id) && !play.solved.has(id)) { play.locked.add(id); play.stillAt.set(id, performance.now()); locked++; }
   for (const id of t.opens) if (!play.explored.has(id)) {
     play.explored.add(id);
     play.reveal.set(id, performance.now() + 250);
