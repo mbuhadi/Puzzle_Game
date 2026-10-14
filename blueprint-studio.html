@@ -662,10 +662,11 @@ function drawEditTile(t, problem) {
 // Test-mode look: tiles are inset so gaps show between them, drift gently
 // left and right, and shake briefly when tapped before they flip
 const TILE_GAP_PX = 10;    // gap between neighbouring tiles, screen px
-const FLOAT_MIN_PX = 1;    // how far a tile drifts each way, screen px —
-const FLOAT_MAX_PX = 2;    //   each tile gets its own amount in this range
+const FLOAT_MIN_PX = .5;   // how far a tile drifts from its resting spot, screen px —
+const FLOAT_MAX_PX = 1;    //   each tile gets its own amount in this range
 const CORNER_PX = 4;       // corner rounding radius, screen px
-const FLOAT_MS = 3600;     // one full left-right-left drift
+const FLOAT_MS = 6000;     // one full there-and-back drift
+const FLOAT_TURN_MS = 17000; // the drift direction turns a full circle in about this long
 const SHAKE_MS = 150;
 const STILL_MS = 500;      // locked tiles ease to a stop over this long
 function tilePhase(id) {
@@ -729,13 +730,20 @@ function insetPoly(pts, d) {
 function drawPlayTile(t, now) {
   const { c, rs, fs } = tileFont(t);
   ctx.save();
-  // Float: every tile drifts left and right a little, each on its own phase
+  // Float: every tile drifts back and forth through its resting spot along a
+  // direction that slowly turns (up, down, left, right and between), each tile
+  // with its own amount, speed, phase and turning direction. The drift never
+  // exceeds FLOAT_MAX_PX, far less than half the gap, so tiles never touch.
   const ph = tilePhase(t.id);
-  const amp = FLOAT_MIN_PX + (FLOAT_MAX_PX - FLOAT_MIN_PX) * ((ph * 7.3) % 1);
+  const h1 = (ph * 7.3) % 1, h2 = (ph * 13.7) % 1, h3 = (ph * 3.1) % 1;
+  const amp = FLOAT_MIN_PX + (FLOAT_MAX_PX - FLOAT_MIN_PX) * h1;
+  const period = FLOAT_MS * (.85 + .3 * h2);
+  const turn = (h3 < .5 ? 1 : -1) * now / (FLOAT_TURN_MS * (.8 + .4 * h3)) * Math.PI * 2 + ph * 2;
   // Locked tiles (solved or cancelled) stop floating: the drift eases out over
   // STILL_MS after locking, then the tile stays put at its resting position
   const still = play.stillAt.has(t.id) ? Math.max(0, 1 - (now - play.stillAt.get(t.id)) / STILL_MS) : 1;
-  let dx = amp * still * Math.sin(now / FLOAT_MS * Math.PI * 2 + ph);
+  const r = amp * still * Math.sin(now / period * Math.PI * 2 + ph);
+  let dx = r * Math.cos(turn), dy = r * Math.sin(turn);
   let rot = 0;
   // Shake after a tap, before the flip
   if (play.shake.has(t.id)) {
@@ -743,7 +751,7 @@ function drawPlayTile(t, now) {
     if (e >= 1) play.shake.delete(t.id);
     else { const k = 1 - e; dx += 5 * k * Math.sin(e * Math.PI * 7); rot = .05 * k * Math.sin(e * Math.PI * 5); }
   }
-  ctx.translate(dx, 0);
+  ctx.translate(dx, dy);
   if (rot) { ctx.translate(c[0], c[1]); ctx.rotate(rot); ctx.translate(-c[0], -c[1]); }
   let faceUp = play.flipped.has(t.id), anim = true;
   if (play.flip.has(t.id)) {
