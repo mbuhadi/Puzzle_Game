@@ -702,6 +702,10 @@ function drawPlayTile(t, now) {
       ctx.font = `${Math.max(7, fs * .7)}px Cinzel, serif`;
       ctx.fillText(solved ? 'SOLVED ✓' : kind === 'given' ? 'GIVEN' : 'PUZZLE', c[0], c[1] + fs * .75);
     }
+    if (solved && rs > 14) {   // solved puzzles are locked too
+      ctx.font = `${Math.max(9, Math.min(16, rs * .35))}px sans-serif`;
+      ctx.fillText('🔒', c[0], c[1] - fs * 1.7);
+    }
   }
   ctx.restore();
   return anim;
@@ -1276,7 +1280,8 @@ document.addEventListener('keyup', e => { if (e.key === ' ') spaceDown = false; 
 // ── Test mode ─────────────────────────────────────────────────────────────────
 // Plays the blueprint the way the phone game will: the player sees only the
 // outline and the explored tiles. Tapping a sign flips the tile and opens its
-// screen; solving a puzzle cancels (locks) explored targets and opens new tiles.
+// screen; solving a puzzle locks it, cancels (locks) explored targets and opens
+// new tiles.
 let playing = false;
 let play = null;
 let openTile = null;
@@ -1308,6 +1313,7 @@ function playTap(w) {
     if (play.explored.has(tiles[i].id) && tiles[i].pts.length >= 3 && pip(w, tiles[i].pts)) { t = tiles[i]; break; }
   if (!t) return;
   if (play.locked.has(t.id)) { setStatus(`${tileName(t)} is locked.`); return; }
+  if (play.solved.has(t.id)) { setStatus(`${tileName(t)} is solved and locked.`); return; }   // solved puzzles lock themselves
   if (!play.flipped.has(t.id)) {
     play.flipped.add(t.id);
     play.flip.set(t.id, performance.now());
@@ -1341,8 +1347,8 @@ function solveOpenTile() {
   if (!t) return;
   play.solved.add(t.id);
   let locked = 0, opened = 0;
-  for (const id of t.cancels)   // only explored tiles can be cancelled
-    if (play.explored.has(id) && !play.locked.has(id)) { play.locked.add(id); locked++; }
+  for (const id of t.cancels)   // only explored, unsolved tiles can be cancelled
+    if (play.explored.has(id) && !play.locked.has(id) && !play.solved.has(id)) { play.locked.add(id); locked++; }
   for (const id of t.opens) if (!play.explored.has(id)) {
     play.explored.add(id);
     play.reveal.set(id, performance.now() + 250);
