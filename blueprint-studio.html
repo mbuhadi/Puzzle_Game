@@ -652,8 +652,10 @@ function draw() {
     } else drawEditTile(t, problems.get(t.id));
   }
 
-  // Outline stroke on top so the perimeter is always crisp
-  if (outline.length >= 2) {
+  // Outline stroke on top so the perimeter is always visible. While testing /
+  // playing, the map's perimeter looks drawn by a child.
+  if (playing && outline.length >= 3) strokeChildish(outline, 'outline', 1.4, 1);
+  else if (outline.length >= 2) {
     pathPoly(outline);
     ctx.strokeStyle = 'rgba(240,247,255,.95)';
     ctx.lineWidth = 3.5;
@@ -823,18 +825,21 @@ function chalkMark(size) {
 if (document.fonts && document.fonts.load)
   document.fonts.load("40px 'Gochi Hand'").then(() => { chalkCache.clear(); render(); }).catch(() => {});
 
-// Outline of a tile that hasn't been revealed yet, drawn like a child would:
-// every edge is its own wobbly stroke that overshoots the corners, gone over
-// a second time a little off the first. The wobble is seeded by the tile id
-// and measured in screen px, so it is the same every frame and at any zoom.
-function strokeChildish(pts, id) {
+// The map's perimeter in test mode, drawn like a child would: every edge is
+// its own wobbly stroke that overshoots the corners, gone over a second time a
+// little off the first. The wobble is seeded by id and measured in screen px,
+// so it is the same every frame and at any zoom. k scales the line widths.
+function strokeChildish(pts, id, k = 1, outward = 0) {
   const P = pts.map(S), n = P.length;
+  // outward > 0 pushes the wobble that many px outside the shape so it
+  // doesn't wander over what's inside (left normals point inward when area > 0)
+  const outSign = polyArea(P) > 0 ? -1 : 1;
   let seed = 0;
   for (const ch of id) seed = (seed * 31 + ch.charCodeAt(0)) % 233280;
   const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   for (const [width, alpha] of [[2.6, .95], [1.5, .6]]) {
-    ctx.lineWidth = width;
+    ctx.lineWidth = width * k;
     ctx.strokeStyle = `rgba(240,247,255,${alpha})`;
     for (let i = 0; i < n; i++) {
       const a = P[i], b = P[(i + 1) % n];
@@ -851,7 +856,8 @@ function strokeChildish(pts, id) {
       ctx.beginPath();
       for (let k = 0; k <= steps; k++) {
         const tt = k / steps, along = -o1 + tt * (L + o1 + o2);
-        const off = A1 * Math.sin(tt * Math.PI * f1 + p1) + A2 * Math.sin(tt * Math.PI * f2 + p2) + e1 + (e2 - e1) * tt;
+        const off = A1 * Math.sin(tt * Math.PI * f1 + p1) + A2 * Math.sin(tt * Math.PI * f2 + p2) + e1 + (e2 - e1) * tt
+          + outSign * (outward ? outward + A1 + A2 + Math.max(Math.abs(e1), Math.abs(e2)) : 0);
         const x = a[0] + ux * along + nx * off, y = a[1] + uy * along + ny * off;
         k ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
       }
@@ -903,13 +909,10 @@ function drawPlayTile(t, now) {
   ctx.fillStyle = '#123b66'; ctx.fill();   // cover the outline's "unknown" hatching
   ctx.fillStyle = locked ? 'rgba(30,38,50,.92)' : faceUp ? 'rgba(235,244,255,.85)' : 'rgba(220,236,255,.18)';
   ctx.fill();
-  if (!locked && !faceUp) strokeChildish(shape, t.id);   // not revealed yet: a child's drawing
-  else {
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = locked ? 'rgba(160,170,185,.8)' : 'rgba(240,247,255,.95)';
-    ctx.stroke();
-  }
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = locked ? 'rgba(160,170,185,.8)' : 'rgba(240,247,255,.95)';
+  ctx.stroke();
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   if (locked) {
     // Locked sign: a grey circle with a diagonal line through it (like a
