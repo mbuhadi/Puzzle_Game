@@ -834,19 +834,21 @@ function insetPoly(pts, d) {
   return out;
 }
 
-// The map's perimeter in test mode: where it runs along a solved tile it is a
+// The map's perimeter in test mode: where it runs along a solved or locked tile it is a
 // neat line; everywhere else it looks drawn by a child in chalk — each piece
 // is its own wobbly stroke that overshoots the map's corners, gone over a
 // second time a little off the first. The wobble is seeded per piece and
 // measured in screen px, so it is the same every frame and at any zoom.
 
-// Split the outline into runs along each edge: solved = a solved tile borders
+// Split the outline into runs along each edge: solved = a solved or locked tile borders
 // it there. Cached until the outline or the set of solved tiles changes.
 let runCache = { key: '', runs: [] };
 function outlineRuns() {
-  const key = outline.join(';') + '|' + [...play.solved].sort().join(',');
+  // "done" tiles — solved or locked (cancelled) — get a smooth edge
+  const done = new Set([...play.solved, ...play.locked]);
+  const key = outline.join(';') + '|' + [...done].sort().join(',');
   if (runCache.key === key) return runCache.runs;
-  const solvedTiles = tiles.filter(t => play.solved.has(t.id) && t.pts.length >= 3);
+  const solvedTiles = tiles.filter(t => done.has(t.id) && t.pts.length >= 3);
   const TOL = 3;   // world units: a tile edge this close to the outline borders it
   const runs = [], n = outline.length;
   for (let i = 0; i < n; i++) {
@@ -923,7 +925,7 @@ function childSegs(g, segs, outSign, k = 1, outward = 0, extra = 0) {
   }
 }
 
-// The perimeter: neat along solved tiles, child-drawn chalk elsewhere. The
+// The perimeter: neat along solved / locked tiles, child-drawn chalk elsewhere. The
 // chalk strokes (plus a faint dusty halo)
 // go onto their own layer, which then has chalk grain knocked out of it. The
 // grain is a fixed tile anchored to the map, so it moves with the map when
@@ -981,7 +983,7 @@ function drawChalkOutline() {
   g.fillStyle = pat;
   g.fillRect(0, 0, chalkLayer.width, chalkLayer.height);
   }
-  // neat pieces: where solved tiles border the map (no grain)
+  // neat pieces: where solved or locked tiles border the map (no grain)
   g.globalCompositeOperation = 'source-over';
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.lineCap = 'round';
