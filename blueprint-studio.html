@@ -562,8 +562,24 @@ function fitView() {
   view.y = (r.height - 24 - h * view.z) / 2 - b.y0 * view.z + 10;
   render();
 }
+// Test-mode zoom limits. Zoomed all the way out, the whole map fills about
+// half the screen; zoomed all the way in, the smallest tile is about half the
+// screen. (The editor keeps its wide limits.)
+const PLAY_ZOOM_OUT_FILL = .5, PLAY_ZOOM_IN_FILL = .5;
+function playZoomLimits() {
+  const r = cv.getBoundingClientRect();
+  const pts = outline.length >= 3 ? outline : tiles.flatMap(t => t.pts);
+  if (!pts.length || !r.width) return [.05, 12];
+  const fitZ = b => Math.min(r.width / Math.max(1, b.x1 - b.x0), r.height / Math.max(1, b.y1 - b.y0));
+  const zMin = PLAY_ZOOM_OUT_FILL * fitZ(bbox(pts));
+  let smallest = null, sa = Infinity;
+  for (const t of tiles) if (t.pts.length >= 3) { const a = Math.abs(polyArea(t.pts)); if (a > 1 && a < sa) { sa = a; smallest = t; } }
+  const zMax = smallest ? PLAY_ZOOM_IN_FILL * fitZ(bbox(smallest.pts)) : zMin * 4;
+  return [zMin, Math.max(zMin, zMax)];
+}
 function zoomAt(px, py, f) {
-  const nz = Math.max(.05, Math.min(12, view.z * f));
+  const [lo, hi] = playing ? playZoomLimits() : [.05, 12];
+  const nz = Math.max(lo, Math.min(hi, view.z * f));
   view.x = px - (px - view.x) * nz / view.z;
   view.y = py - (py - view.y) * nz / view.z;
   view.z = nz;
@@ -2121,7 +2137,8 @@ function togglePlay() {
   document.getElementById('playBtn').textContent = playing ? '■ Stop' : '▶ Test';
   document.getElementById('playBtn').classList.toggle('active', playing);
   statusMsg = '';
-  if (playing) resetPlay(); else { closeTileView(); closeUlView(); refreshAll(); }
+  if (playing) { resetPlay(); const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1); }
+  else { closeTileView(); closeUlView(); refreshAll(); }
   updateStatus();
 }
 function playTileAt(w) {
