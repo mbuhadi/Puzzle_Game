@@ -1240,13 +1240,26 @@ const QMARK = [
   '..##..',
   '..##..',
 ];
+// Pixel-art check mark for solved tiles, drawn the same way as the "?"
+const CHECK = [
+  '........##',
+  '.......###',
+  '......###.',
+  '##...###..',
+  '###.###...',
+  '.#####....',
+  '..###.....',
+];
 const pixelQCache = new Map();
-function pixelQ(size) {
-  const rows = QMARK.length, cols = QMARK[0].length;
-  const px = Math.max(2, Math.round(size * dpr / (rows + 3)));   // device px per art pixel
-  if (pixelQCache.has(px)) return pixelQCache.get(px);
+function pixelQ(size) { return pixelSprite(QMARK, 'q', size); }
+function pixelCheck(size) { return pixelSprite(CHECK, 'check', size); }
+function pixelSprite(grid, name, size) {
+  const rows = grid.length, cols = grid[0].length;
+  const px = Math.max(2, Math.round(size * dpr / (QMARK.length + 3)));   // device px per art pixel (same for every sprite)
+  const ck = name + px;
+  if (pixelQCache.has(ck)) return pixelQCache.get(ck);
   const W = cols + 4, H = rows + 4, ox = 1, oy = 1;
-  const on = (x, y) => y >= 0 && y < rows && x >= 0 && x < cols && QMARK[y][x] === '#';
+  const on = (x, y) => y >= 0 && y < rows && x >= 0 && x < cols && grid[y][x] === '#';
   const cvq = document.createElement('canvas');
   cvq.width = W * px; cvq.height = H * px;
   const g = cvq.getContext('2d');
@@ -1257,7 +1270,7 @@ function pixelQ(size) {
   for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (on(x, y))
     cell(x, y, !on(x, y + 1) ? '#c9d2df' : (!on(x, y - 1) && !on(x - 1, y)) ? '#ffffff' : '#f3efe4');   // fill, shade, highlight
   const out = { cv: cvq, px };
-  pixelQCache.set(px, out);
+  pixelQCache.set(ck, out);
   return out;
 }
 
@@ -1445,8 +1458,15 @@ function drawPlayTile(t, now, pop = 1) {
   ctx.strokeStyle = locked ? rgbStr(th.lockSign, .8) : 'rgba(240,247,255,.95)';
   ctx.stroke();
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  if (locked) {
-    // Locked sign: a grey circle with a diagonal line through it (like a
+  if (play.solved.has(t.id)) {
+    // Solved: a pixel-art check mark, sitting still
+    const q = pixelCheck(Math.max(24, Math.min(rs * 1.5, 110)));
+    const qw = q.cv.width / dpr, qh = q.cv.height / dpr;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(q.cv, Math.round(c[0] - qw / 2), Math.round(c[1] - qh / 2), qw, qh);
+    ctx.imageSmoothingEnabled = true;
+  } else if (locked) {
+    // Cancelled: a grey circle with a diagonal line through it (like a
     // no-smoking sign), the same size as the "?" sign it replaces
     const r = Math.max(7, Math.min(rs * .55, 26));
     ctx.strokeStyle = rgbStr(th.lockSign);
@@ -2179,7 +2199,8 @@ function applyEffects(src, origin) {
       if (play.locked.has(id) || play.solved.has(id)) return;
       play.locked.add(id); play.stillAt.set(id, performance.now());
       squish(id, .5);
-      const t = tileById(id); if (t) popText(t, 'LOCKED', '#c3cbd6');
+      const t = tileById(id);
+      if (t) popText(t, chunkKind(t.chunk) === 'given' ? 'DONE!' : 'LOCKED', '#c3cbd6');   // a given has served its purpose
       render();
     }, LOCK_STAGGER_MS * (i + (origin ? 1 : 0)));
   });
