@@ -1971,7 +1971,7 @@ let openTile = null;
 
 function resetPlay() {
   play = { explored: new Set(tiles.filter(t => t.start).map(t => t.id)),
-    flipped: new Set(), solved: new Set(), locked: new Set(), flip: new Map(), reveal: new Map(), shake: new Map(), stillAt: new Map(), usedCombos: new Set(), busy: false, pendingLock: new Set(),
+    flipped: new Set(), solved: new Set(), locked: new Set(), flip: new Map(), reveal: new Map(), shake: new Map(), stillAt: new Map(), usedCombos: new Set(), busy: false, pendingLock: new Set(), pendingOpen: new Set(),
     fx: new Map(), hover: null, hoverW: null, press: null, parts: [], pops: [], kick: null };
   closeTileView();
   closeUlView();
@@ -2040,7 +2040,8 @@ function closeTileView() {
 }
 // Apply a solved puzzle's or entered combination's effects; returns a summary
 // Cancelled tiles lock one after the other, LOCK_STAGGER_MS apart, nearest
-// to the solved tile first (in list order for unlocker combinations).
+// to the solved tile first (in list order for unlocker combinations); then
+// the opened tiles appear one after the other at the same pace.
 const LOCK_STAGGER_MS = 260;
 function applyEffects(src, origin) {
   let opened = 0;
@@ -2065,13 +2066,29 @@ function applyEffects(src, origin) {
     }, LOCK_STAGGER_MS * (i + (origin ? 1 : 0)));
   });
   const locked = toLock.length;
-  for (const id of src.opens) if (!play.explored.has(id)) {
-    play.explored.add(id);
-    play.reveal.set(id, performance.now() + 250);
-    opened++;
-    const t = tileById(id);
-    if (t) setTimeout(() => { if (play && play.explored.has(id)) burst(t, ['#ffffff', playBg]); }, 420);
+  // Then the opened tiles appear one after the other, at the same pace,
+  // starting once the last tile has locked (nearest to the solved tile first)
+  let toOpen = src.opens.filter(id => !play.explored.has(id) && !play.pendingOpen.has(id));
+  if (origin) {
+    const o = labelInfo(origin.pts).p;
+    const d = id => { const t = tileById(id); return t ? dist(labelInfo(t.pts).p, o) : 0; };
+    toOpen.sort((a, b) => d(a) - d(b));
   }
+  const firstOpen = toLock.length + (origin ? 1 : 0);
+  toOpen.forEach((id, i) => {
+    play.pendingOpen.add(id);
+    opened++;
+    setTimeout(() => {
+      if (!playing || play !== P) return;
+      play.pendingOpen.delete(id);
+      if (play.explored.has(id)) return;
+      play.explored.add(id);
+      play.reveal.set(id, performance.now());
+      const t = tileById(id);
+      if (t) setTimeout(() => { if (play === P && play.explored.has(id)) burst(t, ['#ffffff', playBg]); }, 170);
+      render();
+    }, LOCK_STAGGER_MS * (firstOpen + i));
+  });
   render();
   return (opened ? ` · ${opened} new tile(s) opened` : '') + (locked ? ` · ${locked} tile(s) locked` : '');
 }
