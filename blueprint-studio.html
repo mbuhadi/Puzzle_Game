@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Blueprint Studio</title>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cinzel+Decorative:wght@400&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -22,7 +22,8 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #app { display: flex; flex-direction: column; height: 100%; }
 
 #topbar { height: 46px; flex-shrink: 0; background: var(--bg2); border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 4px; padding: 0 8px; overflow-x: auto; }
+  display: flex; align-items: center; gap: 4px; overflow-x: auto;
+  padding: 0 max(8px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left)); }
 .tb-title { font-family: 'Cinzel Decorative', serif; font-size: 12px; color: var(--gold); letter-spacing: 2px; margin-right: 8px; white-space: nowrap; }
 .tb-sep { width: 1px; height: 24px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
 .tb-grow { flex: 1; }
@@ -116,7 +117,7 @@ body.playing .edit-only { display: none; }
 .combo .btns { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 4px; }
 .combo button { padding: 4px 6px; font-size: 10px; }
 .combo .chips { margin-top: 3px; }
-#ulBar { position: absolute; top: 8px; right: 8px; display: none; flex-direction: column; gap: 6px; z-index: 4; }
+#ulBar { position: absolute; top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); display: none; flex-direction: column; gap: 6px; z-index: 4; }
 body.playing #ulBar.has { display: flex; }
 .ul-icon { width: 44px; height: 44px; padding: 3px; border-radius: 8px; border: 1px solid var(--gold-dim); background: rgba(14,13,10,.85);
   display: flex; align-items: center; justify-content: center; cursor: pointer; }
