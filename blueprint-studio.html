@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Blueprint Studio</title>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cinzel+Decorative:wght@400&family=Gochi+Hand&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cinzel+Decorative:wght@400&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
 <style>
 /* Blueprint Studio — a second map studio (map-editor.html is the old one).
    The map is a blueprint: an outline cut into flip tiles of any shape. Each
@@ -78,7 +78,7 @@ label.chk input { accent-color: var(--gold); width: 15px; height: 15px; }
 
 #canvasWrap { flex: 1; position: relative; overflow: hidden; background: #0d2e52; }
 #cv { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
-#status { position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 10px; font-family: monospace; font-size: 11px;
+#status { z-index: 4; position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 10px; font-family: monospace; font-size: 11px;
   color: rgba(220,236,255,.8); background: rgba(8,24,44,.8); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .float-bar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: none; gap: 6px; z-index: 4;
   align-items: center; background: rgba(14,13,10,.92); border: 1px solid var(--gold-dim); border-radius: 6px; padding: 5px 6px; max-width: calc(100% - 16px); }
@@ -123,6 +123,35 @@ body.playing #ulBar.has { display: flex; }
 .ul-icon img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
 .ul-icon span { font-size: 18px; color: var(--gold); }
 #ulHost { width: 100%; }
+/* ── Test mode "CRT TV" look (scanlines, grain, dark corners, tube edge) ── */
+#crt { position: absolute; inset: 0; pointer-events: none; z-index: 3; display: none; border-radius: 22px / 26px; overflow: hidden;
+  box-shadow: inset 0 0 0 3px rgba(0,0,0,.55), inset 0 0 60px rgba(0,0,0,.55); }
+body.playing #crt { display: block; }
+body.playing #canvasWrap { border-radius: 22px / 26px; }
+#crt::before { content: ''; position: absolute; inset: 0;
+  background: repeating-linear-gradient(to bottom, rgba(0,0,0,.16) 0, rgba(0,0,0,.16) 1px, transparent 1px, transparent 3px); }
+#crt::after { content: ''; position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.45) 100%); }
+#crtGrain { position: absolute; inset: -64px; opacity: .045; animation: crtGrain .5s steps(5) infinite; will-change: transform; }
+@keyframes crtGrain { 0% { transform: translate(0,0) } 20% { transform: translate(-23px,17px) } 40% { transform: translate(31px,-9px) }
+  60% { transform: translate(-13px,-29px) } 80% { transform: translate(19px,27px) } 100% { transform: translate(0,0) } }
+#crtFlicker { position: absolute; inset: 0; background: rgba(255,255,255,.02); animation: crtFlicker 4s infinite; }
+@keyframes crtFlicker { 0%, 100% { opacity: 0 } 48% { opacity: 0 } 50% { opacity: 1 } 52% { opacity: 0 } 77% { opacity: .6 } 78% { opacity: 0 } }
+/* faded-rainbow background picker */
+#palBar { display: none; gap: 6px; align-items: center; }
+#palBar.show { display: flex; }
+.swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(0,0,0,.35); cursor: pointer; padding: 0; flex: 0 0 auto;
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); transition: transform .12s; }
+.swatch:hover { transform: scale(1.12); border-color: rgba(255,255,255,.6); }
+.swatch.sel { border-color: #fff; transform: scale(1.15); box-shadow: 0 0 0 2px rgba(0,0,0,.45); }
+.swatch-row { display: flex; flex-wrap: wrap; gap: 6px; }
+/* juicy corner icons: idle bob, pop on hover, squish on press */
+body.playing .ul-icon { animation: ulBob 3.2s ease-in-out infinite; transition: transform .15s cubic-bezier(.3,1.8,.5,1); }
+body.playing .ul-icon:nth-child(2n) { animation-delay: -1.1s; }
+body.playing .ul-icon:nth-child(3n) { animation-delay: -2.2s; }
+body.playing .ul-icon:hover { animation-play-state: paused; transform: scale(1.14) rotate(-4deg); }
+body.playing .ul-icon:active { transform: scale(.9); }
+@keyframes ulBob { 0%, 100% { transform: translateY(0) rotate(-1deg) } 50% { transform: translateY(-3px) rotate(1.5deg) } }
 #sideToggle { display: none; }
 @media (max-width: 760px) {
   #sideToggle { display: inline-block; }
@@ -221,6 +250,8 @@ body.playing #ulBar.has { display: flex; }
       <div class="divider"></div>
 
       <div>
+        <div class="sec-title">TEST BACKGROUND COLOUR</div>
+        <div class="swatch-row" id="palSide" style="margin-bottom:12px"></div>
         <div class="sec-title">BLUEPRINT</div>
         <div class="row">
           <button onclick="exportJSON()">Export</button>
@@ -245,9 +276,12 @@ body.playing #ulBar.has { display: flex; }
       </div>
       <div class="float-bar" id="playBar">
         <button onclick="resetPlay()">↺ Restart</button>
+        <button onclick="document.getElementById('palBar').classList.toggle('show')" title="Background colour">🎨</button>
+        <span id="palBar" class="swatch-row"></span>
         <button class="play active" onclick="togglePlay()">■ Stop test</button>
       </div>
       <div id="ulBar"></div>
+      <div id="crt"><canvas id="crtGrain"></canvas><div id="crtFlicker"></div></div>
       <div id="status"></div>
     </div>
   </div>
@@ -444,6 +478,7 @@ function toData() {
     outline: outline.map(p => [r2(p[0]), r2(p[1])]),
     tiles: tiles.map(t => ({ id: t.id, pts: t.pts.map(p => [r2(p[0]), r2(p[1])]), start: !!t.start,
       chunk: t.chunk || '', label: t.label || '', opens: [...t.opens], cancels: [...t.cancels] })),
+    bg: playBg,
     unlockers: unlockers.map(u => ({ id: u.id, design: u.design,
       combos: u.combos.map(c => ({ id: c.id, code: [...c.code], opens: [...c.opens], cancels: [...c.cancels] })) })),
   };
@@ -459,6 +494,7 @@ function fromData(d) {
     t.opens = t.opens.filter(id => ids.has(id) && id !== t.id);
     t.cancels = t.cancels.filter(id => ids.has(id) && id !== t.id);
   }
+  playBg = /^#[0-9a-f]{6}$/i.test(d.bg || '') ? d.bg : PALETTE[DEFAULT_BG].c;
   unlockers = (d.unlockers || []).map(u => ({ id: String(u.id), design: String(u.design || ''),
     combos: (u.combos || []).map(c => ({ id: String(c.id), code: (c.code || []).map(Number),
       opens: (c.opens || []).map(String).filter(id => ids.has(id)), cancels: (c.cancels || []).map(String).filter(id => ids.has(id)) })) }));
@@ -621,11 +657,23 @@ function drawGrid(W, H) {
 
 function draw() {
   const W = cv.width / dpr, H = cv.height / dpr;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = '#123b66';
-  ctx.fillRect(0, 0, W, H);
-  drawGrid(W, H);
   const now = performance.now();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (playing) {
+    drawSwirl(W, H, now);
+    // screen bump after a solve: everything but the background jolts
+    shakeOff = [0, 0];
+    if (play.kick) {
+      const e = (now - play.kick.t) / 320;
+      if (e >= 1) play.kick = null;
+      else { const k = (1 - e) * (1 - e) * play.kick.amp; shakeOff = [Math.sin(e * 40) * k, Math.cos(e * 33) * k * .7]; }
+    }
+    ctx.translate(shakeOff[0], shakeOff[1]);
+  } else {
+    ctx.fillStyle = '#123b66';
+    ctx.fillRect(0, 0, W, H);
+    drawGrid(W, H);
+  }
   let animating = false;
   const problems = playing ? new Map() : tileProblems();
 
@@ -641,13 +689,16 @@ function draw() {
     if (t.pts.length < 3) continue;
     if (playing) {
       if (!play.explored.has(t.id)) continue;
-      let alpha = 1;
+      // newly opened tiles pop in: fade + springy grow
+      let alpha = 1, pop = 1;
       if (play.reveal.has(t.id)) {
-        alpha = Math.max(0, Math.min(1, (now - play.reveal.get(t.id)) / 700));
-        if (alpha < 1) animating = true; else play.reveal.delete(t.id);
+        const e = Math.max(0, Math.min(1, (now - play.reveal.get(t.id)) / 650));
+        if (e >= 1) play.reveal.delete(t.id);
+        alpha = Math.min(1, e * 2.5);
+        pop = .35 + .65 * easeOutBack(e);
       }
       ctx.globalAlpha = alpha;
-      if (drawPlayTile(t, now)) animating = true;
+      if (drawPlayTile(t, now, pop)) animating = true;
       ctx.globalAlpha = 1;
     } else drawEditTile(t, problems.get(t.id));
   }
@@ -667,6 +718,9 @@ function draw() {
     drawEffects();
     if (sel) drawHandles();
     if (mode === 'draw') drawDrawing();
+  } else {
+    drawParticles(now);
+    crtGlow();
   }
   if (animating) render();
 }
@@ -779,51 +833,6 @@ function insetPoly(pts, d) {
   insetCache.set(key, out);
   return out;
 }
-
-// A chalk "?" — a hand-drawn font, softened with a faint smudge and
-// eaten into with tiny gaps like chalk dragged over a board. Built once per
-// size (the texture stays put as the tile floats) and redrawn once the
-// chalk font has loaded.
-const chalkCache = new Map();
-function chalkMark(size) {
-  const px = Math.round(size * dpr);
-  const key = px;
-  if (chalkCache.has(key)) return chalkCache.get(key);
-  const c = document.createElement('canvas');
-  c.width = Math.round(px * 1.1); c.height = Math.round(px * 1.3);
-  const g = c.getContext('2d');
-  g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.font = `${px}px 'Gochi Hand', 'Comic Sans MS', cursive`;
-  let seed = px * 9301 + 49297;
-  const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
-  const cx = c.width / 2, cy = c.height / 2 + px * .04;
-  // dusty halo, then the stroke itself drawn twice slightly offset
-  g.fillStyle = 'rgba(235,242,250,.10)';
-  for (let i = 0; i < 6; i++) g.fillText('?', cx + (rnd() - .5) * px * .06, cy + (rnd() - .5) * px * .06);
-  g.fillStyle = 'rgba(245,248,252,.9)';
-  g.fillText('?', cx, cy);
-  g.fillStyle = 'rgba(245,248,252,.35)';
-  g.fillText('?', cx + px * .012, cy - px * .01);
-  // chalk grain: knock out small specks and short streaks
-  g.globalCompositeOperation = 'destination-out';
-  const n = Math.round(c.width * c.height / 7);
-  for (let i = 0; i < n; i++) {
-    g.fillStyle = `rgba(0,0,0,${.2 + rnd() * .75})`;
-    g.fillRect(rnd() * c.width, rnd() * c.height, Math.max(1, rnd() * px * .018), Math.max(1, rnd() * px * .018));
-  }
-  g.lineCap = 'round';
-  for (let i = 0; i < n / 14; i++) {   // streaks where the chalk skipped
-    const x = rnd() * c.width, y = rnd() * c.height, L = px * (.04 + rnd() * .1);
-    g.strokeStyle = `rgba(0,0,0,${.3 + rnd() * .5})`;
-    g.lineWidth = Math.max(1, px * .01 * rnd());
-    g.beginPath(); g.moveTo(x, y); g.lineTo(x + L, y - L * .45); g.stroke();
-  }
-  g.globalCompositeOperation = 'source-over';
-  chalkCache.set(key, c);
-  return c;
-}
-if (document.fonts && document.fonts.load)
-  document.fonts.load("40px 'Gochi Hand'").then(() => { chalkCache.clear(); render(); }).catch(() => {});
 
 // The map's perimeter in test mode: where it runs along a solved tile it is a
 // neat line; everywhere else it looks drawn by a child in chalk — each piece
@@ -939,9 +948,16 @@ function makeGrainTile() {
   }
   return c;
 }
+let chalkKey = '';
 function drawChalkOutline() {
   if (!chalkLayer) chalkLayer = document.createElement('canvas');
   if (!grainTile) grainTile = makeGrainTile();
+  // The outline doesn't float, so the layer is only redrawn when the view,
+  // the canvas size or the neat/chalk split changes
+  outlineRuns();
+  const key = [view.x, view.y, view.z, cv.width, cv.height, dpr, runCache.key].join('|');
+  if (key === chalkKey) { blitChalk(); return; }
+  chalkKey = key;
   if (chalkLayer.width !== cv.width || chalkLayer.height !== cv.height) { chalkLayer.width = cv.width; chalkLayer.height = cv.height; }
   const g = chalkLayer.getContext('2d');
   g.setTransform(1, 0, 0, 1, 0, 0);
@@ -953,15 +969,7 @@ function drawChalkOutline() {
   const outSign = polyArea(outline.map(S)) > 0 ? -1 : 1;
   const segs = runs.filter(r => !r.solved).map(r => ({ a: runPt(r, r.t0), b: runPt(r, r.t1),
     seed: `${r.edge}:${r.t0.toFixed(3)}`, os1: r.t0 === 0, os2: r.t1 === 1 }));
-  // neat pieces: where solved tiles border the map
-  ctx.lineCap = 'round';
-  ctx.lineWidth = 3.5;
-  ctx.strokeStyle = 'rgba(240,247,255,.95)';
-  ctx.beginPath();
-  for (const r of runs) if (r.solved) { const p = S(runPt(r, r.t0)), q = S(runPt(r, r.t1)); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); }
-  ctx.stroke();
-  ctx.lineCap = 'butt';
-  if (!segs.length) return;
+  if (segs.length) {
   g.globalAlpha = .13;
   childSegs(g, segs, outSign, 1.4, 1, 5);   // chalk dust around the line
   g.globalAlpha = 1;
@@ -972,15 +980,261 @@ function drawChalkOutline() {
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.fillStyle = pat;
   g.fillRect(0, 0, chalkLayer.width, chalkLayer.height);
+  }
+  // neat pieces: where solved tiles border the map (no grain)
+  g.globalCompositeOperation = 'source-over';
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.lineCap = 'round';
+  g.lineWidth = 3.5;
+  g.strokeStyle = 'rgba(240,247,255,.95)';
+  g.beginPath();
+  for (const r of runs) if (r.solved) { const p = S(runPt(r, r.t0)), q = S(runPt(r, r.t1)); g.moveTo(p[0], p[1]); g.lineTo(q[0], q[1]); }
+  g.stroke();
+  blitChalk();
+}
+function blitChalk() {
   ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.setTransform(1, 0, 0, 1, shakeOff[0] * dpr, shakeOff[1] * dpr);
   ctx.drawImage(chalkLayer, 0, 0);
   ctx.restore();
 }
 
+// ── Test-mode look & feel ─────────────────────────────────────────────────────
+// Balatro-style: a pixelated swirling paint background in a faded-rainbow
+// colour, chunky pixel-art "?" signs, a CRT-TV glow, and "juice" — tiles
+// that sway, lift and lean toward the pointer, squish when pressed, pop in,
+// and a jolt + pixel burst + pop-up label when something is solved.
+const PALETTE = [
+  { n: 'Rose', c: '#d4848f' }, { n: 'Apricot', c: '#dda07a' }, { n: 'Butter', c: '#d8c27a' },
+  { n: 'Sage', c: '#93b98b' }, { n: 'Seafoam', c: '#7fb8ad' }, { n: 'Sky', c: '#85a9d1' },
+  { n: 'Periwinkle', c: '#9a93cf' }, { n: 'Lilac', c: '#bb93c8' },
+];
+const DEFAULT_BG = 5;
+let playBg = PALETTE[DEFAULT_BG].c;
+let shakeOff = [0, 0];
+const SWAY_RAD = .012;   // idle rock, radians (~0.7°)
+const hexRgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const easeOutBack = e => { const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(e - 1, 3) + c1 * Math.pow(e - 1, 2); };
+
+function renderPalettes() {
+  for (const id of ['palBar', 'palSide']) {
+    const el = document.getElementById(id);
+    el.innerHTML = '';
+    for (const p of PALETTE) {
+      const b = document.createElement('button');
+      b.className = 'swatch' + (p.c === playBg ? ' sel' : '');
+      b.style.background = p.c; b.title = p.n;
+      b.onclick = () => setPlayBg(p.c);
+      el.appendChild(b);
+    }
+  }
+}
+function setPlayBg(c) {
+  if (c === playBg) return;
+  playBg = c;
+  pushHistory();
+  renderPalettes();
+  document.getElementById('mapNameLbl').textContent = bpName + (isDirty() ? ' •' : '');
+  render();
+}
+
+// Swirling paint, computed at low resolution and blown up with hard pixel
+// edges. Recomputed ~25 times a second; the colour comes from playBg.
+const swirl = { cv: document.createElement('canvas'), data: null, last: -1e9, key: '' };
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+function drawSwirl(W, H, now) {
+  const cell = Math.max(3, Math.ceil(W / 170));
+  const w = Math.ceil(W / cell), h = Math.ceil(H / cell), sc = swirl.cv;
+  if (sc.width !== w || sc.height !== h) { sc.width = w; sc.height = h; swirl.data = null; }
+  const g = sc.getContext('2d');
+  if (!swirl.data) { swirl.data = g.createImageData(w, h); swirl.last = -1e9; }
+  if (now - swirl.last > 40 || swirl.key !== playBg) {
+    swirl.last = now; swirl.key = playBg;
+    const base = hexRgb(playBg);
+    const deep = base.map(v => v * .5), mid = base.map(v => v * .75), hi = base.map(v => v + (255 - v) * .4);
+    const t = now / 1000, d = swirl.data.data, asp = w / h;
+    let i = 0;
+    for (let y = 0; y < h; y++) {
+      const ny = y / h - .5;
+      for (let x = 0; x < w; x++) {
+        const nx = (x / w - .5) * asp;
+        const len = Math.sqrt(nx * nx + ny * ny);
+        const ang = Math.atan2(ny, nx) + len * 3 - t * .07;
+        let u = Math.cos(ang) * len * 5, v = Math.sin(ang) * len * 5;
+        for (let k = 0; k < 3; k++) {
+          const u2 = u + .6 * Math.sin(v * 1.1 + t * .27 + k * 1.3);
+          v += .6 * Math.sin(u * 1.1 - t * .22 + k * 2.1);
+          u = u2;
+        }
+        const dither = (BAYER[(y & 3) * 4 + (x & 3)] - 7.5) / 16;
+        let a = .5 + .5 * Math.sin(u * .9 + v * .6);
+        a = Math.max(0, Math.min(1, Math.round((a + dither * .22) * 4) / 4));   // a few flat, dithered bands
+        const streak = .5 + .5 * Math.sin(u * .5 - v * 1.1 + 2) + dither * .08 > .84;
+        let c0, c1, k;
+        if (a < .5) { c0 = deep; c1 = mid; k = a * 2; } else { c0 = mid; c1 = base; k = (a - .5) * 2; }
+        let r = c0[0] + (c1[0] - c0[0]) * k, gg = c0[1] + (c1[1] - c0[1]) * k, bb = c0[2] + (c1[2] - c0[2]) * k;
+        if (streak) { r += (hi[0] - r) * .6; gg += (hi[1] - gg) * .6; bb += (hi[2] - bb) * .6; }
+        d[i++] = r; d[i++] = gg; d[i++] = bb; d[i++] = 255;
+      }
+    }
+    g.putImageData(swirl.data, 0, 0);
+  }
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(sc, 0, 0, w * cell, h * cell);
+  ctx.imageSmoothingEnabled = true;
+}
+
+// Pixel-art "?" sprite: chalky white with a dark outline, a darker underside
+// and a drop shadow, drawn on a tiny grid and scaled up in whole pixels.
+const QMARK = [
+  '.####.',
+  '##..##',
+  '##..##',
+  '....##',
+  '...##.',
+  '..##..',
+  '..##..',
+  '......',
+  '..##..',
+  '..##..',
+];
+const pixelQCache = new Map();
+function pixelQ(size) {
+  const rows = QMARK.length, cols = QMARK[0].length;
+  const px = Math.max(2, Math.round(size * dpr / (rows + 3)));   // device px per art pixel
+  if (pixelQCache.has(px)) return pixelQCache.get(px);
+  const W = cols + 4, H = rows + 4, ox = 1, oy = 1;
+  const on = (x, y) => y >= 0 && y < rows && x >= 0 && x < cols && QMARK[y][x] === '#';
+  const cvq = document.createElement('canvas');
+  cvq.width = W * px; cvq.height = H * px;
+  const g = cvq.getContext('2d');
+  const cell = (x, y, col) => { g.fillStyle = col; g.fillRect((x + ox) * px, (y + oy) * px, px, px); };
+  const outlineAt = (x, y) => { for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) if (on(x + i, y + j)) return true; return false; };
+  for (let y = -1; y <= rows; y++) for (let x = -1; x <= cols; x++) if (outlineAt(x, y)) cell(x + 1, y + 1, 'rgba(6,14,28,.45)');   // shadow
+  for (let y = -1; y <= rows; y++) for (let x = -1; x <= cols; x++) if (outlineAt(x, y)) cell(x, y, '#0f2340');                    // outline
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (on(x, y))
+    cell(x, y, !on(x, y + 1) ? '#c9d2df' : (!on(x, y - 1) && !on(x - 1, y)) ? '#ffffff' : '#f3efe4');   // fill, shade, highlight
+  const out = { cv: cvq, px };
+  pixelQCache.set(px, out);
+  return out;
+}
+
+// Per-tile springs for the hover/press juice
+function tileFx(t, now) {
+  let f = play.fx.get(t.id);
+  if (!f) { f = { s: 1, vs: 0, sy: 1, vsy: 0, tx: 0, vtx: 0, ty: 0, vty: 0, t: now }; play.fx.set(t.id, f); }
+  const dt = Math.min(.05, Math.max(0, (now - f.t) / 1000)); f.t = now;
+  const interactive = !play.locked.has(t.id) && !play.solved.has(t.id);
+  const hov = interactive && play.hover === t.id, pressed = interactive && play.press === t.id;
+  const targetS = pressed ? .95 : hov ? 1.045 : 1;
+  let ttx = 0, tty = 0;
+  if (hov && play.hoverW) {
+    const { p, r } = labelInfo(t.pts);
+    const k = Math.max(r, 1) * 1.6;
+    ttx = Math.max(-1, Math.min(1, (play.hoverW[0] - p[0]) / k));
+    tty = Math.max(-1, Math.min(1, (play.hoverW[1] - p[1]) / k));
+  }
+  const spring = (x, v, target, k, d) => { v += ((target - x) * k - v * d) * dt; return [x + v * dt, v]; };
+  [f.s, f.vs] = spring(f.s, f.vs, targetS, 260, 14);
+  [f.sy, f.vsy] = spring(f.sy, f.vsy, 1, 300, 12);
+  [f.tx, f.vtx] = spring(f.tx, f.vtx, ttx, 120, 13);
+  [f.ty, f.vty] = spring(f.ty, f.vty, tty, 120, 13);
+  return f;
+}
+function squish(id, amount = .3) { const f = play.fx.get(id); if (f) f.vsy -= amount * 10; }
+
+// Pixel confetti and pop-up labels (world-anchored, so they move with the map)
+function burst(t, cols) {
+  const { p } = labelInfo(t.pts), now = performance.now();
+  for (let i = 0; i < 26; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 120 + Math.random() * 260;
+    play.parts.push({ w: p, x: 0, y: 0, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 140, born: now, life: 600 + Math.random() * 500,
+      size: 3 + Math.floor(Math.random() * 3), col: cols[i % cols.length] });
+  }
+}
+function popText(t, text, col) {
+  play.pops.push({ w: labelInfo(t.pts).p, text, col, born: performance.now() });
+}
+function drawParticles(now) {
+  if (!play.parts.length && !play.pops.length) return;
+  ctx.imageSmoothingEnabled = false;
+  play.parts = play.parts.filter(q => now - q.born < q.life);
+  for (const q of play.parts) {
+    const e = (now - q.born) / 1000, s = S(q.w);
+    const x = s[0] + q.vx * e, y = s[1] + q.vy * e + 520 * e * e;   // gravity
+    ctx.globalAlpha = Math.max(0, 1 - (now - q.born) / q.life);
+    ctx.fillStyle = q.col;
+    ctx.fillRect(Math.round(x), Math.round(y), q.size, q.size);
+  }
+  play.pops = play.pops.filter(q => now - q.born < 1300);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const q of play.pops) {
+    const e = (now - q.born) / 1300, s = S(q.w);
+    const scale = e < .15 ? easeOutBack(e / .15) : 1;
+    ctx.globalAlpha = e > .7 ? (1 - e) / .3 : 1;
+    ctx.save();
+    ctx.translate(s[0], s[1] - 24 - e * 46);
+    ctx.scale(scale, scale);
+    ctx.font = "700 20px 'Silkscreen', monospace";
+    ctx.lineWidth = 5; ctx.strokeStyle = '#0f2340'; ctx.lineJoin = 'round';
+    ctx.strokeText(q.text, 0, 0);
+    ctx.fillStyle = q.col;
+    ctx.fillText(q.text, 0, 0);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+  ctx.imageSmoothingEnabled = true;
+}
+function kick(amp = 6) { play.kick = { t: performance.now(), amp }; }
+
+// CRT glow: a blurred quarter-size copy of the frame screened back on top
+// (bloom), plus faint red / blue copies nudged sideways (colour fringing)
+const glow = { a: document.createElement('canvas'), r: document.createElement('canvas'), b: document.createElement('canvas') };
+let glowAt = -1e9;
+function crtGlow() {
+  const w = Math.max(1, Math.ceil(cv.width / 6)), h = Math.max(1, Math.ceil(cv.height / 6));
+  const now = performance.now();
+  if (glow.a.width !== w || glow.a.height !== h) { for (const c of Object.values(glow)) { c.width = w; c.height = h; } glowAt = -1e9; }
+  if (now - glowAt > 50) { glowAt = now; buildGlow(w, h); }
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = .26;
+  ctx.drawImage(glow.a, 0, 0, cv.width, cv.height);
+  ctx.globalAlpha = .1;
+  ctx.drawImage(glow.r, 1.6 * dpr, 0, cv.width, cv.height);
+  ctx.drawImage(glow.b, -1.6 * dpr, 0, cv.width, cv.height);
+  ctx.restore();
+}
+function buildGlow(w, h) {
+  const ga = glow.a.getContext('2d');
+  ga.clearRect(0, 0, w, h);
+  ga.filter = 'blur(2px)';
+  ga.drawImage(cv, 0, 0, w, h);
+  ga.filter = 'none';
+  const tint = (c, col) => {
+    const g = c.getContext('2d');
+    g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, w, h); g.drawImage(cv, 0, 0, w, h);
+    g.globalCompositeOperation = 'multiply'; g.fillStyle = col; g.fillRect(0, 0, w, h);
+    g.globalCompositeOperation = 'source-over';
+  };
+  tint(glow.r, '#ff3030'); tint(glow.b, '#3070ff');
+}
+// Film-grain tile for the CRT overlay
+(function makeCrtGrain() {
+  const c = document.getElementById('crtGrain');
+  c.width = 256; c.height = 256;
+  const g = c.getContext('2d'), img = g.createImageData(256, 256);
+  for (let i = 0; i < img.data.length; i += 4) { const v = Math.random() * 255; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+  g.putImageData(img, 0, 0);
+  c.style.width = 'calc(100% + 128px)'; c.style.height = 'calc(100% + 128px)';
+  c.style.imageRendering = 'pixelated';
+})();
+
 // Returns true while the tile is animating (always, in test mode — tiles float)
-function drawPlayTile(t, now) {
+function drawPlayTile(t, now, pop = 1) {
   const { c, rs, fs } = tileFont(t);
+  const fx = tileFx(t, now);
   ctx.save();
   // Float: every tile drifts back and forth through its resting spot along a
   // direction that slowly turns (up, down, left, right and between), each tile
@@ -1003,20 +1257,43 @@ function drawPlayTile(t, now) {
     if (e >= 1) play.shake.delete(t.id);
     else { const k = 1 - e; dx += 5 * k * Math.sin(e * Math.PI * 7); rot = .05 * k * Math.sin(e * Math.PI * 5); }
   }
-  ctx.translate(dx, dy);
-  if (rot) { ctx.translate(c[0], c[1]); ctx.rotate(rot); ctx.translate(-c[0], -c[1]); }
+  // idle sway: a slow little rock, like a card held loosely (stops when locked)
+  rot += SWAY_RAD * still * Math.sin(now / (2600 * (.85 + .3 * h1)) + ph * 3);
+  // hover / press juice: lift, lean toward the pointer, squish when pressed.
+  // Amounts are capped in screen px so big and small tiles move alike.
+  const shape = insetPoly(t.pts, TILE_GAP_PX / 2 / view.z);
+  let R = 1;
+  for (const v of shape) { const q = S(v); R = Math.max(R, Math.hypot(q[0] - c[0], q[1] - c[1])); }
+  const sz = Math.min(1, 140 / R);                // shrink effects on big tiles
+  const sc = 1 + (fx.s - 1) * sz, scy = 1 + (fx.sy - 1) * sz;
+  rot += fx.tx * .05 * Math.min(1, 90 / R);       // lean: edges move at most ~4-5px
+  ctx.translate(dx, dy - (sc - 1) * 40);
+  // drop shadow on the board below: grows and softens as the tile lifts
+  const lift = Math.max(0, sc - 1);
+  ctx.save();
+  ctx.translate(c[0] + 2, c[1] + 4 + lift * 80); ctx.scale(pop * sc, pop * sc); ctx.translate(-c[0], -c[1]);
+  pathRounded(shape, CORNER_PX);
+  ctx.fillStyle = `rgba(0,0,0,${.28 - lift * .8})`;
+  ctx.fill();
+  ctx.restore();
+  ctx.translate(c[0], c[1]);
+  if (rot) ctx.rotate(rot);
+  ctx.scale(pop * sc, pop * sc * scy);
+  const sk = .05 * Math.min(1, 90 / R);
+  ctx.transform(1, fx.ty * sk, fx.tx * -sk * .6, 1, 0, 0);   // lean toward the pointer
+  ctx.translate(-c[0], -c[1]);
   let faceUp = play.flipped.has(t.id), anim = true;
   if (play.flip.has(t.id)) {
     const p = Math.min(1, (now - play.flip.get(t.id)) / 420);
     if (p >= 1) play.flip.delete(t.id);
     faceUp = p >= .5;
     ctx.translate(c[0], c[1]);
-    ctx.scale(Math.max(.02, Math.abs(Math.cos(p * Math.PI))), 1);
+    const bump = 1 + .1 * Math.sin(p * Math.PI);   // pops up a little mid-flip
+    ctx.scale(Math.max(.02, Math.abs(Math.cos(p * Math.PI))) * bump, bump);
     ctx.translate(-c[0], -c[1]);
   }
   // Solved and cancelled tiles look exactly the same: locked
   const locked = play.locked.has(t.id) || play.solved.has(t.id);
-  const shape = insetPoly(t.pts, TILE_GAP_PX / 2 / view.z);
   pathRounded(shape, CORNER_PX);
   ctx.fillStyle = '#123b66'; ctx.fill();   // cover the outline's "unknown" hatching
   ctx.fillStyle = locked ? 'rgba(30,38,50,.92)' : faceUp ? 'rgba(235,244,255,.85)' : 'rgba(220,236,255,.18)';
@@ -1037,10 +1314,15 @@ function drawPlayTile(t, now) {
     const k = r * Math.SQRT1_2;
     ctx.beginPath(); ctx.moveTo(c[0] - k, c[1] - k); ctx.lineTo(c[0] + k, c[1] + k); ctx.stroke();
   } else if (!faceUp) {
-    // The sign to tap: a big chalk-drawn question mark
-    const size = Math.max(22, Math.min(rs * 1.6, 110));
-    const mark = chalkMark(size);
-    ctx.drawImage(mark, c[0] - mark.width / dpr / 2, c[1] - mark.height / dpr / 2, mark.width / dpr, mark.height / dpr);
+    // The sign to tap: a chunky pixel-art question mark that bobs in whole
+    // art-pixel steps, like an old game sprite
+    const size = Math.max(24, Math.min(rs * 1.5, 110));
+    const q = pixelQ(size);
+    const bob = Math.round(Math.sin(now / 520 + ph * 5) * 1.2) * q.px / dpr;
+    const qw = q.cv.width / dpr, qh = q.cv.height / dpr;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(q.cv, Math.round(c[0] - qw / 2), Math.round(c[1] - qh / 2 + bob), qw, qh);
+    ctx.imageSmoothingEnabled = true;
   } else {
     const kind = chunkKind(t.chunk);
     ctx.fillStyle = '#123b66';
@@ -1470,6 +1752,7 @@ function refreshAll() {
   if (selVertex !== null && (!pts || selVertex >= pts.length)) selVertex = null;
   refreshPanels();
   renderUnlockers();
+  renderPalettes();
   renderChecks();
   document.getElementById('mapNameLbl').textContent = bpName + (isDirty() ? ' •' : '');
   document.getElementById('mSelect').classList.toggle('active', mode === 'select' && !(sel && sel.kind === 'outline'));
@@ -1506,6 +1789,7 @@ cv.addEventListener('pointerdown', e => {
   }
   if (pointers.size > 2) return;
   const w = toWorld(s[0], s[1]);
+  if (playing) { const pt = playTileAt(w); play.press = pt ? pt.id : null; if (e.pointerType !== 'mouse') { play.hover = play.press; play.hoverW = w; } }
   gesture = { type: 'tap', start: s, last: s, w0: w, moved: false, dirty: false, touch: e.pointerType === 'touch' };
   if (e.button === 1 || e.button === 2 || spaceDown) { gesture.type = 'pan'; return; }
   if (!playing && mode === 'select' && sel) {
@@ -1525,6 +1809,11 @@ cv.addEventListener('pointermove', e => {
   const s = localXY(e);
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, s);
   if (e.pointerType === 'mouse') { hoverW = toWorld(s[0], s[1]); if (mode === 'draw' && !gesture) render(); }
+  if (playing && (e.pointerType === 'mouse' || pointers.has(e.pointerId))) {
+    const w = toWorld(s[0], s[1]), pt = playTileAt(w);
+    play.hover = pt ? pt.id : null; play.hoverW = w;
+    cv.style.cursor = pt && !play.locked.has(pt.id) && !play.solved.has(pt.id) ? 'pointer' : 'default';
+  }
   if (!gesture) return;
   if (gesture.type === 'pinch') {
     if (pointers.size < 2) return;
@@ -1582,6 +1871,7 @@ cv.addEventListener('pointermove', e => {
 
 function endPointer(e) {
   pointers.delete(e.pointerId);
+  if (playing && play) { play.press = null; if (e.pointerType !== 'mouse') play.hover = null; }
   if (!gesture) return;
   if (gesture.type === 'pinch') { if (pointers.size === 0) gesture = null; return; }
   if (pointers.size > 0) return;
@@ -1610,7 +1900,7 @@ function handleTap(g) {
 }
 cv.addEventListener('pointerup', endPointer);
 cv.addEventListener('pointercancel', endPointer);
-cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') { hoverW = null; render(); } });
+cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') { hoverW = null; if (playing && play) { play.hover = null; play.press = null; } render(); } });
 cv.addEventListener('contextmenu', e => e.preventDefault());
 cv.addEventListener('wheel', e => {
   e.preventDefault();
@@ -1656,7 +1946,8 @@ let openTile = null;
 
 function resetPlay() {
   play = { explored: new Set(tiles.filter(t => t.start).map(t => t.id)),
-    flipped: new Set(), solved: new Set(), locked: new Set(), flip: new Map(), reveal: new Map(), shake: new Map(), stillAt: new Map(), usedCombos: new Set(), busy: false };
+    flipped: new Set(), solved: new Set(), locked: new Set(), flip: new Map(), reveal: new Map(), shake: new Map(), stillAt: new Map(), usedCombos: new Set(), busy: false,
+    fx: new Map(), hover: null, hoverW: null, press: null, parts: [], pops: [], kick: null };
   closeTileView();
   closeUlView();
   statusMsg = '';
@@ -1677,10 +1968,13 @@ function togglePlay() {
   if (playing) resetPlay(); else { closeTileView(); closeUlView(); refreshAll(); }
   updateStatus();
 }
-function playTap(w) {
-  let t = null;
+function playTileAt(w) {
   for (let i = tiles.length - 1; i >= 0; i--)
-    if (play.explored.has(tiles[i].id) && tiles[i].pts.length >= 3 && pip(w, tiles[i].pts)) { t = tiles[i]; break; }
+    if (play.explored.has(tiles[i].id) && tiles[i].pts.length >= 3 && pip(w, tiles[i].pts)) return tiles[i];
+  return null;
+}
+function playTap(w) {
+  const t = playTileAt(w);
   if (!t) return;
   // Solved puzzles lock themselves, just like cancelled tiles
   if (play.locked.has(t.id) || play.solved.has(t.id)) { setStatus(`${tileName(t)} is locked.`); return; }
@@ -1688,6 +1982,7 @@ function playTap(w) {
   play.busy = true;
   const P = play;   // ignore these timers if the test is stopped or restarted
   play.shake.set(t.id, performance.now());
+  squish(t.id, .35);
   render();
   setTimeout(() => {
     if (!playing || play !== P) return;
@@ -1722,11 +2017,17 @@ function closeTileView() {
 function applyEffects(src) {
   let locked = 0, opened = 0;
   for (const id of src.cancels)   // only explored, unsolved tiles can be cancelled
-    if (play.explored.has(id) && !play.locked.has(id) && !play.solved.has(id)) { play.locked.add(id); play.stillAt.set(id, performance.now()); locked++; }
+    if (play.explored.has(id) && !play.locked.has(id) && !play.solved.has(id)) {
+      play.locked.add(id); play.stillAt.set(id, performance.now()); locked++;
+      squish(id, .5);
+      const t = tileById(id); if (t) popText(t, 'LOCKED', '#c3cbd6');
+    }
   for (const id of src.opens) if (!play.explored.has(id)) {
     play.explored.add(id);
     play.reveal.set(id, performance.now() + 250);
     opened++;
+    const t = tileById(id);
+    if (t) setTimeout(() => { if (play && play.explored.has(id)) burst(t, ['#ffffff', playBg]); }, 420);
   }
   render();
   return (opened ? ` · ${opened} new tile(s) opened` : '') + (locked ? ` · ${locked} tile(s) locked` : '');
@@ -1737,6 +2038,10 @@ function solveOpenTile() {
   play.solved.add(t.id);
   play.stillAt.set(t.id, performance.now());
   closeTileView();
+  // juice: jolt, pixel burst, pop-up label
+  kick(7); squish(t.id, .6);
+  burst(t, ['#ffffff', '#f3efe4', playBg, '#ffd166']);
+  popText(t, 'SOLVED!', '#ffd166');
   setStatus(`${tileName(t)} solved` + applyEffects(t));
 }
 
@@ -1881,6 +2186,7 @@ function openUlPlay(u) {
       if (play.usedCombos.has(c.id)) { ctl.shake(); msg.textContent = 'That combination has already been used.'; return; }
       play.usedCombos.add(c.id);
       ctl.flashOk();
+      kick(5);
       msg.textContent = 'Unlocked!';
       const summary = applyEffects(c);
       setTimeout(() => { closeUlView(); setStatus(`${unlockerName(u)} ${comboLabel(c)} entered` + summary); }, 650);
@@ -2085,6 +2391,7 @@ window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 buildChunkSelect();
+renderPalettes();
 loadDesignList();
 new ResizeObserver(resizeCanvas).observe(document.getElementById('canvasWrap'));
 pushHistory(); markSaved();
