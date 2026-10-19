@@ -654,7 +654,7 @@ function draw() {
 
   // Outline stroke on top so the perimeter is always visible. While testing /
   // playing, the map's perimeter looks drawn by a child.
-  if (playing && outline.length >= 3) strokeChildish(outline, 'outline', 1.4, 1);
+  if (playing && outline.length >= 3) drawChalkOutline();
   else if (outline.length >= 2) {
     pathPoly(outline);
     ctx.strokeStyle = 'rgba(240,247,255,.95)';
@@ -829,7 +829,7 @@ if (document.fonts && document.fonts.load)
 // its own wobbly stroke that overshoots the corners, gone over a second time a
 // little off the first. The wobble is seeded by id and measured in screen px,
 // so it is the same every frame and at any zoom. k scales the line widths.
-function strokeChildish(pts, id, k = 1, outward = 0) {
+function strokeChildish(pts, id, k = 1, outward = 0, g = ctx, extra = 0) {
   const P = pts.map(S), n = P.length;
   // outward > 0 pushes the wobble that many px outside the shape so it
   // doesn't wander over what's inside (left normals point inward when area > 0)
@@ -837,10 +837,10 @@ function strokeChildish(pts, id, k = 1, outward = 0) {
   let seed = 0;
   for (const ch of id) seed = (seed * 31 + ch.charCodeAt(0)) % 233280;
   const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  g.lineCap = 'round'; g.lineJoin = 'round';
   for (const [width, alpha] of [[2.6, .95], [1.5, .6]]) {
-    ctx.lineWidth = width * k;
-    ctx.strokeStyle = `rgba(240,247,255,${alpha})`;
+    g.lineWidth = width * k + extra;
+    g.strokeStyle = `rgba(240,247,255,${alpha})`;
     for (let i = 0; i < n; i++) {
       const a = P[i], b = P[(i + 1) % n];
       const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy);
@@ -853,17 +853,66 @@ function strokeChildish(pts, id, k = 1, outward = 0) {
       const f1 = 1 + rnd() * 2, f2 = 3 + rnd() * 4, p1 = rnd() * 6.28, p2 = rnd() * 6.28;
       const A1 = Math.min(3.6, L * .045) * (.7 + rnd() * .6), A2 = A1 * .45;
       const steps = Math.max(3, Math.ceil((L + o1 + o2) / 9));
-      ctx.beginPath();
+      g.beginPath();
       for (let k = 0; k <= steps; k++) {
         const tt = k / steps, along = -o1 + tt * (L + o1 + o2);
         const off = A1 * Math.sin(tt * Math.PI * f1 + p1) + A2 * Math.sin(tt * Math.PI * f2 + p2) + e1 + (e2 - e1) * tt
           + outSign * (outward ? outward + A1 + A2 + Math.max(Math.abs(e1), Math.abs(e2)) : 0);
         const x = a[0] + ux * along + nx * off, y = a[1] + uy * along + ny * off;
-        k ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+        k ? g.lineTo(x, y) : g.moveTo(x, y);
       }
-      ctx.stroke();
+      g.stroke();
     }
   }
+}
+
+// The child-drawn perimeter, in chalk: the strokes (plus a faint dusty halo)
+// go onto their own layer, which then has chalk grain knocked out of it. The
+// grain is a fixed tile anchored to the map, so it moves with the map when
+// panning instead of shimmering.
+let chalkLayer = null, grainTile = null;
+function makeGrainTile() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d');
+  let seed = 4242;
+  const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+  for (let i = 0; i < 9000; i++) {   // specks where the chalk didn't catch
+    g.fillStyle = `rgba(0,0,0,${.15 + rnd() * .8})`;
+    g.fillRect(rnd() * 256, rnd() * 256, .6 + rnd() * 1.6, .6 + rnd() * 1.6);
+  }
+  g.lineCap = 'round';
+  for (let i = 0; i < 260; i++) {   // short skips along the drag direction
+    const x = rnd() * 256, y = rnd() * 256, L = 2 + rnd() * 7, a = rnd() * Math.PI;
+    g.strokeStyle = `rgba(0,0,0,${.3 + rnd() * .55})`;
+    g.lineWidth = .5 + rnd() * 1.2;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * L, y + Math.sin(a) * L); g.stroke();
+  }
+  return c;
+}
+function drawChalkOutline() {
+  if (!chalkLayer) chalkLayer = document.createElement('canvas');
+  if (!grainTile) grainTile = makeGrainTile();
+  if (chalkLayer.width !== cv.width || chalkLayer.height !== cv.height) { chalkLayer.width = cv.width; chalkLayer.height = cv.height; }
+  const g = chalkLayer.getContext('2d');
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalCompositeOperation = 'source-over';
+  g.clearRect(0, 0, chalkLayer.width, chalkLayer.height);
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.globalAlpha = .13;
+  strokeChildish(outline, 'outline', 1.4, 1, g, 5);   // chalk dust around the line
+  g.globalAlpha = 1;
+  strokeChildish(outline, 'outline', 1.4, 1, g);
+  g.globalCompositeOperation = 'destination-out';
+  const pat = g.createPattern(grainTile, 'repeat');
+  pat.setTransform(new DOMMatrix([dpr, 0, 0, dpr, (view.x * dpr) % (256 * dpr), (view.y * dpr) % (256 * dpr)]));   // same grain size on any screen
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.fillStyle = pat;
+  g.fillRect(0, 0, chalkLayer.width, chalkLayer.height);
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(chalkLayer, 0, 0);
+  ctx.restore();
 }
 
 // Returns true while the tile is animating (always, in test mode — tiles float)
