@@ -2042,7 +2042,7 @@ function closeTileView() {
 // Cancelled tiles lock one after the other, LOCK_STAGGER_MS apart, nearest
 // to the solved tile first (in list order for unlocker combinations); then
 // the opened tiles appear one after the other at the same pace.
-const LOCK_STAGGER_MS = 260;
+const LOCK_STAGGER_MS = 200;
 function applyEffects(src, origin) {
   let opened = 0;
   // only explored, unsolved tiles can be cancelled
