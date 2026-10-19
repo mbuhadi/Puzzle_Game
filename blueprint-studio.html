@@ -1971,7 +1971,7 @@ let openTile = null;
 
 function resetPlay() {
   play = { explored: new Set(tiles.filter(t => t.start).map(t => t.id)),
-    flipped: new Set(), solved: new Set(), locked: new Set(), flip: new Map(), reveal: new Map(), shake: new Map(), stillAt: new Map(), usedCombos: new Set(), busy: false,
+    flipped: new Set(), solved: new Set(), locked: new Set(), flip: new Map(), reveal: new Map(), shake: new Map(), stillAt: new Map(), usedCombos: new Set(), busy: false, pendingLock: new Set(),
     fx: new Map(), hover: null, hoverW: null, press: null, parts: [], pops: [], kick: null };
   closeTileView();
   closeUlView();
@@ -2002,7 +2002,7 @@ function playTap(w) {
   const t = playTileAt(w);
   if (!t) return;
   // Solved puzzles lock themselves, just like cancelled tiles
-  if (play.locked.has(t.id) || play.solved.has(t.id)) { setStatus(`${tileName(t)} is locked.`); return; }
+  if (play.locked.has(t.id) || play.solved.has(t.id) || play.pendingLock.has(t.id)) { setStatus(`${tileName(t)} is locked.`); return; }
   if (play.busy) return;   // a tile is already shaking/flipping
   play.busy = true;
   const P = play;   // ignore these timers if the test is stopped or restarted
@@ -2039,14 +2039,32 @@ function closeTileView() {
   openTile = null;
 }
 // Apply a solved puzzle's or entered combination's effects; returns a summary
-function applyEffects(src) {
-  let locked = 0, opened = 0;
-  for (const id of src.cancels)   // only explored, unsolved tiles can be cancelled
-    if (play.explored.has(id) && !play.locked.has(id) && !play.solved.has(id)) {
-      play.locked.add(id); play.stillAt.set(id, performance.now()); locked++;
+// Cancelled tiles lock one after the other, LOCK_STAGGER_MS apart, nearest
+// to the solved tile first (in list order for unlocker combinations).
+const LOCK_STAGGER_MS = 260;
+function applyEffects(src, origin) {
+  let opened = 0;
+  // only explored, unsolved tiles can be cancelled
+  let toLock = src.cancels.filter(id => play.explored.has(id) && !play.locked.has(id) && !play.solved.has(id) && !play.pendingLock.has(id));
+  if (origin) {
+    const o = labelInfo(origin.pts).p;
+    const d = id => { const t = tileById(id); return t ? dist(labelInfo(t.pts).p, o) : 0; };
+    toLock.sort((a, b) => d(a) - d(b));
+  }
+  const P = play;
+  toLock.forEach((id, i) => {
+    play.pendingLock.add(id);   // can't be opened while it waits its turn
+    setTimeout(() => {
+      if (!playing || play !== P) return;
+      play.pendingLock.delete(id);
+      if (play.locked.has(id) || play.solved.has(id)) return;
+      play.locked.add(id); play.stillAt.set(id, performance.now());
       squish(id, .5);
       const t = tileById(id); if (t) popText(t, 'LOCKED', '#c3cbd6');
-    }
+      render();
+    }, LOCK_STAGGER_MS * (i + (origin ? 1 : 0)));
+  });
+  const locked = toLock.length;
   for (const id of src.opens) if (!play.explored.has(id)) {
     play.explored.add(id);
     play.reveal.set(id, performance.now() + 250);
@@ -2067,7 +2085,7 @@ function solveOpenTile() {
   kick(7); squish(t.id, .6);
   burst(t, ['#ffffff', '#f3efe4', playBg, '#ffd166']);
   popText(t, 'SOLVED!', '#ffd166');
-  setStatus(`${tileName(t)} solved` + applyEffects(t));
+  setStatus(`${tileName(t)} solved` + applyEffects(t, t));
 }
 
 // ── Constant unlockers ────────────────────────────────────────────────────────
