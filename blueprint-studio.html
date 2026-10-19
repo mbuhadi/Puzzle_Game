@@ -850,10 +850,12 @@ function insetPoly(pts, d) {
 
 // Split the outline into runs along each edge: solved = a solved or locked tile borders
 // it there. Cached until the outline or the set of solved tiles changes.
+const SMOOTH_DONE_EDGES = false;   // true = neat edge along solved / locked tiles
 let runCache = { key: '', runs: [] };
 function outlineRuns() {
-  // "done" tiles — solved or locked (cancelled) — get a smooth edge
-  const done = new Set([...play.solved, ...play.locked]);
+  // "done" tiles — solved or locked (cancelled) — can get a smooth edge.
+  // Switched off: the whole perimeter stays a child's chalk drawing.
+  const done = SMOOTH_DONE_EDGES ? new Set([...play.solved, ...play.locked]) : new Set();
   const key = outline.join(';') + '|' + [...done].sort().join(',');
   if (runCache.key === key) return runCache.runs;
   const solvedTiles = tiles.filter(t => done.has(t.id) && t.pts.length >= 3);
