@@ -127,6 +127,11 @@ body.playing #ulBar.has { display: flex; }
 #crt { position: absolute; inset: 0; pointer-events: none; z-index: 3; display: none; border-radius: 22px / 26px; overflow: hidden;
   box-shadow: inset 0 0 0 3px rgba(0,0,0,.55), inset 0 0 60px rgba(0,0,0,.55); }
 body.playing #crt { display: block; }
+#rotateCover { display: none; position: fixed; inset: 0; z-index: 10000; background: #14161c; color: #e8e4d8;
+  flex-direction: column; align-items: center; justify-content: center; gap: 18px; font: 600 18px system-ui, sans-serif; text-align: center; padding: 24px; }
+#rotateCover .phone { width: 44px; height: 76px; border: 4px solid currentColor; border-radius: 9px; animation: rotPhone 2.2s ease-in-out infinite; }
+@keyframes rotPhone { 0%, 30% { transform: rotate(-90deg); } 60%, 100% { transform: rotate(0deg); } }
+@media (orientation: landscape) and (pointer: coarse) { body.playing #rotateCover { display: flex; } }
 body.playing #canvasWrap { border-radius: 22px / 26px; }
 #crt::before { content: ''; position: absolute; inset: 0;
   background: repeating-linear-gradient(to bottom, rgba(0,0,0,.16) 0, rgba(0,0,0,.16) 1px, transparent 1px, transparent 3px); }
@@ -577,6 +582,23 @@ function playZoomLimits() {
   const zMax = smallest ? PLAY_ZOOM_IN_FILL * fitZ(bbox(smallest.pts)) : zMin * 4;
   return [zMin, Math.max(zMin, zMax)];
 }
+// Test mode: the map can't be dragged off screen. A map smaller than the
+// screen stays fully inside it; a bigger one can't pull its edge in past the
+// screen edge (PLAY_EDGE_PX of slack either way).
+const PLAY_EDGE_PX = 12;
+function clampPlayView() {
+  const pts = outline.length >= 3 ? outline : tiles.flatMap(t => t.pts);
+  const r = cv.getBoundingClientRect();
+  if (!pts.length || !r.width) return;
+  const b = bbox(pts), m = PLAY_EDGE_PX;
+  const axis = (off, a0, a1, size) => {
+    const w = (a1 - a0) * view.z, lo = Math.min(m, size - m - w), hi = Math.max(m, size - m - w);
+    const s0 = a0 * view.z + off;
+    return off + Math.max(lo, Math.min(hi, s0)) - s0;
+  };
+  view.x = axis(view.x, b.x0, b.x1, r.width);
+  view.y = axis(view.y, b.y0, b.y1, r.height);
+}
 function zoomAt(px, py, f) {
   const [lo, hi] = playing ? playZoomLimits() : [.05, 12];
   const nz = Math.max(lo, Math.min(hi, view.z * f));
@@ -660,7 +682,7 @@ let renderQueued = false;
 function render() {
   if (renderQueued) return;
   renderQueued = true;
-  requestAnimationFrame(() => { renderQueued = false; draw(); });
+  requestAnimationFrame(() => { renderQueued = false; if (playing) clampPlayView(); draw(); });
 }
 
 function drawGrid(W, H) {
@@ -2137,9 +2159,29 @@ function togglePlay() {
   document.getElementById('playBtn').textContent = playing ? '■ Stop' : '▶ Test';
   document.getElementById('playBtn').classList.toggle('active', playing);
   statusMsg = '';
-  if (playing) { resetPlay(); const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1); }
-  else { closeTileView(); closeUlView(); refreshAll(); }
+  if (playing) { resetPlay(); const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1); lockPortrait(); }
+  else { closeTileView(); closeUlView(); refreshAll(); unlockPortrait(); }
   updateStatus();
+}
+// The game is portrait-only on phones and tablets. Where the browser allows it
+// (Android Chrome) test mode goes fullscreen and locks the screen upright;
+// elsewhere a "rotate your device" cover hides the game while it's sideways.
+const TOUCH_DEVICE = matchMedia('(pointer: coarse)').matches;
+let wentFullscreen = false;
+async function lockPortrait() {
+  if (!TOUCH_DEVICE) return;
+  try {
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      wentFullscreen = true;
+    }
+    await screen.orientation.lock('portrait');
+  } catch (e) { /* not supported here: the rotate cover takes over */ }
+}
+function unlockPortrait() {
+  try { screen.orientation.unlock(); } catch (e) {}
+  if (wentFullscreen && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  wentFullscreen = false;
 }
 function playTileAt(w) {
   for (let i = tiles.length - 1; i >= 0; i--)
@@ -2610,5 +2652,6 @@ resizeCanvas();
 refreshAll();
 fitView();
 </script>
+<div id="rotateCover"><div class="phone"></div><div>Turn your device upright to play</div></div>
 </body>
 </html>
