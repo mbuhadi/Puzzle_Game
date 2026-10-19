@@ -825,48 +825,97 @@ function chalkMark(size) {
 if (document.fonts && document.fonts.load)
   document.fonts.load("40px 'Gochi Hand'").then(() => { chalkCache.clear(); render(); }).catch(() => {});
 
-// The map's perimeter in test mode, drawn like a child would: every edge is
-// its own wobbly stroke that overshoots the corners, gone over a second time a
-// little off the first. The wobble is seeded by id and measured in screen px,
-// so it is the same every frame and at any zoom. k scales the line widths.
-function strokeChildish(pts, id, k = 1, outward = 0, g = ctx, extra = 0) {
-  const P = pts.map(S), n = P.length;
-  // outward > 0 pushes the wobble that many px outside the shape so it
-  // doesn't wander over what's inside (left normals point inward when area > 0)
-  const outSign = polyArea(P) > 0 ? -1 : 1;
-  let seed = 0;
-  for (const ch of id) seed = (seed * 31 + ch.charCodeAt(0)) % 233280;
-  const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+// The map's perimeter in test mode: where it runs along a solved tile it is a
+// neat line; everywhere else it looks drawn by a child in chalk — each piece
+// is its own wobbly stroke that overshoots the map's corners, gone over a
+// second time a little off the first. The wobble is seeded per piece and
+// measured in screen px, so it is the same every frame and at any zoom.
+
+// Split the outline into runs along each edge: solved = a solved tile borders
+// it there. Cached until the outline or the set of solved tiles changes.
+let runCache = { key: '', runs: [] };
+function outlineRuns() {
+  const key = outline.join(';') + '|' + [...play.solved].sort().join(',');
+  if (runCache.key === key) return runCache.runs;
+  const solvedTiles = tiles.filter(t => play.solved.has(t.id) && t.pts.length >= 3);
+  const TOL = 3;   // world units: a tile edge this close to the outline borders it
+  const runs = [], n = outline.length;
+  for (let i = 0; i < n; i++) {
+    const a = outline[i], b = outline[(i + 1) % n], L = dist(a, b);
+    if (L < 1e-6) continue;
+    const N = Math.min(400, Math.max(8, Math.ceil(L / 4)));
+    const at = t => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    const st = [];
+    for (let k = 0; k < N; k++) { const p = at((k + .5) / N); st.push(solvedTiles.some(tl => edgeDist(p, tl.pts) < TOL)); }
+    // tile corners on this edge, to snap run boundaries onto
+    const corners = [];
+    for (const tl of solvedTiles) for (const v of tl.pts) {
+      const q = closestOnSeg(v, a, b);
+      if (dist(q, v) < TOL) corners.push(dist(a, q) / L);
+    }
+    const snapT = t => { let best = t, bd = 1.5 / N; for (const c of corners) if (Math.abs(c - t) < bd) { bd = Math.abs(c - t); best = c; } return best; };
+    let s0 = 0;
+    const edgeRuns = [];
+    for (let k = 1; k <= N; k++) if (k === N || st[k] !== st[s0]) {
+      edgeRuns.push({ edge: i, t0: s0 ? snapT(s0 / N) : 0, t1: k < N ? snapT(k / N) : 1, solved: st[s0], a, b });
+      s0 = k;
+    }
+    // drop slivers (e.g. a solved tile only touching the edge at a corner) and
+    // merge neighbours that end up the same
+    for (const r of edgeRuns) if ((r.t1 - r.t0) * L < TOL * 2 && edgeRuns.length > 1) r.solved = null;
+    const merged = [];
+    for (const r of edgeRuns) {
+      const prev = merged[merged.length - 1];
+      if (r.solved === null) { if (prev) prev.t1 = r.t1; else r.solved = false, merged.push(r); continue; }
+      if (prev && prev.solved === r.solved) prev.t1 = r.t1; else merged.push(r);
+    }
+    if (merged.length && merged[0].solved === null) merged[0].solved = false;
+    runs.push(...merged);
+  }
+  runCache = { key, runs };
+  return runs;
+}
+const runPt = (r, t) => [r.a[0] + (r.b[0] - r.a[0]) * t, r.a[1] + (r.b[1] - r.a[1]) * t];
+
+// Child-drawn strokes for pieces of the outline. segs: { a, b (world), seed,
+// os1, os2 (overshoot the start / end?) }. outSign / outward push the wobble
+// outward so it doesn't wander over the tiles. k scales the line widths,
+// extra widens them (for the dusty halo pass).
+function childSegs(g, segs, outSign, k = 1, outward = 0, extra = 0) {
   g.lineCap = 'round'; g.lineJoin = 'round';
-  for (const [width, alpha] of [[2.6, .95], [1.5, .6]]) {
+  for (const [width, alpha, pass] of [[2.6, .95, 0], [1.5, .6, 1]]) {
     g.lineWidth = width * k + extra;
     g.strokeStyle = `rgba(240,247,255,${alpha})`;
-    for (let i = 0; i < n; i++) {
-      const a = P[i], b = P[(i + 1) % n];
+    for (const sg of segs) {
+      let seed = 7 + pass * 101;
+      for (const ch of sg.seed) seed = (seed * 31 + ch.charCodeAt(0)) % 233280;
+      const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+      const a = S(sg.a), b = S(sg.b);
       const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy);
       if (L < 2) continue;
       const ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
-      // overshoot past both corners, start and end a little off the line
-      const o1 = 3 + rnd() * 8, o2 = 3 + rnd() * 8;
+      // overshoot past the map's corners, start and end a little off the line
+      const o1 = sg.os1 ? 3 + rnd() * 8 : 0, o2 = sg.os2 ? 3 + rnd() * 8 : 0;
       const e1 = (rnd() - .5) * 5, e2 = (rnd() - .5) * 5;
-      // slow wobble along the edge (two waves with random phase)
+      // slow wobble along the piece (two waves with random phase)
       const f1 = 1 + rnd() * 2, f2 = 3 + rnd() * 4, p1 = rnd() * 6.28, p2 = rnd() * 6.28;
       const A1 = Math.min(3.6, L * .045) * (.7 + rnd() * .6), A2 = A1 * .45;
+      const push = outSign * (outward ? outward + A1 + A2 + Math.max(Math.abs(e1), Math.abs(e2)) : 0);
       const steps = Math.max(3, Math.ceil((L + o1 + o2) / 9));
       g.beginPath();
-      for (let k = 0; k <= steps; k++) {
-        const tt = k / steps, along = -o1 + tt * (L + o1 + o2);
-        const off = A1 * Math.sin(tt * Math.PI * f1 + p1) + A2 * Math.sin(tt * Math.PI * f2 + p2) + e1 + (e2 - e1) * tt
-          + outSign * (outward ? outward + A1 + A2 + Math.max(Math.abs(e1), Math.abs(e2)) : 0);
+      for (let j = 0; j <= steps; j++) {
+        const tt = j / steps, along = -o1 + tt * (L + o1 + o2);
+        const off = A1 * Math.sin(tt * Math.PI * f1 + p1) + A2 * Math.sin(tt * Math.PI * f2 + p2) + e1 + (e2 - e1) * tt + push;
         const x = a[0] + ux * along + nx * off, y = a[1] + uy * along + ny * off;
-        k ? g.lineTo(x, y) : g.moveTo(x, y);
+        j ? g.lineTo(x, y) : g.moveTo(x, y);
       }
       g.stroke();
     }
   }
 }
 
-// The child-drawn perimeter, in chalk: the strokes (plus a faint dusty halo)
+// The perimeter: neat along solved tiles, child-drawn chalk elsewhere. The
+// chalk strokes (plus a faint dusty halo)
 // go onto their own layer, which then has chalk grain knocked out of it. The
 // grain is a fixed tile anchored to the map, so it moves with the map when
 // panning instead of shimmering.
@@ -899,10 +948,24 @@ function drawChalkOutline() {
   g.globalCompositeOperation = 'source-over';
   g.clearRect(0, 0, chalkLayer.width, chalkLayer.height);
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const runs = outlineRuns();
+  // left normals point inward when the (screen) outline's area is > 0
+  const outSign = polyArea(outline.map(S)) > 0 ? -1 : 1;
+  const segs = runs.filter(r => !r.solved).map(r => ({ a: runPt(r, r.t0), b: runPt(r, r.t1),
+    seed: `${r.edge}:${r.t0.toFixed(3)}`, os1: r.t0 === 0, os2: r.t1 === 1 }));
+  // neat pieces: where solved tiles border the map
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 3.5;
+  ctx.strokeStyle = 'rgba(240,247,255,.95)';
+  ctx.beginPath();
+  for (const r of runs) if (r.solved) { const p = S(runPt(r, r.t0)), q = S(runPt(r, r.t1)); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); }
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+  if (!segs.length) return;
   g.globalAlpha = .13;
-  strokeChildish(outline, 'outline', 1.4, 1, g, 5);   // chalk dust around the line
+  childSegs(g, segs, outSign, 1.4, 1, 5);   // chalk dust around the line
   g.globalAlpha = 1;
-  strokeChildish(outline, 'outline', 1.4, 1, g);
+  childSegs(g, segs, outSign, 1.4, 1);
   g.globalCompositeOperation = 'destination-out';
   const pat = g.createPattern(grainTile, 'repeat');
   pat.setTransform(new DOMMatrix([dpr, 0, 0, dpr, (view.x * dpr) % (256 * dpr), (view.y * dpr) % (256 * dpr)]));   // same grain size on any screen
