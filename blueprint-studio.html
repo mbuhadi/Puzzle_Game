@@ -1041,6 +1041,9 @@ function setPlayBg(c) {
 // Swirling paint, computed at low resolution and blown up with hard pixel
 // edges. Recomputed ~25 times a second; the colour comes from playBg.
 const swirl = { cv: document.createElement('canvas'), data: null, last: -1e9, key: '' };
+// Swirl speed. 1 = the first version (one full turn every ~90 s, churn
+// cycles of ~23-29 s). Lower = slower; at 0.5 a full turn takes ~3 minutes.
+const SWIRL_SPEED = .5;
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 function drawSwirl(W, H, now) {
   const cell = Math.max(3, Math.ceil(W / 170));
@@ -1052,7 +1055,7 @@ function drawSwirl(W, H, now) {
     swirl.last = now; swirl.key = playBg;
     const base = hexRgb(playBg);
     const deep = base.map(v => v * .5), mid = base.map(v => v * .75), hi = base.map(v => v + (255 - v) * .4);
-    const t = now / 1000, d = swirl.data.data, asp = w / h;
+    const t = now / 1000 * SWIRL_SPEED, d = swirl.data.data, asp = w / h;
     let i = 0;
     for (let y = 0; y < h; y++) {
       const ny = y / h - .5;
