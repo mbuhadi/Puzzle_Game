@@ -1076,7 +1076,7 @@ function theme() {
     tile: hslRgb(h, Math.min(.42, s * .85), .28),          // face-down tile
     tileUp: hslRgb(h, s * .45, .9),                        // flipped tile
     locked: hslRgb(h, s * .18, .2),                        // solved / cancelled tile
-    lockSign: hslRgb(h, s * .2, .64),                      // no-entry sign
+    lockSign: hslRgb(h, s * .2, .64),                      // locked tile outline
     ink: hslRgb(h, Math.min(.5, s * .7), .15),             // dark ink: text, "?" outline, label outlines
     interior: hslRgb(h, s * .35, .2),                      // the map's unexplored inside
   };
@@ -1458,23 +1458,14 @@ function drawPlayTile(t, now, pop = 1) {
   ctx.strokeStyle = locked ? rgbStr(th.lockSign, .8) : 'rgba(240,247,255,.95)';
   ctx.stroke();
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  if (play.solved.has(t.id)) {
-    // Solved: a pixel-art check mark, sitting still
+  if (locked) {
+    // Solved or cancelled (puzzle or given): the same pixel-art check mark,
+    // sitting still
     const q = pixelCheck(Math.max(24, Math.min(rs * 1.5, 110)));
     const qw = q.cv.width / dpr, qh = q.cv.height / dpr;
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(q.cv, Math.round(c[0] - qw / 2), Math.round(c[1] - qh / 2), qw, qh);
     ctx.imageSmoothingEnabled = true;
-  } else if (locked) {
-    // Cancelled: a grey circle with a diagonal line through it (like a
-    // no-smoking sign), the same size as the "?" sign it replaces
-    const r = Math.max(7, Math.min(rs * .55, 26));
-    ctx.strokeStyle = rgbStr(th.lockSign);
-    ctx.lineWidth = Math.max(1.6, r * .18);
-    ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.arc(c[0], c[1], r, 0, Math.PI * 2); ctx.stroke();
-    const k = r * Math.SQRT1_2;
-    ctx.beginPath(); ctx.moveTo(c[0] - k, c[1] - k); ctx.lineTo(c[0] + k, c[1] + k); ctx.stroke();
   } else if (!faceUp) {
     // The sign to tap: a chunky pixel-art question mark that bobs in whole
     // art-pixel steps, like an old game sprite
