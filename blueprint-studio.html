@@ -605,22 +605,24 @@ function playZoomLimits() {
   const zMax = smallest ? PLAY_ZOOM_IN_FILL * fitZ(bbox(smallest.pts)) : zMin * 4;
   return [zMin, Math.max(zMin, zMax)];
 }
-// Test mode: the map can't be dragged off screen. A map smaller than the
-// screen stays fully inside it; a bigger one can't pull its edge in past the
-// screen edge (PLAY_EDGE_PX of slack either way).
-const PLAY_EDGE_PX = 12;
+// Test mode: an invisible rectangular wall around the map that the view can't
+// scroll past. It sits PLAY_WALL_PAD × the map's longer side outside the
+// map's bounding box (fixed in map space, so it zooms with the map). While
+// the walled area is bigger than the screen the screen's edges stop at the
+// wall; once it's smaller (zoomed out) the whole walled area stays on screen.
+const PLAY_WALL_PAD = .2;
 function clampPlayView() {
   const pts = outline.length >= 3 ? outline : tiles.flatMap(t => t.pts);
   const r = cv.getBoundingClientRect();
   if (!pts.length || !r.width) return;
-  const b = bbox(pts), m = PLAY_EDGE_PX;
+  const b = bbox(pts), pad = PLAY_WALL_PAD * Math.max(b.x1 - b.x0, b.y1 - b.y0);
   const axis = (off, a0, a1, size) => {
-    const w = (a1 - a0) * view.z, lo = Math.min(m, size - m - w), hi = Math.max(m, size - m - w);
+    const w = (a1 - a0) * view.z, lo = Math.min(0, size - w), hi = Math.max(0, size - w);
     const s0 = a0 * view.z + off;
     return off + Math.max(lo, Math.min(hi, s0)) - s0;
   };
-  view.x = axis(view.x, b.x0, b.x1, r.width);
-  view.y = axis(view.y, b.y0, b.y1, r.height);
+  view.x = axis(view.x, b.x0 - pad, b.x1 + pad, r.width);
+  view.y = axis(view.y, b.y0 - pad, b.y1 + pad, r.height);
 }
 function zoomAt(px, py, f) {
   const [lo, hi] = playing ? playZoomLimits() : [.05, 12];
