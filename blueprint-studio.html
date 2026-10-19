@@ -2168,6 +2168,52 @@ let playing = false;
 let play = null;
 let openTile = null;
 
+// ── Preloading tile contents in exploration order ────────────────────────────
+// Opening a tile loads puzzles_curated.html?chunk=… fresh, so warm the browser
+// cache ahead of the player, one "wave" at a time in the order tiles can be
+// reached: the starting tiles first, then the tiles their puzzles (and the
+// unlockers' combinations, usable from the start) open, then the tiles those
+// open, and so on. Tiles nothing opens come last. Each wave loads in hidden
+// iframes and must finish (or time out) before the next one starts.
+function explorationWaves() {
+  const seen = new Set(), waves = [];
+  let wave = tiles.filter(t => t.start).map(t => t.id);
+  let combosUsed = false;
+  while (wave.length) {
+    wave.forEach(id => seen.add(id));
+    waves.push(wave);
+    const next = [];
+    const push = id => { if (!seen.has(id) && !next.includes(id) && tileById(id)) next.push(id); };
+    for (const id of wave) { const t = tileById(id); if (t && chunkKind(t.chunk) === 'problem') t.opens.forEach(push); }
+    if (!combosUsed) { combosUsed = true; allCombos().forEach(c => c.opens.forEach(push)); }
+    wave = next;
+  }
+  const rest = tiles.map(t => t.id).filter(id => !seen.has(id));
+  if (rest.length) waves.push(rest);
+  return waves.map(w => w.map(id => tileById(id).chunk).filter(Boolean));
+}
+const preloaded = new Set();
+let preloadRun = 0;
+function preloadChunk(id) {
+  return new Promise(resolve => {
+    const f = document.createElement('iframe');
+    f.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;border:none;';
+    let settled = false;
+    const finish = () => { if (settled) return; settled = true; f.remove(); preloaded.add(id); resolve(); };
+    f.addEventListener('load', finish, { once: true });
+    setTimeout(finish, 8000);   // one stuck chunk shouldn't stall the queue
+    f.src = 'puzzles_curated.html?chunk=' + encodeURIComponent(id);
+    document.body.appendChild(f);
+  });
+}
+async function preloadInExplorationOrder() {
+  const run = ++preloadRun;   // a newer run (test restarted) takes over
+  for (const wave of explorationWaves()) {
+    const todo = [...new Set(wave)].filter(id => !preloaded.has(id));
+    if (todo.length) await Promise.all(todo.map(preloadChunk));
+    if (run !== preloadRun) return;
+  }
+}
 function resetPlay() {
   play = { explored: new Set(tiles.filter(t => t.start).map(t => t.id)),
     flipped: new Set(), solved: new Set(), locked: new Set(), flip: new Map(), reveal: new Map(), shake: new Map(), stillAt: new Map(), usedCombos: new Set(), busy: false, pendingLock: new Set(), pendingOpen: new Set(),
@@ -2189,7 +2235,7 @@ function togglePlay() {
   document.getElementById('playBtn').textContent = playing ? '■ Stop' : '▶ Test';
   document.getElementById('playBtn').classList.toggle('active', playing);
   statusMsg = '';
-  if (playing) { resetPlay(); const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1); lockLandscape(); nudgeBrowserChrome(); }
+  if (playing) { resetPlay(); preloadInExplorationOrder(); const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1); lockLandscape(); nudgeBrowserChrome(); }
   else { closeTileView(); closeUlView(); refreshAll(); unlockLandscape(); }
   updateStatus();
 }
