@@ -18,8 +18,15 @@
   --text: #d4ba88; --dim: #6a5c3a; --hover: #231d0e;
   --open: #7ee08a; --cancel: #ff6b6b;
 }
-html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Cinzel', serif; }
-#app { display: flex; flex-direction: column; height: 100%; }
+/* Same fix as the map page: phone browsers only tuck their address bar away
+   (the black bar at the top) if the page can scroll, so the page keeps 2px of
+   scroll room and gets nudged by 1px; the app itself is pinned to the really
+   visible area (--vvh, kept in sync with visualViewport below). */
+:root { --vvh: 100vh; }
+@supports (height: 100dvh) { :root { --vvh: 100dvh; } }
+html, body { background: var(--bg); color: var(--text); font-family: 'Cinzel', serif; }
+body { min-height: calc(var(--vvh) + 2px); }
+#app { display: flex; flex-direction: column; position: fixed; top: 0; left: 0; right: 0; height: var(--vvh); }
 
 #topbar { height: 46px; flex-shrink: 0; background: var(--bg2); border-bottom: 1px solid var(--border);
   display: flex; align-items: center; gap: 4px; overflow-x: auto;
@@ -345,6 +352,28 @@ body.playing .ul-icon:active { transform: scale(.9); }
   </div>
 </div>
 
+<script>
+// Real visible viewport height → --vvh, plus the 1px scroll nudge that makes
+// mobile browsers collapse their address bar (see the CSS at the top).
+function updateViewportVars() {
+  const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  document.documentElement.style.setProperty('--vvh', h + 'px');
+}
+function nudgeBrowserChrome() {
+  window.scrollTo(0, 1);
+  setTimeout(() => window.scrollTo(0, 1), 150);
+  setTimeout(() => window.scrollTo(0, 1), 400);
+}
+updateViewportVars();
+window.addEventListener('resize', updateViewportVars);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', updateViewportVars);
+window.addEventListener('orientationchange', () => {
+  updateViewportVars(); nudgeBrowserChrome();
+  setTimeout(updateViewportVars, 150);
+  setTimeout(updateViewportVars, 400);
+});
+window.addEventListener('load', nudgeBrowserChrome);
+</script>
 <script src="unlocker_runtime.js"></script>
 <script src="puzzles_studio.js"></script>
 <script src="puzzles_curated_data.js"></script>
@@ -2160,7 +2189,7 @@ function togglePlay() {
   document.getElementById('playBtn').textContent = playing ? '■ Stop' : '▶ Test';
   document.getElementById('playBtn').classList.toggle('active', playing);
   statusMsg = '';
-  if (playing) { resetPlay(); const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1); lockLandscape(); }
+  if (playing) { resetPlay(); const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1); lockLandscape(); nudgeBrowserChrome(); }
   else { closeTileView(); closeUlView(); refreshAll(); unlockLandscape(); }
   updateStatus();
 }
