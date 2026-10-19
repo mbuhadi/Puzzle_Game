@@ -130,8 +130,8 @@ body.playing #crt { display: block; }
 #rotateCover { display: none; position: fixed; inset: 0; z-index: 10000; background: #14161c; color: #e8e4d8;
   flex-direction: column; align-items: center; justify-content: center; gap: 18px; font: 600 18px system-ui, sans-serif; text-align: center; padding: 24px; }
 #rotateCover .phone { width: 44px; height: 76px; border: 4px solid currentColor; border-radius: 9px; animation: rotPhone 2.2s ease-in-out infinite; }
-@keyframes rotPhone { 0%, 30% { transform: rotate(-90deg); } 60%, 100% { transform: rotate(0deg); } }
-@media (orientation: landscape) and (pointer: coarse) { body.playing #rotateCover { display: flex; } }
+@keyframes rotPhone { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
+@media (orientation: portrait) and (pointer: coarse) { body.playing #rotateCover { display: flex; } }
 body.playing #canvasWrap { border-radius: 22px / 26px; }
 #crt::before { content: ''; position: absolute; inset: 0;
   background: repeating-linear-gradient(to bottom, rgba(0,0,0,.16) 0, rgba(0,0,0,.16) 1px, transparent 1px, transparent 3px); }
@@ -2159,26 +2159,26 @@ function togglePlay() {
   document.getElementById('playBtn').textContent = playing ? '■ Stop' : '▶ Test';
   document.getElementById('playBtn').classList.toggle('active', playing);
   statusMsg = '';
-  if (playing) { resetPlay(); const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1); lockPortrait(); }
-  else { closeTileView(); closeUlView(); refreshAll(); unlockPortrait(); }
+  if (playing) { resetPlay(); const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1); lockLandscape(); }
+  else { closeTileView(); closeUlView(); refreshAll(); unlockLandscape(); }
   updateStatus();
 }
-// The game is portrait-only on phones and tablets. Where the browser allows it
-// (Android Chrome) test mode goes fullscreen and locks the screen upright;
-// elsewhere a "rotate your device" cover hides the game while it's sideways.
+// The game is landscape-only on phones and tablets. Where the browser allows it
+// (Android Chrome) test mode goes fullscreen and locks the screen sideways;
+// elsewhere a "rotate your device" cover hides the game while it's upright.
 const TOUCH_DEVICE = matchMedia('(pointer: coarse)').matches;
 let wentFullscreen = false;
-async function lockPortrait() {
+async function lockLandscape() {
   if (!TOUCH_DEVICE) return;
   try {
     if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
       await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
       wentFullscreen = true;
     }
-    await screen.orientation.lock('portrait');
+    await screen.orientation.lock('landscape');
   } catch (e) { /* not supported here: the rotate cover takes over */ }
 }
-function unlockPortrait() {
+function unlockLandscape() {
   try { screen.orientation.unlock(); } catch (e) {}
   if (wentFullscreen && document.fullscreenElement) document.exitFullscreen().catch(() => {});
   wentFullscreen = false;
@@ -2652,6 +2652,6 @@ resizeCanvas();
 refreshAll();
 fitView();
 </script>
-<div id="rotateCover"><div class="phone"></div><div>Turn your device upright to play</div></div>
+<div id="rotateCover"><div class="phone"></div><div>Turn your device sideways to play</div></div>
 </body>
 </html>
