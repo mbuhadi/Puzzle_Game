@@ -922,7 +922,8 @@ function runEnds(O, r) {
   return [at(r.t0), at(r.t1)];
 }
 // Trace one chalk piece: a slow wobble that fades out at both ends
-function traceChalkRun(g, A, B, seedStr) {
+// bias: how far (px) this stroke drifts to one side mid-piece (0 at the ends)
+function traceChalkRun(g, A, B, seedStr, bias = 0) {
   let seed = 7;
   for (const ch of seedStr) seed = (seed * 31 + ch.charCodeAt(0)) % 233280;
   const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
@@ -935,7 +936,7 @@ function traceChalkRun(g, A, B, seedStr) {
   g.moveTo(A[0], A[1]);
   for (let j = 1; j <= steps; j++) {
     const u = j / steps, env = Math.pow(Math.sin(Math.PI * u), .6);
-    const off = env * (A1 * Math.sin(u * Math.PI * f1 + p1) + A2 * Math.sin(u * Math.PI * f2 + p2));
+    const off = env * (A1 * Math.sin(u * Math.PI * f1 + p1) + A2 * Math.sin(u * Math.PI * f2 + p2) + bias * Math.min(1, L / 60));
     g.lineTo(A[0] + dx * u + nx * off, A[1] + dy * u + ny * off);
   }
 }
@@ -989,6 +990,12 @@ function drawChalkOutline() {
   for (const r of chalkRuns) { const [A, B] = runEnds(O, r); traceChalkRun(g, A, B, `${r.edge}:${r.t0.toFixed(3)}`); }
   g.strokeStyle = 'rgba(240,247,255,.13)'; g.lineWidth = 8.6; g.stroke();   // chalk dust around the line
   g.strokeStyle = 'rgba(240,247,255,.95)'; g.lineWidth = 3.6; g.stroke();
+  // second, thinner pass with its own wobble — gone over twice like a child
+  // would. It may cross the first stroke but starts and ends on the same
+  // points, so nothing overshoots the corners.
+  g.beginPath();
+  for (const r of chalkRuns) { const [A, B] = runEnds(O, r); traceChalkRun(g, A, B, `2nd:${r.edge}:${r.t0.toFixed(3)}`, (r.edge % 2 ? 1 : -1) * 2.2); }
+  g.strokeStyle = 'rgba(240,247,255,.6)'; g.lineWidth = 2.1; g.stroke();
   g.globalCompositeOperation = 'destination-out';
   const pat = g.createPattern(grainTile, 'repeat');
   pat.setTransform(new DOMMatrix([dpr, 0, 0, dpr, (view.x * dpr) % (256 * dpr), (view.y * dpr) % (256 * dpr)]));   // same grain size on any screen
