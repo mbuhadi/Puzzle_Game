@@ -346,6 +346,7 @@ body.playing .ul-icon:active { transform: scale(.9); }
   </div>
 </div>
 
+<canvas id="liftCv" style="position:fixed;left:0;top:0;pointer-events:none;z-index:39;display:none"></canvas>
 <div id="veil" style="position:fixed;inset:0;background:#08080a;opacity:0;pointer-events:none;z-index:60"></div>
 <!-- Test mode: a flipped tile's interface -->
 <div id="tileView" class="overlay">
@@ -842,7 +843,7 @@ function draw() {
     if (mode === 'draw') drawDrawing();
   } else {
     drawParticles(now);
-    if (play.lift) { drawLiftedCard(now); if (!play.lift.held) animating = true; }
+    if (play.lift || liftShown) { drawLiftedCard(now); liftShown = !!play.lift; if (play.lift && !play.lift.held) animating = true; }
     crtGlow();
   }
   if (animating || camMoving) render();
@@ -2457,6 +2458,7 @@ async function preloadInExplorationOrder() {
 }
 function resetPlay() {
   veil(false, 0);
+  document.getElementById('liftCv').style.display = 'none'; liftShown = false;
   play = { explored: new Set(tiles.filter(t => t.start).map(t => t.id)),
     flipped: new Set(), solved: new Set(), locked: new Set(), flip: new Map(), reveal: new Map(), shake: new Map(), stillAt: new Map(), usedCombos: new Set(), busy: false, pendingLock: new Set(), pendingOpen: new Set(),
     fx: new Map(), hover: null, hoverW: null, press: null, parts: [], pops: [], kick: null };
@@ -2477,7 +2479,7 @@ function togglePlay() {
   document.getElementById('playBtn').classList.toggle('active', playing);
   statusMsg = '';
   if (playing) { resetPlay(); preloadInExplorationOrder(); const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1); lockLandscape(); nudgeBrowserChrome(); }
-  else { closeTileView(); closeUlView(); veil(false, 0); refreshAll(); unlockLandscape(); }
+  else { closeTileView(); closeUlView(); veil(false, 0); document.getElementById('liftCv').style.display = 'none'; liftShown = false; refreshAll(); unlockLandscape(); }
   updateStatus();
 }
 // The game is landscape-only on phones and tablets. Where the browser allows it
@@ -2526,7 +2528,7 @@ function playTap(w) {
 // the dark card fades in filling the screen, shrinks back to its place and
 // flips back over.
 const LIFT_MS = 560, VEIL_OUT_MS = 130, VEIL_IN_MS = 220;
-const CARD_BACK = [62, 64, 70];   // the card's dark-grey other side
+const CARD_BACK = [20, 18, 14];   // the card's other side: the interface's background colour (#14120e)
 function veil(on, ms) {
   const v = document.getElementById('veil');
   v.style.transition = `opacity ${ms}ms ease`;
@@ -2562,11 +2564,21 @@ function resamplePoly(P, n, from) {
 // a rectangle exactly covering the screen, while it flips over (in the first
 // 60%) to its dark-grey back
 const MORPH_N = 96;
+let liftShown = false;
 function drawLiftedCard(now) {
   const L = play.lift, t = L && tileById(L.id);
+  // own full-window layer above the top bar (below the interface and veil)
+  const lc = document.getElementById('liftCv'), g = lc.getContext('2d');
+  const W = innerWidth, H = innerHeight;
+  if (lc.width !== Math.round(W * dpr) || lc.height !== Math.round(H * dpr)) {
+    lc.width = Math.round(W * dpr); lc.height = Math.round(H * dpr); lc.style.width = W + 'px'; lc.style.height = H + 'px';
+  }
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+  lc.style.display = t ? 'block' : 'none';
   if (!t) return;
-  const p = liftProgress(now), W = cv.width / dpr, H = cv.height / dpr;
-  const shape = insetPoly(t.pts, TILE_GAP_PX / 2 / view.z).map(S);
+  const p = liftProgress(now), cr = cv.getBoundingClientRect();
+  const shape = insetPoly(t.pts, TILE_GAP_PX / 2 / view.z).map(S).map(q => [q[0] + cr.left, q[1] + cr.top]);
   const b = bbox(shape);
   // line the two outlines up: tile corner nearest its top-left ↔ screen's top-left
   let from = 0, bd = Infinity;
@@ -2580,28 +2592,28 @@ function drawLiftedCard(now) {
   const pb = bbox(P), cx = (pb.x0 + pb.x1) / 2, cy = (pb.y0 + pb.y1) / 2;
   const sx = Math.max(.03, Math.abs(Math.cos(ang))) * (1 + .08 * Math.sin(ang));
   P = P.map(q => [cx + (q[0] - cx) * sx, q[1]]);
-  const path = (dx = 0, dy = 0) => { ctx.beginPath(); P.forEach((q, i) => i ? ctx.lineTo(q[0] + dx, q[1] + dy) : ctx.moveTo(q[0] + dx, q[1] + dy)); ctx.closePath(); };
-  ctx.save();
-  ctx.lineJoin = 'round';
+  const path = (dx = 0, dy = 0) => { g.beginPath(); P.forEach((q, i) => i ? g.lineTo(q[0] + dx, q[1] + dy) : g.moveTo(q[0] + dx, q[1] + dy)); g.closePath(); };
+  g.save();
+  g.lineJoin = 'round';
   path(6 * (1 - e), 10 * (1 - e));   // shadow, fading as the card comes up
-  ctx.fillStyle = `rgba(0,0,0,${.35 * (1 - e)})`; ctx.fill();
+  g.fillStyle = `rgba(0,0,0,${.35 * (1 - e)})`; g.fill();
   path();
   const th = theme(), locked = play.locked.has(t.id) || play.solved.has(t.id);
-  ctx.fillStyle = rgbStr(back ? CARD_BACK : locked ? th.locked : th.tile);
-  ctx.fill();
-  ctx.lineWidth = 2 * (1 - e);
-  if (ctx.lineWidth > .1) { ctx.strokeStyle = back ? 'rgba(255,255,255,.18)' : locked ? rgbStr(th.lockSign, .8) : 'rgba(240,247,255,.95)'; ctx.stroke(); }
+  g.fillStyle = rgbStr(back ? CARD_BACK : locked ? th.locked : th.tile);
+  g.fill();
+  g.lineWidth = 2 * (1 - e);
+  if (g.lineWidth > .1) { g.strokeStyle = back ? 'rgba(255,255,255,.18)' : locked ? rgbStr(th.lockSign, .8) : 'rgba(240,247,255,.95)'; g.stroke(); }
   if (!back) {
-    const { rs, c } = tileFont(t);
+    const { rs, c: c0 } = tileFont(t), c = [c0[0] + cr.left, c0[1] + cr.top];
     const grow = (pb.x1 - pb.x0) / Math.max(1, b.x1 - b.x0);
     const ox = c[0] - (b.x0 + b.x1) / 2, oy = c[1] - (b.y0 + b.y1) / 2;   // where the sign sits in the tile
     const q = locked ? pixelCheck(Math.max(24, Math.min(rs * 1.5, 110))) : pixelQ(Math.max(24, Math.min(rs * 1.5, 110)));
     const qw = q.cv.width / dpr * grow * sx, qh = q.cv.height / dpr * grow;
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(q.cv, cx + ox * (1 - e) * sx - qw / 2, cy + oy * (1 - e) - qh / 2, qw, qh);
-    ctx.imageSmoothingEnabled = true;
+    g.imageSmoothingEnabled = false;
+    g.drawImage(q.cv, cx + ox * (1 - e) * sx - qw / 2, cy + oy * (1 - e) - qh / 2, qw, qh);
+    g.imageSmoothingEnabled = true;
   }
-  ctx.restore();
+  g.restore();
 }
 // Shake is done: lift the card and open its interface
 function liftAndOpen(t) {
