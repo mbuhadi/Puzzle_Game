@@ -1222,7 +1222,9 @@ function drawChalkOutline() {
 // the same two end points as in the studio, joined by a slightly bowed,
 // wobbly line gone over twice; the name written in chalk at the end.
 const LABEL_BOW = .14;    // how far the line bows out mid-way, × its length
-function traceChalkCurve(g, A, B, seedStr, bow, wob) {
+// keep(x, y): optional; where it's false the pen lifts (used to leave a gap
+// around the map's perimeter)
+function traceChalkCurve(g, A, B, seedStr, bow, wob, keep) {
   let seed = 11;
   for (const ch of seedStr) seed = (seed * 31 + ch.charCodeAt(0)) % 233280;
   const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
@@ -1231,12 +1233,14 @@ function traceChalkCurve(g, A, B, seedStr, bow, wob) {
   const nx = -dy / L, ny = dx / L;
   const f1 = 1 + rnd() * 2, f2 = 3 + rnd() * 4, p1 = rnd() * 6.28, p2 = rnd() * 6.28;
   const A1 = Math.min(wob, L * .03) * (.7 + rnd() * .5), A2 = A1 * .4;
-  const steps = Math.max(2, Math.ceil(L / 7));
-  g.moveTo(A[0], A[1]);
-  for (let j = 1; j <= steps; j++) {
+  const steps = Math.max(2, Math.ceil(L / (keep ? 3 : 7)));
+  let down = false;
+  for (let j = 0; j <= steps; j++) {
     const u = j / steps, env = Math.pow(Math.sin(Math.PI * u), .6);
     const off = 4 * u * (1 - u) * bow * L + env * (A1 * Math.sin(u * Math.PI * f1 + p1) + A2 * Math.sin(u * Math.PI * f2 + p2));
-    g.lineTo(A[0] + dx * u + nx * off, A[1] + dy * u + ny * off);
+    const x = A[0] + dx * u + nx * off, y = A[1] + dy * u + ny * off;
+    if (keep && !keep(x, y)) { down = false; continue; }
+    if (down) g.lineTo(x, y); else { g.moveTo(x, y); down = true; }
   }
 }
 // Signed bow for traceChalkCurve: its offset runs along the line's left-hand
@@ -1248,15 +1252,20 @@ function bowOf(l) {
   const downish = Math.abs(ny) > 1e-6 ? ny > 0 : nx > 0;
   return (downish === (l.belly !== 'up') ? 1 : -1) * LABEL_BOW;
 }
+// The chalk label lines stay this far (screen px) from the drawn perimeter,
+// so they never touch it: the line breaks where it would cross or meet it.
+const LABEL_PERIM_GAP_PX = 12;
 function drawChalkLabels(g) {
   if (!labels.length) return;
   const ends = l => [S(l.pts[0]), S(l.pts[1])];
+  const O = outline.length >= 3 ? outlineOffsetScreen() : null;
+  const keep = O ? (x, y) => edgeDist([x, y], O) >= LABEL_PERIM_GAP_PX : null;
   g.beginPath();
-  for (const l of labels) { const [A, B] = ends(l); traceChalkCurve(g, A, B, l.id, bowOf(l), 2.2); }
+  for (const l of labels) { const [A, B] = ends(l); traceChalkCurve(g, A, B, l.id, bowOf(l), 2.2, keep); }
   g.strokeStyle = 'rgba(240,247,255,.12)'; g.lineWidth = 6.5; g.stroke();
   g.strokeStyle = 'rgba(240,247,255,.92)'; g.lineWidth = 2.6; g.stroke();
   g.beginPath();
-  for (const l of labels) { const [A, B] = ends(l); traceChalkCurve(g, A, B, '2nd:' + l.id, bowOf(l) * 1.08, 1.6); }
+  for (const l of labels) { const [A, B] = ends(l); traceChalkCurve(g, A, B, '2nd:' + l.id, bowOf(l) * 1.08, 1.6, keep); }
   g.strokeStyle = 'rgba(240,247,255,.55)'; g.lineWidth = 1.5; g.stroke();
   for (const l of labels) {
     if (!labelText(l)) continue;
