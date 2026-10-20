@@ -346,13 +346,14 @@ body.playing .ul-icon:active { transform: scale(.9); }
   </div>
 </div>
 
+<div id="veil" style="position:fixed;inset:0;background:#08080a;opacity:0;pointer-events:none;z-index:60"></div>
 <!-- Test mode: a flipped tile's interface -->
 <div id="tileView" class="overlay">
   <div class="panel">
     <div class="row" style="flex:0 0 auto">
       <span id="tvTitle" style="font-size:12px;color:var(--gold);letter-spacing:1px"></span>
       <button id="tvSolve" class="play" style="flex:0 0 auto" onclick="solveOpenTile()"></button>
-      <button style="flex:0 0 auto" onclick="closeTileView()">Close</button>
+      <button style="flex:0 0 auto" onclick="closeTileAnimated()">Close</button>
     </div>
     <iframe id="tvFrame"></iframe>
     <div id="tvEmpty">This tile has no puzzle or given assigned yet.</div>
@@ -807,6 +808,7 @@ function draw() {
     if (t.pts.length < 3) continue;
     if (playing) {
       if (!play.explored.has(t.id)) continue;
+      if (play.lift && play.lift.id === t.id) continue;   // drawn on top (drawLiftedCard)
       // newly opened tiles pop in: fade + springy grow
       let alpha = 1, pop = 1;
       if (play.reveal.has(t.id)) {
@@ -840,6 +842,7 @@ function draw() {
     if (mode === 'draw') drawDrawing();
   } else {
     drawParticles(now);
+    if (play.lift) { drawLiftedCard(now); if (!play.lift.held) animating = true; }
     crtGlow();
   }
   if (animating || camMoving) render();
@@ -1357,7 +1360,9 @@ const BG_STYLES = [
   { id: 'spiral', n: 'Spiral', tip: 'Paint slowly turning around the centre' },
   { id: 'marble', n: 'Marble', tip: 'Marbled streams flowing sideways' },
   { id: 'lava', n: 'Lava lamp', tip: 'Soft blobs wandering around at random' },
-  { id: 'ripple', n: 'Ripples', tip: 'Rings spreading from drifting points, overlapping' },
+  { id: 'squares', n: 'Squares', tip: 'A big chequerboard sliding slowly along a diagonal' },
+  { id: 'waves', n: 'Waves', tip: 'Soft horizontal bands gently rolling' },
+  { id: 'stripes', n: 'Stripes', tip: 'Wide diagonal stripes sliding slowly' },
 ];
 let bgStyle = 'spiral';
 function renderStyles() {
@@ -1430,16 +1435,21 @@ const BG_FIELDS = {
     FIELD.a = Math.min(1, f * .55);
     FIELD.s = Math.min(1, f * .3);
   },
-  // rings spreading out from three slowly drifting points, overlapping
-  ripple(nx, ny, t) {
-    let v = 0;
-    for (let k = 0; k < 3; k++) {
-      const cx = .55 * Math.sin(t * .17 + k * 2.1), cy = .3 * Math.cos(t * .13 + k * 1.7);
-      const dd = Math.sqrt((nx - cx) * (nx - cx) + (ny - cy) * (ny - cy));
-      v += Math.sin(dd * 14 - t * 1.1 + k);
-    }
-    FIELD.a = .5 + v / 6;
-    FIELD.s = .5 + .5 * Math.sin(v * 1.6);
+  // a big two-tone chequerboard sliding slowly along a diagonal
+  squares(nx, ny, t) {
+    const n = 5, u = nx * n + t * .9, v = ny * n + t * .9;
+    FIELD.a = (Math.floor(u) + Math.floor(v)) & 1 ? .25 : .75;
+    FIELD.s = 0;
+  },
+  // soft horizontal bands, gently rolling
+  waves(nx, ny, t) {
+    FIELD.a = .5 + .5 * Math.sin(ny * 7 + .9 * Math.sin(nx * 2.2 + t * .8) - t * .5);
+    FIELD.s = 0;
+  },
+  // wide diagonal stripes sliding slowly
+  stripes(nx, ny, t) {
+    FIELD.a = .5 + .5 * Math.sin((nx + ny) * 7 - t * 1.2);
+    FIELD.s = 0;
   },
 };
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
@@ -2366,7 +2376,7 @@ cv.addEventListener('wheel', e => {
 document.addEventListener('keydown', e => {
   const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); quickSave(); return; }
-  if (playing) { if (e.key === 'Escape') { closeTileView(); closeUlView(); } return; }
+  if (playing) { if (e.key === 'Escape') { if (openTile) closeTileAnimated(); closeUlView(); } return; }
   if (typing) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
@@ -2446,6 +2456,7 @@ async function preloadInExplorationOrder() {
   }
 }
 function resetPlay() {
+  veil(false, 0);
   play = { explored: new Set(tiles.filter(t => t.start).map(t => t.id)),
     flipped: new Set(), solved: new Set(), locked: new Set(), flip: new Map(), reveal: new Map(), shake: new Map(), stillAt: new Map(), usedCombos: new Set(), busy: false, pendingLock: new Set(), pendingOpen: new Set(),
     fx: new Map(), hover: null, hoverW: null, press: null, parts: [], pops: [], kick: null };
@@ -2466,7 +2477,7 @@ function togglePlay() {
   document.getElementById('playBtn').classList.toggle('active', playing);
   statusMsg = '';
   if (playing) { resetPlay(); preloadInExplorationOrder(); const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1); lockLandscape(); nudgeBrowserChrome(); }
-  else { closeTileView(); closeUlView(); refreshAll(); unlockLandscape(); }
+  else { closeTileView(); closeUlView(); veil(false, 0); refreshAll(); unlockLandscape(); }
   updateStatus();
 }
 // The game is landscape-only on phones and tablets. Where the browser allows it
@@ -2505,15 +2516,116 @@ function playTap(w) {
   play.shake.set(t.id, performance.now());
   squish(t.id, .35);
   render();
+  setTimeout(() => { if (playing && play === P) liftAndOpen(t); }, SHAKE_MS);
+}
+// Opening a tile, step by step: it shakes (SHAKE_MS), then flips over to its
+// dark-grey back while being lifted toward the player — growing and gliding
+// to the middle of the screen until it fills it (LIFT_MS); the screen then
+// quickly fades to black (VEIL_OUT_MS) and the interface fades in
+// (VEIL_IN_MS). Closing plays the same in reverse: the interface fades out,
+// the dark card fades in filling the screen, shrinks back to its place and
+// flips back over.
+const LIFT_MS = 560, VEIL_OUT_MS = 130, VEIL_IN_MS = 220;
+const CARD_BACK = [62, 64, 70];   // the card's dark-grey other side
+function veil(on, ms) {
+  const v = document.getElementById('veil');
+  v.style.transition = `opacity ${ms}ms ease`;
+  v.style.opacity = on ? 1 : 0;
+  v.style.pointerEvents = on ? 'auto' : 'none';
+}
+const easeInOut = e => e < .5 ? 4 * e * e * e : 1 - Math.pow(-2 * e + 2, 3) / 2;
+function liftProgress(now) {
+  const L = play.lift;
+  if (!L) return 0;
+  if (L.held) return 1;
+  const e = Math.max(0, Math.min(1, (now - L.t0) / LIFT_MS));
+  return L.dir > 0 ? e : 1 - e;
+}
+function drawLiftedCard(now) {
+  const L = play.lift, t = L && tileById(L.id);
+  if (!t) return;
+  const p = liftProgress(now), W = cv.width / dpr, H = cv.height / dpr;
+  const shape = insetPoly(t.pts, TILE_GAP_PX / 2 / view.z).map(S);
+  const b = bbox(shape), c = [(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2];
+  const full = Math.max(W / Math.max(1, b.x1 - b.x0), H / Math.max(1, b.y1 - b.y0)) * 1.15;
+  const e = easeInOut(p);
+  const sc = 1 + (full - 1) * e;
+  const cx = c[0] + (W / 2 - c[0]) * e, cy = c[1] + (H / 2 - c[1]) * e;
+  // the flip happens in the first 60% of the lift
+  const ang = Math.min(1, p / .6) * Math.PI, back = ang > Math.PI / 2;
+  ctx.save();
+  // shadow: drops away as the card comes up
+  ctx.fillStyle = `rgba(0,0,0,${.35 * (1 - e)})`;
+  ctx.translate(cx + 6 + 30 * e, cy + 10 + 40 * e); ctx.scale(sc * Math.max(.03, Math.abs(Math.cos(ang))), sc); ctx.translate(-c[0], -c[1]);
+  pathRounded(shape.map(q => toWorld(q[0], q[1])), CORNER_PX / sc); ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(sc * Math.max(.03, Math.abs(Math.cos(ang))) * (1 + .08 * Math.sin(ang)), sc);
+  ctx.translate(-c[0], -c[1]);
+  pathRounded(shape.map(q => toWorld(q[0], q[1])), CORNER_PX / sc);
+  const th = theme(), locked = play.locked.has(t.id) || play.solved.has(t.id);
+  ctx.fillStyle = rgbStr(back ? CARD_BACK : locked ? th.locked : th.tile);
+  ctx.fill();
+  ctx.lineJoin = 'round'; ctx.lineWidth = 2 / sc;
+  ctx.strokeStyle = back ? 'rgba(255,255,255,.18)' : locked ? rgbStr(th.lockSign, .8) : 'rgba(240,247,255,.95)';
+  ctx.stroke();
+  if (!back) {
+    const { rs } = tileFont(t);
+    const q = locked ? pixelCheck(Math.max(24, Math.min(rs * 1.5, 110))) : pixelQ(Math.max(24, Math.min(rs * 1.5, 110)));
+    const qw = q.cv.width / dpr, qh = q.cv.height / dpr;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(q.cv, c[0] - qw / 2, c[1] - qh / 2, qw, qh);
+    ctx.imageSmoothingEnabled = true;
+  }
+  ctx.restore();
+}
+// Shake is done: lift the card and open its interface
+function liftAndOpen(t) {
+  const P = play;
+  play.busy = true;
+  openTileView(t, false);                         // start loading behind the scenes
+  play.lift = { id: t.id, dir: 1, t0: performance.now() };
+  render();
   setTimeout(() => {
     if (!playing || play !== P) return;
-    if (play.flipped.has(t.id)) { play.busy = false; openTileView(t); return; }
-    play.flipped.add(t.id);
-    play.flip.set(t.id, performance.now());
-    setTimeout(() => { if (!playing || play !== P) return; play.busy = false; openTileView(t); }, 450);
-  }, SHAKE_MS);
+    veil(true, VEIL_OUT_MS);
+    setTimeout(() => {
+      if (!playing || play !== P) return;
+      play.lift.held = true;
+      document.getElementById('tileView').classList.add('open');
+      veil(false, VEIL_IN_MS);
+      setTimeout(() => { if (play === P) play.busy = false; }, VEIL_IN_MS);
+    }, VEIL_OUT_MS);
+  }, LIFT_MS);
 }
-function openTileView(t) {
+// The reverse; after() runs once the card is back in its place
+function closeTileAnimated(after) {
+  if (!openTile || !play || play.closing) { closeTileView(); if (after) after(); return; }
+  const P = play, id = openTile.id;
+  play.busy = true; play.closing = true;
+  veil(true, VEIL_OUT_MS);
+  setTimeout(() => {
+    if (!playing || play !== P) return;
+    closeTileView();
+    play.lift = { id, dir: -1, held: true };
+    play.closing = false;
+    veil(false, VEIL_IN_MS);
+    render();
+    setTimeout(() => {
+      if (!playing || play !== P) return;
+      play.lift = { id, dir: -1, t0: performance.now() };
+      render();
+      setTimeout(() => {
+        if (!playing || play !== P) return;
+        play.lift = null; play.busy = false;
+        render();
+        if (after) after();
+      }, LIFT_MS);
+    }, VEIL_IN_MS);
+  }, VEIL_OUT_MS);
+}
+function openTileView(t, show = true) {
   openTile = t;
   const frame = document.getElementById('tvFrame');
   const has = !!t.chunk, kind = chunkKind(t.chunk);
@@ -2527,7 +2639,7 @@ function openTileView(t) {
   btn.disabled = solved;
   const fx = [t.opens.length ? `opens ${t.opens.length}` : '', t.cancels.length ? `cancels ${t.cancels.length}` : ''].filter(Boolean).join(', ');
   btn.textContent = solved ? 'Solved ✓' : 'Mark solved' + (fx ? ` (${fx})` : '');
-  document.getElementById('tileView').classList.add('open');
+  if (show) document.getElementById('tileView').classList.add('open');
 }
 function closeTileView() {
   document.getElementById('tileView').classList.remove('open');
@@ -2634,12 +2746,15 @@ function solveOpenTile() {
   if (!t) return;
   play.solved.add(t.id);
   play.stillAt.set(t.id, performance.now());
-  closeTileView();
-  // juice: jolt, pixel burst, pop-up label
-  kick(7); squish(t.id, .6);
-  burst(t, ['#ffffff', '#f3efe4', playBg, '#ffd166']);
-  popText(t, 'SOLVED!', '#ffd166');
-  setStatus(`${tileName(t)} solved` + applyEffects(t, t));
+  const P = play;
+  closeTileAnimated(() => {
+    if (!playing || play !== P) return;
+    // juice: jolt, pixel burst, pop-up label
+    kick(7); squish(t.id, .6);
+    burst(t, ['#ffffff', '#f3efe4', playBg, '#ffd166']);
+    popText(t, 'SOLVED!', '#ffd166');
+    setStatus(`${tileName(t)} solved` + applyEffects(t, t));
+  });
 }
 
 // ── Constant unlockers ────────────────────────────────────────────────────────
