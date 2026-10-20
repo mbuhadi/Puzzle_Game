@@ -667,6 +667,7 @@ function clampPlayView() {
   view.y = axis(view.y, b.y0 - pad, b.y1 + pad, r.height);
 }
 function zoomAt(px, py, f) {
+  if (playing && play && play.seq) return;
   const [lo, hi] = playing ? playZoomLimits() : [.05, 12];
   const nz = Math.max(lo, Math.min(hi, view.z * f));
   view.x = px - (px - view.x) * nz / view.z;
@@ -774,6 +775,8 @@ function draw() {
   const W = cv.width / dpr, H = cv.height / dpr;
   const now = performance.now();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  let camMoving = false;
+  if (playing && play.cam) { stepCam(now); camMoving = true; }
   if (playing) {
     drawSwirl(W, H, now);
     // screen bump after a solve: everything but the background jolts
@@ -839,7 +842,7 @@ function draw() {
     drawParticles(now);
     crtGlow();
   }
-  if (animating) render();
+  if (animating || camMoving) render();
 }
 
 // ── Map labels ────────────────────────────────────────────────────────────────
@@ -2267,7 +2270,7 @@ cv.addEventListener('pointermove', e => {
     if (pointers.size < 2) return;
     const [a, b] = [...pointers.values()];
     const d = dist(a, b), m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-    view.x += m[0] - gesture.m[0]; view.y += m[1] - gesture.m[1];
+    if (!(playing && play.seq)) { view.x += m[0] - gesture.m[0]; view.y += m[1] - gesture.m[1]; }
     zoomAt(m[0], m[1], d / (gesture.d || d));
     gesture.d = d; gesture.m = m;
     return;
@@ -2292,7 +2295,7 @@ cv.addEventListener('pointermove', e => {
   }
   const w = toWorld(s[0], s[1]);
   if (gesture.type === 'pan') {
-    view.x += s[0] - gesture.last[0]; view.y += s[1] - gesture.last[1];
+    if (!(playing && play.seq)) { view.x += s[0] - gesture.last[0]; view.y += s[1] - gesture.last[1]; }
   } else if (gesture.type === 'vertex') {
     const p = gesture.free ? (gridOn() ? (g => [Math.round(w[0] / g) * g, Math.round(w[1] / g) * g])(gridSize()) : w) : snapPoint(w, gesture.exclude);
     for (const r of gesture.refs) { const pts = polyOf(r.ref); if (pts && pts[r.i]) pts[r.i] = [p[0], p[1]]; }
@@ -2357,7 +2360,7 @@ cv.addEventListener('wheel', e => {
   e.preventDefault();
   const s = localXY(e);
   if (e.ctrlKey || Math.abs(e.deltaY) >= Math.abs(e.deltaX)) zoomAt(s[0], s[1], Math.exp(-e.deltaY * (e.ctrlKey ? .01 : .0015)));
-  else { view.x -= e.deltaX; render(); }
+  else if (!(playing && play.seq)) { view.x -= e.deltaX; render(); }
 }, { passive: false });
 
 document.addEventListener('keydown', e => {
@@ -2496,7 +2499,7 @@ function playTap(w) {
   if (!t) return;
   // Solved puzzles lock themselves, just like cancelled tiles
   if (play.locked.has(t.id) || play.solved.has(t.id) || play.pendingLock.has(t.id)) { setStatus(`${tileName(t)} is locked.`); return; }
-  if (play.busy) return;   // a tile is already shaking/flipping
+  if (play.busy || play.seq) return;   // a tile is already shaking/flipping, or tiles are locking / opening
   play.busy = true;
   const P = play;   // ignore these timers if the test is stopped or restarted
   play.shake.set(t.id, performance.now());
@@ -2536,7 +2539,35 @@ function closeTileView() {
 // to the solved tile first (in list order for unlocker combinations); then
 // the opened tiles appear one after the other at the same pace.
 const LOCK_STAGGER_MS = 200;
-function applyEffects(src, origin) {
+// Camera during effects: before anything locks or opens, the view eases out
+// to show the whole map centred (CAM_FILL of the screen, never past the
+// zoom-out limit); after the last tile has opened and CAM_HOLD_MS has passed
+// it eases back to where the player was. The player can't pan, zoom or tap
+// tiles while this runs.
+const CAM_MS = 700, CAM_HOLD_MS = 700, CAM_FILL = .85;
+function overviewView() {
+  const r = cv.getBoundingClientRect(), b = bbox(playMapPts());
+  const bw = Math.max(1, b.x1 - b.x0), bh = Math.max(1, b.y1 - b.y0);
+  const [lo, hi] = playZoomLimits();
+  const z = Math.max(lo, Math.min(hi, view.z, CAM_FILL * Math.min(r.width / bw, r.height / bh)));
+  return { x: r.width / 2 - (b.x0 + bw / 2) * z, y: r.height / 2 - (b.y0 + bh / 2) * z, z };
+}
+function camTo(to, ms) { play.cam = { from: { ...view }, to, t0: performance.now(), ms }; render(); }
+// Called from draw(): moves the view along the current camera move.
+// Zoom eases on a log scale while the screen-centre point glides across.
+function stepCam(now) {
+  const c = play.cam, r = cv.getBoundingClientRect();
+  let e = Math.min(1, (now - c.t0) / c.ms);
+  e = e < .5 ? 4 * e * e * e : 1 - Math.pow(-2 * e + 2, 3) / 2;
+  const mid = v => [(r.width / 2 - v.x) / v.z, (r.height / 2 - v.y) / v.z];
+  const a = mid(c.from), b = mid(c.to);
+  const z = Math.exp(Math.log(c.from.z) + (Math.log(c.to.z) - Math.log(c.from.z)) * e);
+  const cx = a[0] + (b[0] - a[0]) * e, cy = a[1] + (b[1] - a[1]) * e;
+  view.z = z; view.x = r.width / 2 - cx * z; view.y = r.height / 2 - cy * z;
+  if (e >= 1) play.cam = null;
+}
+// startAfter: ms to wait before the camera starts (e.g. while a dialog closes)
+function applyEffects(src, origin, startAfter = 0) {
   let opened = 0;
   // only explored, unsolved tiles can be cancelled
   let toLock = src.cancels.filter(id => play.explored.has(id) && !play.locked.has(id) && !play.solved.has(id) && !play.pendingLock.has(id));
@@ -2546,6 +2577,18 @@ function applyEffects(src, origin) {
     toLock.sort((a, b) => d(a) - d(b));
   }
   const P = play;
+  const toOpenCount = src.opens.filter(id => !play.explored.has(id) && !play.pendingOpen.has(id)).length;
+  // the whole sequence is shifted to start once the camera has zoomed out
+  let lead = 0;
+  if (toLock.length || toOpenCount) {
+    lead = startAfter + CAM_MS;
+    const back = { ...view };
+    play.seq = true;
+    setTimeout(() => { if (playing && play === P) camTo(overviewView(), CAM_MS); }, startAfter);
+    const end = lead + LOCK_STAGGER_MS * (toLock.length + (origin ? 1 : 0) + Math.max(0, toOpenCount - 1)) + CAM_HOLD_MS;
+    setTimeout(() => { if (playing && play === P) camTo(back, CAM_MS); }, end);
+    setTimeout(() => { if (playing && play === P) play.seq = false; }, end + CAM_MS);
+  }
   toLock.forEach((id, i) => {
     play.pendingLock.add(id);   // can't be opened while it waits its turn
     setTimeout(() => {
@@ -2557,7 +2600,7 @@ function applyEffects(src, origin) {
       const t = tileById(id);
       if (t) popText(t, chunkKind(t.chunk) === 'given' ? 'DONE!' : 'LOCKED', '#c3cbd6');   // a given has served its purpose
       render();
-    }, LOCK_STAGGER_MS * (i + (origin ? 1 : 0)));
+    }, lead + LOCK_STAGGER_MS * (i + (origin ? 1 : 0)));
   });
   const locked = toLock.length;
   // Then the opened tiles appear one after the other, at the same pace,
@@ -2581,7 +2624,7 @@ function applyEffects(src, origin) {
       const t = tileById(id);
       if (t) setTimeout(() => { if (play === P && play.explored.has(id)) burst(t, ['#ffffff', playBg]); }, 170);
       render();
-    }, LOCK_STAGGER_MS * (firstOpen + i));
+    }, lead + LOCK_STAGGER_MS * (firstOpen + i));
   });
   render();
   return (opened ? ` · ${opened} new tile(s) opened` : '') + (locked ? ` · ${locked} tile(s) locked` : '');
@@ -2727,7 +2770,7 @@ function renderUlBar() {
 }
 function openUlPlay(u) {
   const d = designs.get(u.design);
-  if (!d || !playing) return;
+  if (!d || !playing || play.seq) return;
   fitUlHost(d);
   const msg = document.getElementById('ulMsg');
   document.getElementById('ulTitle').textContent = unlockerName(u);
@@ -2742,7 +2785,7 @@ function openUlPlay(u) {
       ctl.flashOk();
       kick(5);
       msg.textContent = 'Unlocked!';
-      const summary = applyEffects(c);
+      const summary = applyEffects(c, null, 650);
       setTimeout(() => { closeUlView(); setStatus(`${unlockerName(u)} ${comboLabel(c)} entered` + summary); }, 650);
     },
   });
