@@ -623,14 +623,9 @@ function fitView() {
   render();
 }
 // What counts as "the map" for the test-mode zoom limits and scroll wall:
-// the outline (else the tiles) plus the labels, with room for their names
+// the outline (else the tiles). Labels don't count.
 function playMapPts() {
-  const pts = [...(outline.length >= 3 ? outline : tiles.flatMap(t => t.pts))];
-  for (const l of labels) {
-    const [a, b] = l.pts, w = l.size * Math.max(2, labelText(l).length * .45), h = l.size * .6;
-    pts.push(a, [b[0] - w, b[1] - h], [b[0] + w, b[1] + h]);
-  }
-  return pts;
+  return outline.length >= 3 ? outline : tiles.flatMap(t => t.pts);
 }
 // Test-mode zoom limits. Zoomed all the way out, the whole map fills about
 // 70% of the screen; zoomed all the way in, the smallest tile is about half
