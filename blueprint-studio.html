@@ -591,9 +591,9 @@ function fitView() {
   render();
 }
 // Test-mode zoom limits. Zoomed all the way out, the whole map fills about
-// 60% of the screen; zoomed all the way in, the smallest tile is about half
+// 70% of the screen; zoomed all the way in, the smallest tile is about half
 // the screen. (The editor keeps its wide limits.)
-const PLAY_ZOOM_OUT_FILL = .6, PLAY_ZOOM_IN_FILL = .5;
+const PLAY_ZOOM_OUT_FILL = .7, PLAY_ZOOM_IN_FILL = .5;
 function playZoomLimits() {
   const r = cv.getBoundingClientRect();
   const pts = outline.length >= 3 ? outline : tiles.flatMap(t => t.pts);
