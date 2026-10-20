@@ -2541,41 +2541,64 @@ function liftProgress(now) {
   const e = Math.max(0, Math.min(1, (now - L.t0) / LIFT_MS));
   return L.dir > 0 ? e : 1 - e;
 }
+// Resample a closed polygon to n points evenly spaced along its outline,
+// starting at index `from` and running clockwise on screen
+function resamplePoly(P, n, from) {
+  if (polyArea(P) < 0) { P = [...P].reverse(); from = P.length - 1 - from; }
+  P = [...P.slice(from), ...P.slice(0, from)];
+  const m = P.length, seg = [], out = [];
+  let tot = 0;
+  for (let i = 0; i < m; i++) { const d = dist(P[i], P[(i + 1) % m]); seg.push(d); tot += d; }
+  let i = 0, acc = 0;
+  for (let k = 0; k < n; k++) {
+    const want = tot * k / n;
+    while (i < m - 1 && acc + seg[i] < want) { acc += seg[i]; i++; }
+    const f = seg[i] ? (want - acc) / seg[i] : 0, a = P[i], b = P[(i + 1) % m];
+    out.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]);
+  }
+  return out;
+}
+// The lifted card: over the lift its outline morphs from the tile's shape to
+// a rectangle exactly covering the screen, while it flips over (in the first
+// 60%) to its dark-grey back
+const MORPH_N = 96;
 function drawLiftedCard(now) {
   const L = play.lift, t = L && tileById(L.id);
   if (!t) return;
   const p = liftProgress(now), W = cv.width / dpr, H = cv.height / dpr;
   const shape = insetPoly(t.pts, TILE_GAP_PX / 2 / view.z).map(S);
-  const b = bbox(shape), c = [(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2];
-  const full = Math.max(W / Math.max(1, b.x1 - b.x0), H / Math.max(1, b.y1 - b.y0)) * 1.15;
+  const b = bbox(shape);
+  // line the two outlines up: tile corner nearest its top-left ↔ screen's top-left
+  let from = 0, bd = Infinity;
+  shape.forEach((q, i) => { const d = Math.hypot(q[0] - b.x0, q[1] - b.y0); if (d < bd) { bd = d; from = i; } });
+  const A = resamplePoly(shape, MORPH_N, from);
+  const R = resamplePoly([[0, 0], [W, 0], [W, H], [0, H]], MORPH_N, 0);
   const e = easeInOut(p);
-  const sc = 1 + (full - 1) * e;
-  const cx = c[0] + (W / 2 - c[0]) * e, cy = c[1] + (H / 2 - c[1]) * e;
-  // the flip happens in the first 60% of the lift
+  let P = A.map((q, i) => [q[0] + (R[i][0] - q[0]) * e, q[1] + (R[i][1] - q[1]) * e]);
+  // the flip: squeeze sideways around the card's middle
   const ang = Math.min(1, p / .6) * Math.PI, back = ang > Math.PI / 2;
+  const pb = bbox(P), cx = (pb.x0 + pb.x1) / 2, cy = (pb.y0 + pb.y1) / 2;
+  const sx = Math.max(.03, Math.abs(Math.cos(ang))) * (1 + .08 * Math.sin(ang));
+  P = P.map(q => [cx + (q[0] - cx) * sx, q[1]]);
+  const path = (dx = 0, dy = 0) => { ctx.beginPath(); P.forEach((q, i) => i ? ctx.lineTo(q[0] + dx, q[1] + dy) : ctx.moveTo(q[0] + dx, q[1] + dy)); ctx.closePath(); };
   ctx.save();
-  // shadow: drops away as the card comes up
-  ctx.fillStyle = `rgba(0,0,0,${.35 * (1 - e)})`;
-  ctx.translate(cx + 6 + 30 * e, cy + 10 + 40 * e); ctx.scale(sc * Math.max(.03, Math.abs(Math.cos(ang))), sc); ctx.translate(-c[0], -c[1]);
-  pathRounded(shape.map(q => toWorld(q[0], q[1])), CORNER_PX / sc); ctx.fill();
-  ctx.restore();
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.scale(sc * Math.max(.03, Math.abs(Math.cos(ang))) * (1 + .08 * Math.sin(ang)), sc);
-  ctx.translate(-c[0], -c[1]);
-  pathRounded(shape.map(q => toWorld(q[0], q[1])), CORNER_PX / sc);
+  ctx.lineJoin = 'round';
+  path(6 * (1 - e), 10 * (1 - e));   // shadow, fading as the card comes up
+  ctx.fillStyle = `rgba(0,0,0,${.35 * (1 - e)})`; ctx.fill();
+  path();
   const th = theme(), locked = play.locked.has(t.id) || play.solved.has(t.id);
   ctx.fillStyle = rgbStr(back ? CARD_BACK : locked ? th.locked : th.tile);
   ctx.fill();
-  ctx.lineJoin = 'round'; ctx.lineWidth = 2 / sc;
-  ctx.strokeStyle = back ? 'rgba(255,255,255,.18)' : locked ? rgbStr(th.lockSign, .8) : 'rgba(240,247,255,.95)';
-  ctx.stroke();
+  ctx.lineWidth = 2 * (1 - e);
+  if (ctx.lineWidth > .1) { ctx.strokeStyle = back ? 'rgba(255,255,255,.18)' : locked ? rgbStr(th.lockSign, .8) : 'rgba(240,247,255,.95)'; ctx.stroke(); }
   if (!back) {
-    const { rs } = tileFont(t);
+    const { rs, c } = tileFont(t);
+    const grow = (pb.x1 - pb.x0) / Math.max(1, b.x1 - b.x0);
+    const ox = c[0] - (b.x0 + b.x1) / 2, oy = c[1] - (b.y0 + b.y1) / 2;   // where the sign sits in the tile
     const q = locked ? pixelCheck(Math.max(24, Math.min(rs * 1.5, 110))) : pixelQ(Math.max(24, Math.min(rs * 1.5, 110)));
-    const qw = q.cv.width / dpr, qh = q.cv.height / dpr;
+    const qw = q.cv.width / dpr * grow * sx, qh = q.cv.height / dpr * grow;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(q.cv, c[0] - qw / 2, c[1] - qh / 2, qw, qh);
+    ctx.drawImage(q.cv, cx + ox * (1 - e) * sx - qw / 2, cy + oy * (1 - e) - qh / 2, qw, qh);
     ctx.imageSmoothingEnabled = true;
   }
   ctx.restore();
