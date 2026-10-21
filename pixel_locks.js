@@ -118,7 +118,7 @@ const PL = (() => {
     if (y < t0 || y > t1) return false;
     if (x >= G.xa && x <= G.xb) return true;
     const half = (t1 - t0) / 2 + .5, t = Math.abs(y - (t0 + t1) / 2);
-    const d = x < G.xa ? G.xa - x : x - G.xb, len = CAP - inset;
+    const d = x < G.xa ? G.xa - x : x - G.xb, len = (G.cap || CAP) - inset;
     if (d > len) return false;
     const R = k * 2 * half, Hh = Math.sqrt(R * R - (R - half) * (R - half)), yy = d * Hh / len;
     return t <= Math.sqrt(Math.max(0, R * R - yy * yy)) - (R - half);
@@ -202,33 +202,49 @@ const PL = (() => {
     g.strokeText(text, x, y); g.fillStyle = fill; g.fillText(text, x, y);
   }
 
-  // ── Mini (corner) version: a small plaque with pointed ends and four slots ──
-  const MINI_W = 38, MINI_H = 17;
-  function drawMiniArt(g, L) {
-    const W = MINI_W, H = MINI_H, M = MAT[L.mat], P = L.pal, top = 1, bot = H - 2, xa = 9, xb = W - 10;
-    const IN = (x, y, i = 0) => {
-      const t0 = top + i, t1 = bot - i;
-      if (y < t0 || y > t1) return false;
-      if (x >= xa && x <= xb) return true;
-      const half = (t1 - t0) / 2, t = y - (t0 + t1) / 2, d = x < xa ? xa - x : x - xb;
-      return d <= 8 - i && Math.abs(t) <= half * (1 - d / (9 - i)) + .5;
-    };
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      if (!IN(x, y)) { if (IN(x - 1, y) || IN(x + 1, y) || IN(x, y - 1) || IN(x, y + 1)) px(g, x, y, C.ink); continue; }
-      const edge = !IN(x - 1, y) || !IN(x + 1, y) || !IN(x, y - 1) || !IN(x, y + 1);
-      const band = !edge && !IN(x, y, 2);
-      px(g, x, y, edge ? (!IN(x, y - 1) ? M.H : M.S) : band ? ((x + y) % 2 ? P.tiles[0] : P.tiles[2]) : M.B);
-    }
-    rect(g, 11, 4, 16, 9, C.ink);
-    for (let i = 0; i < 4; i++) { rect(g, 12 + i * 4, 5, 3, 7, C.ivory); rect(g, 12 + i * 4, 10, 3, 1, C.ivoryS); rect(g, 13 + i * 4, 6, 1, 3, C.digit); }
-    px(g, 5, 8, P.star[0]); px(g, W - 6, 8, P.star[0]);
+  // ── Mini (corner) version ──
+  // The big lock in miniature, drawn at its own small pixel size (not shrunk):
+  // same pointed ends, tile border, stars, ivory dials with rims between them,
+  // and the dials showing where the player left them (1× digits).
+  const MD = { DW: 8, DH: 11, GAP: 2, CAP: 8 };
+  function miniGeo() {
+    const winW = MD.DW * 4 + MD.GAP * 3 + 2, winH = MD.DH + 2;
+    const bodyW = winW + 6, plateH = winH + 8;
+    const W = bodyW + MD.CAP * 2 + 2, cx = W / 2, top = 1, bot = top + plateH - 1;
+    const xa = Math.round(cx - bodyW / 2), xb = W - 1 - xa;
+    return { W, H: bot + 2, cx, xa, xb, top, bot, cap: MD.CAP, winW, winH,
+      wx: Math.round(cx - winW / 2), wy: top + Math.round((plateH - winH) / 2) };
   }
-  function drawMini(canvas, design, s = 3) {
+  function drawMiniArt(g, L, dials, digits) {
+    const G = miniGeo(), M = MAT[L.mat], P = L.pal, tiles = P.tiles;
+    const IN = (x, y, i = 0) => inPlate(G, x, y, i);
+    const mir = x => x < G.cx ? x : G.W - 1 - x;
+    for (let y = 0; y < G.H; y++) for (let x = 0; x < G.W; x++) {
+      if (!IN(x, y)) { if (IN(x - 1, y) || IN(x + 1, y) || IN(x, y - 1) || IN(x, y + 1)) px(g, x, y, C.ink); continue; }
+      if (!IN(x - 1, y) || !IN(x + 1, y) || !IN(x, y - 1) || !IN(x, y + 1)) { px(g, x, y, !IN(x, y - 1) ? M.H : M.S); continue; }
+      const xm = mir(x);
+      if (!IN(x, y, 3) && IN(x, y, 1)) { px(g, x, y, (xm + y) % 2 ? tiles[0] : tiles[(Math.floor(xm / 2) % 2) ? 2 : 1]); continue; }
+      px(g, x, y, (xm + y) % 4 === 0 ? M.lat : M.B);
+    }
+    const sy = Math.round((G.top + G.bot) / 2);
+    for (const sx of [Math.round(G.xa - MD.CAP * .3), Math.round(G.xb + MD.CAP * .3)]) star(g, sx, sy, 2, P.star[0], C.ink);
+    const { wx, wy, winW, winH } = G;
+    rect(g, wx - 1, wy - 1, winW + 2, winH + 2, C.ink);
+    rect(g, wx, wy, winW, winH, C.win);
+    for (let i = 0; i < 4; i++) {
+      const dx = wx + 1 + i * (MD.DW + MD.GAP), dy = wy + 1, h = MD.DH;
+      for (let y = 0; y < h; y++) { const t = Math.abs(y - (h - 1) / 2) / ((h - 1) / 2); rect(g, dx, dy + y, MD.DW, 1, t > .75 ? C.ivoryS : C.ivory); }
+      glyph(g, digits === 'en' ? 'en' : 'ar', ((dials && dials[i]) || 0) % 10, dx + 2, dy + 2, 1, C.digit, dy, dy + h);
+      if (i < 3) { rect(g, dx + MD.DW, dy, 1, h, P.rim[0]); rect(g, dx + MD.DW + 1, dy, 1, h, P.rim[1]); }
+    }
+  }
+  // opts: { dials: [4 digits shown], digits: 'ar' | 'en' }
+  function drawMini(canvas, design, s = 2, opts = {}) {
     const L = get(design); if (!L) return;
-    const art = document.createElement('canvas');
-    art.width = MINI_W; art.height = MINI_H;
-    drawMiniArt(art.getContext('2d'), L);
-    canvas.width = MINI_W * s; canvas.height = MINI_H * s;
+    const G = miniGeo(), art = document.createElement('canvas');
+    art.width = G.W; art.height = G.H;
+    drawMiniArt(art.getContext('2d'), L, opts.dials, opts.digits);
+    canvas.width = G.W * s; canvas.height = G.H * s;
     const g = canvas.getContext('2d');
     g.imageSmoothingEnabled = false;
     g.drawImage(art, 0, 0, canvas.width, canvas.height);
