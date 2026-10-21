@@ -144,6 +144,15 @@ body.playing #ulBar.has { display: flex; }
 .ul-icon.px .halo { position: absolute; left: 50%; top: 50%; width: 190%; height: 320%; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
 .ul-card .hdr canvas { width: 38px; height: 17px; image-rendering: pixelated; }
 #ulView.px { padding: 4px; }
+/* pop in / out with a bounce (same feel as the unlocker previews) */
+#ulView.px.popin { animation: ulFadeIn .2s ease-out; }
+#ulView.px.popin .panel { animation: ulPopIn .34s cubic-bezier(.3,1.7,.5,1); }
+#ulView.px.closing { animation: ulFadeOut .32s ease-in forwards; pointer-events: none; }
+#ulView.px.closing .panel { animation: ulPopOut .32s cubic-bezier(.5,-.6,.75,.4) forwards; }
+@keyframes ulPopIn { from { transform: scale(.6); } to { transform: scale(1); } }
+@keyframes ulPopOut { from { transform: scale(1); } to { transform: scale(.4); opacity: 0; } }
+@keyframes ulFadeIn { from { background-color: rgba(0,0,0,0); } }
+@keyframes ulFadeOut { to { background-color: rgba(0,0,0,0); } }
 #ulView.px .panel { background: none; border: none; box-shadow: none; width: auto !important; max-width: 100%; max-height: none; overflow: visible; padding: 4px; gap: 4px; }
 #ulView.px #ulTitle { display: none; }
 #ulView.px .row { justify-content: flex-end; }
@@ -2585,7 +2594,7 @@ function resetPlay() {
     flipped: new Set(), opened: new Set(), solved: new Set(), locked: new Set(), flip: new Map(), reveal: new Map(), shake: new Map(), stillAt: new Map(), usedCombos: new Set(), busy: false, pendingLock: new Set(), pendingOpen: new Set(),
     fx: new Map(), hover: null, hoverW: null, press: null, parts: [], pops: [], kick: null };
   closeTileView();
-  closeUlView();
+  closeUlView(true);
   statusMsg = '';
   renderUlBar();
   render(); updateStatus();
@@ -2601,7 +2610,7 @@ function togglePlay() {
   document.getElementById('playBtn').classList.toggle('active', playing);
   statusMsg = '';
   if (playing) { resetPlay(); preloadInExplorationOrder(); const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1); lockLandscape(); nudgeBrowserChrome(); }
-  else { closeTileView(); closeUlView(); veil(false, 0); refreshAll(); unlockLandscape(); }
+  else { closeTileView(); closeUlView(true); veil(false, 0); refreshAll(); unlockLandscape(); }
   updateStatus();
 }
 // The game is landscape-only on phones and tablets. Where the browser allows it
@@ -3030,7 +3039,11 @@ function renderUnlockers() {
 // Editor: set a combination by turning the real dials, then save it
 let ulCtl = null;   // the mounted Courtyard Lock, if one is showing
 function openPixelLock(u, opts) {
-  document.getElementById('ulView').classList.add('px', 'open');
+  const ov = document.getElementById('ulView');
+  clearTimeout(ulCloseTimer); ov.classList.remove('closing');
+  ov.classList.add('px', 'open');
+  // pop in with a little bounce (restart the animation each time)
+  ov.classList.remove('popin'); void ov.offsetWidth; ov.classList.add('popin');
   // room left for the lock: the screen minus the Close row and message line
   const vh = window.visualViewport ? visualViewport.height : innerHeight, vw = window.visualViewport ? visualViewport.width : innerWidth;
   ulCtl = PL.mount(document.getElementById('ulHost'), u.design, { digits: ulDigits(), maxW: Math.min(vw - 24, vw * .8), maxH: vh - 78, ...opts });
@@ -3075,10 +3088,25 @@ function openUlSetter(u, combo) {
 function fitUlHost(d) {
   document.getElementById('ulHost').style.cssText = `width: min(100%, calc((88vh - 110px) * ${d.w} / ${d.h})); margin: 0 auto;`;
 }
-function closeUlView() {
-  if (ulCtl) { ulCtl.destroy(); ulCtl = null; }
-  document.getElementById('ulView').classList.remove('open', 'px');
-  document.getElementById('ulHost').innerHTML = '';
+// A Courtyard Lock leaves the way it came: a little swell, then it shrinks
+// away with the backdrop fading (UL_POP_OUT_MS), then the view closes.
+const UL_POP_OUT_MS = 320;
+let ulCloseTimer = 0;
+function closeUlView(now) {
+  const ov = document.getElementById('ulView');
+  const finish = () => {
+    if (ulCtl) { ulCtl.destroy(); ulCtl = null; }
+    ov.classList.remove('open', 'px', 'popin', 'closing');
+    document.getElementById('ulHost').innerHTML = '';
+  };
+  if (now !== true && ov.classList.contains('px') && ov.classList.contains('open')) {
+    if (ov.classList.contains('closing')) return;
+    ov.classList.add('closing');
+    ulCloseTimer = setTimeout(finish, UL_POP_OUT_MS);
+    return;
+  }
+  clearTimeout(ulCloseTimer);
+  finish();
 }
 // Test mode: the corner icons and playing an unlocker
 function renderUlBar() {
@@ -3113,7 +3141,7 @@ function openUlPlay(u) {
       ctl.flashOk('UNLOCK!');
       kick(5);
       msg.textContent = '';
-      const summary = applyEffects(c, null, 900);
+      const summary = applyEffects(c, null, 900 + UL_POP_OUT_MS);   // camera starts once the lock has popped away
       setTimeout(() => { closeUlView(); setStatus(`${unlockerName(u)} ${comboLabel(c)} entered` + summary); }, 900);
     } });
     return;
