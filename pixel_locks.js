@@ -96,12 +96,16 @@ const PL = (() => {
       else if (inS(x + 1, y) || inS(x - 1, y) || inS(x, y + 1) || inS(x, y - 1)) px(g, cx + x, cy + y, edge);
     }
   }
-  function geo(v) {
+  // side: the button sits to the right of the plate instead of under it
+  // (short, wide screens — phones held sideways)
+  const SIDE_BTN_W = 50;
+  function geo(v, side) {
     const x0 = 3, x1 = v.W - 4, cx = Math.round((x0 + x1) / 2);
     const gh = 7 * v.gs, dh = gh + v.pad * 2 + 4;
     const wx = cx - Math.round(v.ww / 2), wy = v.springY - 6, wh = dh * 4 + 1;
     const yBot = wy + wh + 9;
-    return { x0, x1, cx, gh, dh, wx, wy, wh, ww: v.ww, yb: v.springY, yBot, H: yBot + 28 };
+    return { x0, x1, cx, gh, dh, wx, wy, wh, ww: v.ww, yb: v.springY, yBot, side: !!side,
+      W: side ? v.W + 6 + SIDE_BTN_W : v.W, H: side ? yBot + 4 : yBot + 28 };
   }
   function plate(g, v, G, M) {
     const { x0, x1, yb, yBot } = G, k = v.k, IN = (x, y, a = 0, b = 0, c = 0) => inArch(x, y, x0 + a, x1 - a, yb + b, yBot - c, k);
@@ -124,16 +128,16 @@ const PL = (() => {
   function plateCanvas(v) {
     if (!plateCache.has(v.id)) {
       const G = geo(v), c = document.createElement('canvas');
-      c.width = v.W; c.height = G.H;
+      c.width = v.W; c.height = G.yBot + 2;
       plate(c.getContext('2d'), v, G, MAT[v.mat]);
       plateCache.set(v.id, c);
     }
     return plateCache.get(v.id);
   }
   // Everything but the button's word, onto an art-sized context
-  function drawLock(g, v, st, now) {
-    const G = geo(v), M = MAT[v.mat], P = v.pal, { cx, wx, wy, ww, dh, gh } = G;
-    g.clearRect(0, 0, v.W, G.H);
+  function drawLock(g, v, st, now, side) {
+    const G = geo(v, side), M = MAT[v.mat], P = v.pal, { cx, wx, wy, ww, dh, gh } = G;
+    g.clearRect(0, 0, G.W, G.H);
     g.drawImage(plateCanvas(v), 0, 0);
     const sy = Math.round(wy - v.star - 6);
     star(g, cx, sy, v.star, P.star[0], C.ink);
@@ -162,7 +166,9 @@ const PL = (() => {
     }
     for (const [rx, ry] of [[G.x0 + 6, G.yBot - 6], [G.x1 - 6, G.yBot - 6]]) { rect(g, rx - 1, ry - 1, 3, 3, C.ink); px(g, rx, ry, M.H); }
     const pressed = now - st.pressAt < 140, bad = now - st.badAt < 380;
-    const bx = Math.max(2, Math.round(v.W / 2 - 34)), bw = v.W - 2 * bx, by = G.yBot + 7 + (pressed ? 1 : 0), bh = 15;
+    let bx = Math.max(2, Math.round(v.W / 2 - 34)), bw = v.W - 2 * bx, by = G.yBot + 7, bh = 15;
+    if (side) { bh = 21; bx = v.W + 6; bw = SIDE_BTN_W - 2; by = G.yBot - bh - 6; }   // taller: easy to hit with a thumb
+    by += pressed ? 1 : 0;
     if (!pressed) rect(g, bx, by + 2, bw, bh, C.ink);
     rect(g, bx, by, bw, bh, C.ink);
     const B = bad ? ['#5a1a14', '#b0392c', '#e88070'] : P.btn;
@@ -226,40 +232,44 @@ const PL = (() => {
     const v = get(design);
     host.innerHTML = '';
     if (!v) return null;
-    const G = geo(v);
+    const maxW0 = opts.maxW || host.clientWidth || 400, maxH0 = opts.maxH || innerHeight * .78;
+    // pick the layout that lets the lock be drawn biggest; whole pixels when
+    // there's room for at least 2×, otherwise just fit
+    const fitS = G => Math.min(maxW0 / G.W, maxH0 / G.H);
+    const side = opts.layout === 'side' || (opts.layout !== 'below' && fitS(geo(v, true)) > fitS(geo(v)) * 1.08);
+    const G = geo(v, side);
     const st = { dials: (opts.code && opts.code.length === 4 ? opts.code : [0, 0, 0, 0]).map(n => ((+n % 10) + 10) % 10),
       roll: [0, 0, 0, 0], pressAt: -1e9, badAt: -1e9, popAt: -1e9, popWord: '', popCol: '#7ee08a', shakeAt: -1e9,
       digits: opts.digits === 'en' ? 'en' : 'ar' };
     const label = opts.submitLabel || 'UNLOCK';
-    const maxW = opts.maxW || host.clientWidth || 400, maxH = opts.maxH || innerHeight * .78;
-    const S = Math.max(2, Math.floor(Math.min(maxW / v.W, maxH / G.H)));
+    const f = fitS(G), S = f >= 2 ? Math.floor(f) : Math.max(.5, f);
     const wrap = document.createElement('div');
     wrap.style.cssText = 'position:relative;display:flex;justify-content:center;margin:0 auto;';
     const glow = document.createElement('div');
-    glow.style.cssText = `position:absolute;left:50%;top:50%;width:${v.W * S * 2.6}px;height:${G.H * S * 1.25}px;transform:translate(-50%,-50%);pointer-events:none;border-radius:50%;background:${glowCSS(design)}`;
+    glow.style.cssText = `position:absolute;left:${v.W * S / 2}px;top:50%;width:${v.W * S * 2.6}px;height:${G.H * S * 1.25}px;transform:translate(-50%,-50%);pointer-events:none;border-radius:50%;background:${glowCSS(design)}`;
     const cv = document.createElement('canvas');
-    cv.width = v.W * S; cv.height = G.H * S;
+    cv.width = Math.round(G.W * S); cv.height = Math.round(G.H * S);
     cv.style.cssText = 'position:relative;image-rendering:pixelated;touch-action:none;filter:drop-shadow(0 10px 0 rgba(0,0,0,.35));';
     wrap.append(glow, cv);
     host.appendChild(wrap);
     const art = document.createElement('canvas');
-    art.width = v.W; art.height = G.H;
+    art.width = G.W; art.height = G.H;
     const ag = art.getContext('2d'), g = cv.getContext('2d');
     let hit = null, raf = 0, alive = true;
     function draw(now = performance.now()) {
-      hit = drawLock(ag, v, st, now);
+      hit = drawLock(ag, v, st, now, side);
       g.setTransform(1, 0, 0, 1, 0, 0);
       g.clearRect(0, 0, cv.width, cv.height);
       g.imageSmoothingEnabled = false;
-      g.drawImage(art, 0, 0, v.W * S, G.H * S);
+      g.drawImage(art, 0, 0, cv.width, cv.height);
       const b = hit.button;
       popWord(g, label, (b.x + b.w / 2) * S, (b.y + b.h / 2 - 1) * S, fitWord(g, label, (b.w - 4) * S, Math.round(S * 6.5)), '#ffd166');
       const e = (now - st.popAt) / 1300;
       if (e >= 0 && e < 1) {
         g.save(); g.globalAlpha = e > .7 ? (1 - e) / .3 : 1;
         const sc = e < .15 ? .6 + .46 * Math.sin(e / .15 * Math.PI / 2) : 1;
-        g.translate(cv.width / 2, (G.wy - 6) * S - e * 40); g.scale(sc, sc);
-        popWord(g, st.popWord, 0, 0, fitWord(g, st.popWord, cv.width * .95, Math.round(S * 7)), st.popCol);
+        g.translate(v.W * S / 2, (G.wy - 6) * S - e * 40); g.scale(sc, sc);
+        popWord(g, st.popWord, 0, 0, fitWord(g, st.popWord, v.W * S * 1.3, Math.round(S * 7)), st.popCol);
         g.restore();
       }
     }
@@ -274,7 +284,7 @@ const PL = (() => {
     }
     function turn(i, dir) { st.dials[i] = (st.dials[i] + dir + 10) % 10; st.roll[i] = dir * (7 + v.pad + 2) / v.gs; }
     let swipe = null;
-    const artXY = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * v.W, (e.clientY - r.top) / r.height * G.H]; };
+    const artXY = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * G.W, (e.clientY - r.top) / r.height * G.H]; };
     cv.addEventListener('pointerdown', e => {
       const [x, y] = artXY(e), b = hit.button;
       if (x >= b.x && x < b.x + b.w && y >= b.y - 1 && y < b.y + b.h + 2) {
@@ -303,6 +313,7 @@ const PL = (() => {
     draw(); raf = requestAnimationFrame(loop);
     return {
       code: () => [...st.dials],
+      layout: () => ({ S: cv.width / G.W, side, G, button: hit.button }),   // for tests
       shake() { st.shakeAt = st.badAt = performance.now(); },
       flashOk(word = 'UNLOCK!') { st.popWord = word; st.popCol = '#7ee08a'; st.popAt = performance.now(); },
       pop(word, col) { st.popWord = word; st.popCol = col || '#ffd166'; st.popAt = performance.now(); },

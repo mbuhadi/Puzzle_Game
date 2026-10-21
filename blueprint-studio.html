@@ -143,7 +143,8 @@ body.playing #ulBar.has { display: flex; }
 .ul-icon.px canvas { display: block; image-rendering: pixelated; position: relative; filter: drop-shadow(0 3px 0 rgba(0,0,0,.35)); }
 .ul-icon.px .halo { position: absolute; left: 50%; top: 50%; width: 260%; height: 170%; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
 .ul-card .hdr canvas { width: 18px; height: 26px; image-rendering: pixelated; }
-#ulView.px .panel { background: none; border: none; box-shadow: none; width: auto !important; max-width: 100%; overflow: visible; }
+#ulView.px { padding: 4px; }
+#ulView.px .panel { background: none; border: none; box-shadow: none; width: auto !important; max-width: 100%; max-height: none; overflow: visible; padding: 4px; gap: 4px; }
 #ulView.px #ulTitle { display: none; }
 #ulView.px .row { justify-content: flex-end; }
 #ulView.px #ulMsg { color: #f4ecd8; font-size: 13px; text-shadow: 0 1px 2px #000; }
@@ -3030,7 +3031,9 @@ function renderUnlockers() {
 let ulCtl = null;   // the mounted Courtyard Lock, if one is showing
 function openPixelLock(u, opts) {
   document.getElementById('ulView').classList.add('px', 'open');
-  ulCtl = PL.mount(document.getElementById('ulHost'), u.design, { digits: ulDigits(), maxW: innerWidth * .9, maxH: innerHeight * .8, ...opts });
+  // room left for the lock: the screen minus the Close row and message line
+  const vh = window.visualViewport ? visualViewport.height : innerHeight, vw = window.visualViewport ? visualViewport.width : innerWidth;
+  ulCtl = PL.mount(document.getElementById('ulHost'), u.design, { digits: ulDigits(), maxW: vw - 24, maxH: vh - 78, ...opts });
   return ulCtl;
 }
 function openUlSetter(u, combo) {
