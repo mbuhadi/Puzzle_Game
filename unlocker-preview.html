@@ -140,7 +140,7 @@ function geo(v) {
   const side = v.arrows === 'side' ? 6 : 0;
   const wx = cx - Math.round(v.ww / 2) - Math.round(side / 2), wy = v.springY - 6;
   const wh = dh * 4 + 1;
-  const yBot = wy + wh + 15;
+  const yBot = wy + wh + 9;   // (no keyhole: a shorter base under the dials)
   const H = yBot + 28;
   return { x0, x1, cx, gh, dh, wx, wy, wh, ww: v.ww, yb: v.springY, yBot, H, ax: wx + v.ww + 6 };
 }
@@ -231,9 +231,7 @@ function drawLock(g, v, st, now) {
     if (v.arrows === 'side') { tri(g, G.ax, mid - 6, 1, M); tri(g, G.ax, mid + 2, -1, M); }
     else { const sc = P ? P.studs : band[0]; rect(g, wx - 5, mid - 1, 3, 3, C.ink); px(g, wx - 4, mid, sc); rect(g, wx + ww + 2, mid - 1, 3, 3, C.ink); px(g, wx + ww + 3, mid, sc); }
   }
-  // keyhole + rivets
-  const ky = wy + G.wh + 4;
-  rect(g, cx - 2, ky, 5, 4, C.ink); rect(g, cx - 1, ky + 4, 3, 5, C.ink); rect(g, cx - 1, ky + 1, 3, 2, C.win);
+  // rivets
   for (const [rx, ry] of [[G.x0 + 6, G.yBot - 6], [G.x1 - 6, G.yBot - 6]]) { rect(g, rx - 1, ry - 1, 3, 3, C.ink); px(g, rx, ry, M.H); }
   // button plaque
   const pressed = now - st.pressAt < 140;
