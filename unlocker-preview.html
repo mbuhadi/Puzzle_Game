@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Courtyard Lock — preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* Look-only preview of the first pixel-art constant unlocker: "the Courtyard
+   Lock" — a brass door-lock plate from an Arabic courtyard house (pointed
+   arch, turquoise zellige border, eight-point star, ring knocker) with four
+   stacked digit dials. A mini version sits in the top-right of the screen;
+   tapping it opens the big one. Dials turn and the button presses, but
+   nothing is checked yet. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #0e0d0a; color: #d4ba88; font-family: 'Cinzel', serif; overflow: hidden; }
+#screen { position: absolute; inset: 0; overflow: hidden;
+  background: radial-gradient(ellipse at 30% 40%, #7d93ad 0%, #5f7690 35%, #48596f 70%, #34404f 100%); }
+/* a mock blueprint in the middle so the mini has context */
+#board { position: absolute; left: 50%; top: 52%; width: min(70vw, 900px); aspect-ratio: 16 / 9; transform: translate(-50%, -50%);
+  border: 3px solid rgba(240,247,255,.85); border-radius: 4px; display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 10px; padding: 10px; }
+#board div { background: #2f4a66; border: 2px solid rgba(240,247,255,.9); border-radius: 4px; }
+#board div:nth-child(2) { grid-row: span 2; }
+#crt { position: absolute; inset: 0; pointer-events: none; z-index: 30;
+  background: repeating-linear-gradient(to bottom, rgba(0,0,0,.13) 0 1px, transparent 1px 3px);
+  box-shadow: inset 0 0 120px rgba(0,0,0,.55); }
+#mini { position: absolute; top: 14px; right: 16px; z-index: 10; cursor: pointer; image-rendering: pixelated;
+  animation: bob 3.2s ease-in-out infinite; filter: drop-shadow(0 4px 0 rgba(0,0,0,.35)); }
+#mini:hover { animation-play-state: paused; transform: scale(1.12) rotate(-4deg); }
+@keyframes bob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-3px) } }
+#ov { position: absolute; inset: 0; z-index: 20; background: rgba(8,8,10,.62); display: none; align-items: center; justify-content: center; }
+#ov.open { display: flex; }
+#big { image-rendering: pixelated; touch-action: none; filter: drop-shadow(0 10px 0 rgba(0,0,0,.35)); animation: pop .32s cubic-bezier(.3,1.7,.5,1); }
+@keyframes pop { from { transform: scale(.6) } to { transform: scale(1) } }
+#hint { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; z-index: 40; font: 11px sans-serif; color: rgba(255,255,255,.7); pointer-events: none; }
+#opts { position: absolute; left: 12px; top: 12px; z-index: 40; display: flex; gap: 6px; }
+#opts button { background: #1e1a12; border: 1px solid #2e2a1e; color: #d4ba88; font: 11px 'Cinzel', serif; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+#opts button.on { border-color: #c8a84b; color: #c8a84b; }
+</style>
+</head>
+<body>
+<div id="screen">
+  <div id="board"><div></div><div></div><div></div><div></div><div></div></div>
+  <canvas id="mini" title="Courtyard Lock"></canvas>
+  <div id="ov"><canvas id="big"></canvas></div>
+  <div id="crt"></div>
+</div>
+<div id="opts">
+  <button id="dAr" class="on" onclick="setDigits('ar')">٠١٢٣ digits</button>
+  <button id="dEn" onclick="setDigits('en')">0123 digits</button>
+</div>
+<div id="hint">Tap the lock in the top-right corner · in the big lock: tap ▲ / ▼ or swipe a dial · tap outside to close</div>
+<script>
+// ── Palette ──
+const C = {
+  ink: '#1a1008', brassD: '#5a3a12', brassS: '#8a5d1c', brass: '#bb8a34', brassL: '#e2bb63', brassH: '#fff0b0',
+  tq: '#2a9d8f', tqL: '#7fdccd', tqD: '#17594f', ivory: '#efe3c4', ivoryS: '#c9b98f', ivoryD: '#8f7d57',
+  red: '#b0392c', dial: '#3a2410', win: '#140c05', cream: '#fff6d8',
+};
+// ── 5×7 digit glyphs ──
+const GLYPHS = {
+  ar: [
+    ['.....','.....','..#..','.#.#.','..#..','.....','.....'],   // ٠
+    ['.#...','..#..','..#..','..#..','..#..','..#..','..#..'],   // ١
+    ['.#.##','.#.#.','.##..','.#...','.#...','.#...','.#...'],   // ٢
+    ['#.#.#','#####','#....','#....','#....','#....','#....'],   // ٣
+    ['.###.','#....','.##..','#....','#....','.####','.....'],   // ٤
+    ['.....','.###.','#...#','#...#','#...#','.###.','.....'],   // ٥
+    ['####.','...#.','...#.','...#.','...#.','...#.','...#.'],   // ٦
+    ['#...#','#...#','.#.#.','.#.#.','.#.#.','..#..','..#..'],   // ٧
+    ['..#..','..#..','.#.#.','.#.#.','.#.#.','#...#','#...#'],   // ٨
+    ['.##..','#..#.','#..#.','.###.','...#.','...#.','...#.'],   // ٩
+  ],
+  en: [
+    ['.###.','#...#','#..##','#.#.#','##..#','#...#','.###.'],
+    ['..#..','.##..','..#..','..#..','..#..','..#..','.###.'],
+    ['.###.','#...#','....#','...#.','..#..','.#...','#####'],
+    ['####.','....#','....#','.###.','....#','....#','####.'],
+    ['...#.','..##.','.#.#.','#..#.','#####','...#.','...#.'],
+    ['#####','#....','####.','....#','....#','#...#','.###.'],
+    ['.###.','#....','#....','####.','#...#','#...#','.###.'],
+    ['#####','....#','...#.','..#..','.#...','.#...','.#...'],
+    ['.###.','#...#','#...#','.###.','#...#','#...#','.###.'],
+    ['.###.','#...#','#...#','.####','....#','....#','.###.'],
+  ],
+};
+let digitSet = 'ar';
+function setDigits(k) { digitSet = k; document.getElementById('dAr').classList.toggle('on', k === 'ar'); document.getElementById('dEn').classList.toggle('on', k === 'en'); drawAll(); }
+
+// ── Tiny pixel helpers (art canvas, 1 unit = 1 art pixel) ──
+function px(g, x, y, c) { g.fillStyle = c; g.fillRect(x, y, 1, 1); }
+function rect(g, x, y, w, h, c) { g.fillStyle = c; g.fillRect(x, y, w, h); }
+function glyph(g, d, x, y, c, clipY0 = -1e9, clipY1 = 1e9) {
+  const G = GLYPHS[digitSet][d];
+  for (let j = 0; j < 7; j++) for (let i = 0; i < 5; i++)
+    if (G[j][i] === '#' && y + j >= clipY0 && y + j < clipY1) px(g, x + i, y + j, c);
+}
+// pointed (Moorish) arch: inside test for the plate shape
+function inArch(x, y, x0, x1, yb, yBot, k = .6) {
+  if (x < x0 || x > x1 || y > yBot) return false;
+  if (y >= yb) return true;
+  const w = x1 - x0, R = k * w, cA = x0 + R, cB = x1 - R;
+  return Math.hypot(x - cA, y - yb) <= R && Math.hypot(x - cB, y - yb) <= R;
+}
+// pixel-art eight-point star (two overlapping squares) at (cx, cy), radius r
+function star(g, cx, cy, r, fill, edge) {
+  const inS = (x, y) => (Math.abs(x) <= r * .72 && Math.abs(y) <= r * .72) || (Math.abs(x + y) <= r && Math.abs(x - y) <= r);
+  for (let y = -r - 1; y <= r + 1; y++) for (let x = -r - 1; x <= r + 1; x++) {
+    if (inS(x, y)) px(g, cx + x, cy + y, fill);
+    else if (inS(x + 1, y) || inS(x - 1, y) || inS(x, y + 1) || inS(x, y - 1)) px(g, cx + x, cy + y, edge);
+  }
+}
+
+// little brass triangle (up: dir 1, down: dir -1), 7 wide × 4 tall, inked
+function tri(g, cx, y, dir) {
+  const rows = [0, 1, 2, 3].map(r => dir > 0 ? r : 3 - r);
+  rows.forEach((r, j) => { rect(g, cx - r - 1, y + j, 2 * r + 3, 1, C.ink); });
+  rows.forEach((r, j) => { if (r) rect(g, cx - r + 1, y + j, 2 * r - 1, 1, dir > 0 ? (j < 2 ? C.brassH : C.brassL) : C.brassL); });
+  rect(g, cx - 3 - 1, dir > 0 ? y + 4 : y - 1, 9, 1, C.ink);
+}
+// ── The big lock ──
+const BIG = { W: 84, H: 168 };
+const DIALS = [0, 0, 0, 0];                 // shown digit per dial
+const ROLL = [0, 0, 0, 0];                  // animation offset (art px), eases to 0
+let pressAt = -1e9, popAt = -1e9;
+function drawBig(g, now) {
+  const { W, H } = BIG;
+  g.clearRect(0, 0, W, H);
+  const x0 = 4, x1 = W - 5, yb = 58, yBot = 140;
+  // plate: outline, bevel, body
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const a = inArch(x, y, x0, x1, yb, yBot);
+    if (!a) { if (inArch(x - 1, y, x0, x1, yb, yBot) || inArch(x + 1, y, x0, x1, yb, yBot) || inArch(x, y + 1, x0, x1, yb, yBot) || inArch(x, y - 1, x0, x1, yb, yBot)) px(g, x, y, C.ink); continue; }
+    const edge = !inArch(x - 2, y, x0, x1, yb, yBot) || !inArch(x + 2, y, x0, x1, yb, yBot) || !inArch(x, y - 2, x0, x1, yb, yBot) || !inArch(x, y + 2, x0, x1, yb, yBot);
+    const lit = !inArch(x - 2, y - 2, x0, x1, yb, yBot);
+    px(g, x, y, edge ? (lit ? C.brassH : C.brassS) : C.brass);
+  }
+  // zellige band just inside the edge: turquoise / ivory checks on a dark grout
+  const bandIn = (x, y) => inArch(x, y, x0 + 4, x1 - 4, yb, yBot - 4) && !inArch(x, y, x0 + 9, x1 - 9, yb + 2, yBot - 9);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (bandIn(x, y)) {
+    const k = (Math.floor((x + y) / 3) + Math.floor((x - y + 300) / 3)) % 2;
+    px(g, x, y, (x + y) % 3 === 0 || (x - y + 300) % 3 === 0 ? C.tqD : k ? C.tq : C.ivory);
+  }
+  // inner panel: engraved brass with a faint diagonal lattice (mashrabiya)
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (inArch(x, y, x0 + 10, x1 - 10, yb + 3, yBot - 10)) {
+    const lat = (x + y) % 6 === 0 || (x - y + 600) % 6 === 0;
+    px(g, x, y, lat ? C.brassS : C.brass);
+  }
+  // ring knocker hanging from a boss at the top, star medallion behind it
+  const cx = Math.round((x0 + x1) / 2);
+  star(g, cx, 34, 8, C.tq, C.ink);
+  star(g, cx, 34, 4, C.tqL, C.tqD);
+  rect(g, cx - 1, 33, 3, 3, C.brassH);
+  // dial window
+  const wx = cx - 13, wy = 50, ww = 26, dh = 17, wh = dh * 4 + 3;
+  rect(g, wx - 2, wy - 2, ww + 4, wh + 4, C.ink);
+  rect(g, wx - 1, wy - 1, ww + 2, wh + 2, C.brassD);
+  rect(g, wx, wy, ww, wh, C.win);
+  for (let i = 0; i < 4; i++) {
+    const dy = wy + 1 + i * dh, h = dh - 2;
+    // ivory cylinder, darker toward the top and bottom
+    for (let y = 0; y < h; y++) {
+      const t = Math.abs(y - (h - 1) / 2) / ((h - 1) / 2);
+      rect(g, wx + 1, dy + y, ww - 2, 1, t > .8 ? C.ivoryD : t > .5 ? C.ivoryS : C.ivory);
+    }
+    rect(g, wx + 1, dy + 2, 2, h - 4, C.cream);   // glint
+    // digits: current in the middle, neighbours peeking above / below
+    const r = ROLL[i];
+    const d = DIALS[i], gx = wx + Math.round(ww / 2) - 2;
+    for (const k of [-1, 0, 1]) {
+      const yy = dy + Math.round((h - 7) / 2) + k * 9 + Math.round(r);
+      glyph(g, (d + k + 10) % 10, gx, yy, k ? C.ivoryD : C.dial, dy, dy + h);
+    }
+    // brass band between dials
+    if (i < 3) { rect(g, wx, dy + h, ww, 1, C.brassS); rect(g, wx, dy + h + 1, ww, 1, C.brassL); }
+    // up / down studs on the right of each dial
+    const ax = wx + ww + 7, mid = dy + Math.floor(h / 2);   // ax = arrow centre
+    tri(g, ax, mid - 6, 1); tri(g, ax, mid + 2, -1);
+    // matching dot on the left
+    rect(g, wx - 6, mid - 1, 3, 3, C.ink); rect(g, wx - 5, mid, 1, 1, C.tqL);
+  }
+  // keyhole under the window
+  const ky = wy + wh + 6;
+  rect(g, cx - 2, ky, 5, 4, C.ink); rect(g, cx - 1, ky + 4, 3, 5, C.ink); rect(g, cx - 1, ky + 1, 3, 2, C.win);
+  // rivets
+  for (const [rx, ry] of [[x0 + 6, yBot - 6], [x1 - 6, yBot - 6], [x0 + 6, yb + 4], [x1 - 6, yb + 4]]) {
+    rect(g, rx - 1, ry - 1, 3, 3, C.ink); px(g, rx, ry, C.brassH);
+  }
+  // the button: a turquoise tile plaque with the word in the pop-text style
+  const pressed = now - pressAt < 140;
+  const bx = 12, by = yBot + 8 + (pressed ? 1 : 0), bw = W - 24, bh = 15;
+  if (!pressed) rect(g, bx, by + 2, bw, bh, C.ink);           // drop shadow
+  rect(g, bx, by, bw, bh, C.ink);
+  rect(g, bx + 1, by + 1, bw - 2, bh - 2, C.tqD);
+  rect(g, bx + 1, by + 1, bw - 2, bh - 4, C.tq);
+  rect(g, bx + 2, by + 2, bw - 4, 1, C.tqL);
+  BIG.button = { x: bx, y: by, w: bw, h: bh };
+  BIG.dials = { wx, wy, ww, dh };
+  return { bx, by, bw, bh };
+}
+// text on the scaled canvas: Silkscreen with a dark outline (same as LOCKED / DONE!)
+function popWord(g, text, x, y, size, fill) {
+  g.font = `700 ${size}px 'Silkscreen', monospace`;
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineJoin = 'round'; g.lineWidth = Math.max(3, size * .28); g.strokeStyle = C.ink;
+  g.strokeText(text, x, y); g.fillStyle = fill; g.fillText(text, x, y);
+}
+
+// ── The mini lock (top-right corner) ──
+const MINI = { W: 26, H: 38 };
+function drawMini(g) {
+  const { W, H } = MINI, x0 = 2, x1 = W - 3, yb = 14, yBot = H - 3;
+  g.clearRect(0, 0, W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const a = inArch(x, y, x0, x1, yb, yBot);
+    if (!a) { if (inArch(x - 1, y, x0, x1, yb, yBot) || inArch(x + 1, y, x0, x1, yb, yBot) || inArch(x, y + 1, x0, x1, yb, yBot) || inArch(x, y - 1, x0, x1, yb, yBot)) px(g, x, y, C.ink); continue; }
+    const edge = !inArch(x - 1, y, x0, x1, yb, yBot) || !inArch(x + 1, y, x0, x1, yb, yBot) || !inArch(x, y - 1, x0, x1, yb, yBot) || !inArch(x, y + 1, x0, x1, yb, yBot);
+    const band = !edge && !inArch(x, y, x0 + 2, x1 - 2, yb + 1, yBot - 2);
+    px(g, x, y, edge ? (!inArch(x - 1, y - 1, x0, x1, yb, yBot) ? C.brassH : C.brassS) : band ? ((x + y) % 2 ? C.tq : C.ivory) : C.brass);
+  }
+  const cx = Math.round((x0 + x1) / 2);
+  star(g, cx, 10, 2, C.tq, C.ink);
+  // four dial slots
+  const wx = cx - 4, wy = 15;
+  rect(g, wx - 1, wy - 1, 10, 4 * 4 + 1, C.ink);
+  for (let i = 0; i < 4; i++) { rect(g, wx, wy + i * 4, 8, 3, C.ivory); rect(g, wx, wy + i * 4 + 2, 8, 1, C.ivoryS); rect(g, wx + 3, wy + i * 4, 2, 2, C.dial); }
+  rect(g, cx - 1, wy + 18, 3, 3, C.ink);   // keyhole
+}
+
+// ── Scaling: art canvas → screen canvas in whole pixels ──
+const art = document.createElement('canvas');
+const big = document.getElementById('big'), mini = document.getElementById('mini');
+let BS = 4, MS = 2;
+function layout() {
+  BS = Math.max(2, Math.floor(Math.min((innerHeight - 40) / BIG.H, (innerWidth - 40) / BIG.W)));
+  MS = Math.max(2, Math.min(3, Math.floor(innerWidth / 400)));
+  big.width = BIG.W * BS; big.height = BIG.H * BS;
+  mini.width = MINI.W * MS; mini.height = MINI.H * MS;
+  drawAll();
+}
+function blit(target, w, h, s, fn) {
+  art.width = w; art.height = h;
+  const ag = art.getContext('2d');
+  const r = fn(ag);
+  const g = target.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.clearRect(0, 0, target.width, target.height);
+  g.drawImage(art, 0, 0, w * s, h * s);
+  return { g, r };
+}
+function drawAll(now = performance.now()) {
+  blit(mini, MINI.W, MINI.H, MS, ag => drawMini(ag));
+  if (!document.getElementById('ov').classList.contains('open')) return;
+  const { g, r } = blit(big, BIG.W, BIG.H, BS, ag => drawBig(ag, now));
+  popWord(g, 'UNLOCK', (r.bx + r.bw / 2) * BS, (r.by + r.bh / 2 - 1) * BS, Math.round(BS * 6.5), '#ffd166');
+  // pop-up word after pressing, like SOLVED! / LOCKED
+  const e = (now - popAt) / 1300;
+  if (e >= 0 && e < 1) {
+    const s = e < .15 ? 1 + .9 * Math.sin(e / .15 * Math.PI / 2) - .9 * (e / .15) * (e / .15) * 0 : 1;
+    g.save(); g.globalAlpha = e > .7 ? (1 - e) / .3 : 1;
+    g.translate(big.width / 2, (BIG.dials.wy - 10) * BS - e * 40); g.scale(s, s);
+    popWord(g, 'UNLOCK!', 0, 0, Math.round(BS * 7), '#7ee08a');
+    g.restore();
+  }
+}
+function loop(now) {
+  let moving = false;
+  for (let i = 0; i < 4; i++) if (ROLL[i]) { ROLL[i] *= .72; if (Math.abs(ROLL[i]) < .3) ROLL[i] = 0; moving = true; }
+  if (moving || now - pressAt < 200 || now - popAt < 1300) drawAll(now);
+  requestAnimationFrame(loop);
+}
+
+// ── Interaction (look & feel only) ──
+function turn(i, dir) { DIALS[i] = (DIALS[i] + dir + 10) % 10; ROLL[i] = dir * 9; }
+mini.onclick = () => { document.getElementById('ov').classList.add('open'); big.style.animation = 'none'; big.offsetHeight; big.style.animation = ''; drawAll(); };
+document.getElementById('ov').addEventListener('pointerdown', e => { if (e.target.id === 'ov') e.currentTarget.classList.remove('open'); });
+let swipe = null;
+big.addEventListener('pointerdown', e => {
+  const r = big.getBoundingClientRect(), x = (e.clientX - r.left) / BS, y = (e.clientY - r.top) / BS;
+  const b = BIG.button, d = BIG.dials;
+  if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) { pressAt = popAt = performance.now(); drawAll(); return; }
+  const i = Math.floor((y - d.wy) / d.dh);
+  if (i < 0 || i > 3) return;
+  if (x >= d.wx + d.ww + 1 && x <= d.wx + d.ww + 10) { const mid = d.wy + 1 + i * d.dh + (d.dh - 2) / 2; turn(i, y < mid ? -1 : 1); drawAll(); return; }
+  if (x >= d.wx && x < d.wx + d.ww) { swipe = { i, y: e.clientY }; big.setPointerCapture(e.pointerId); }
+});
+big.addEventListener('pointermove', e => {
+  if (!swipe) return;
+  const step = BS * 8;
+  while (e.clientY - swipe.y > step) { turn(swipe.i, -1); swipe.y += step; }
+  while (swipe.y - e.clientY > step) { turn(swipe.i, 1); swipe.y -= step; }
+});
+big.addEventListener('pointerup', () => { swipe = null; });
+addEventListener('resize', layout);
+document.fonts.load("700 20px 'Silkscreen'").then(() => drawAll());
+layout(); requestAnimationFrame(loop);
+// ?open=1 shows the big lock straight away (handy for screenshots)
+if (new URLSearchParams(location.search).get('open') === '1') mini.onclick();
+</script>
+</body>
+</html>
