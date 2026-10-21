@@ -321,5 +321,7 @@ const PL = (() => {
     };
   }
 
-  return { LOCKS, isPixel, get, drawMini, glowCSS, codeText, mount, sameCode: (a, b) => a.length === b.length && a.every((x, i) => +x === +b[i]) };
+  // drawing pieces, shared with the design previews (unlocker-preview*.html)
+  const parts = { C, MAT, GLYPHS, px, rect, glyph, inArch, star, popWord, fitWord };
+  return { parts, LOCKS, isPixel, get, drawMini, glowCSS, codeText, mount, sameCode: (a, b) => a.length === b.length && a.every((x, i) => +x === +b[i]) };
 })();

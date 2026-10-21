@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Courtyard Locks — horizontal preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* Look-only preview of the horizontal Courtyard Locks: the same four colour
+   schemes as the vertical ones, turned on their side for a landscape screen
+   and mirror-symmetric left to right — a long plate with a pointed arch at
+   each end, a star in each end, four dials side by side (each still rolls
+   up / down: tap its top or bottom half, or swipe it), UNLOCK underneath. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #0e0d0a; color: #d4ba88; font-family: 'Cinzel', serif; overflow: hidden; }
+#screen { position: absolute; inset: 0; overflow: hidden;
+  background: radial-gradient(ellipse at 30% 40%, #7d93ad 0%, #5f7690 35%, #48596f 70%, #34404f 100%); }
+#board { position: absolute; left: 50%; top: 54%; width: min(70vw, 900px); aspect-ratio: 16 / 9; transform: translate(-50%, -50%);
+  border: 3px solid rgba(240,247,255,.85); border-radius: 4px; display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 10px; padding: 10px; }
+#board div { background: #2f4a66; border: 2px solid rgba(240,247,255,.9); border-radius: 4px; }
+#board div:nth-child(2) { grid-row: span 2; }
+#crt { position: absolute; inset: 0; pointer-events: none; z-index: 30;
+  background: repeating-linear-gradient(to bottom, rgba(0,0,0,.13) 0 1px, transparent 1px 3px); box-shadow: inset 0 0 120px rgba(0,0,0,.55); }
+#miniBox { position: absolute; top: 14px; right: 16px; z-index: 10; cursor: pointer; animation: bob 3.2s ease-in-out infinite; }
+#miniBox:hover { animation-play-state: paused; transform: scale(1.12) rotate(-3deg); }
+#miniBox canvas { position: relative; display: block; image-rendering: pixelated; filter: drop-shadow(0 3px 0 rgba(0,0,0,.35)); }
+@keyframes bob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-3px) } }
+.halo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
+#ov { position: absolute; inset: 0; z-index: 20; background: rgba(8,8,10,.62); display: none; align-items: center; justify-content: center; }
+#ov.open { display: flex; }
+.wrap { position: relative; display: flex; }
+.wrap canvas { position: relative; image-rendering: pixelated; touch-action: none; filter: drop-shadow(0 8px 0 rgba(0,0,0,.35)); }
+#cmp { position: absolute; inset: 0; z-index: 25; background: rgba(8,8,10,.72); display: none; flex-wrap: wrap; align-content: center; justify-content: center; gap: 3vh 4vw; padding: 60px 20px 40px; }
+#cmp.open { display: flex; }
+#cmp figure { display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; }
+#cmp figcaption { font: 12px 'Cinzel', serif; color: #e8dfc8; letter-spacing: 1px; }
+#cmp figure:hover figcaption { color: #ffd166; }
+#hint { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; z-index: 40; font: 11px sans-serif; color: rgba(255,255,255,.7); pointer-events: none; }
+#opts { position: absolute; left: 12px; top: 12px; z-index: 40; display: flex; gap: 6px; flex-wrap: wrap; max-width: calc(100vw - 150px); }
+#opts button { background: #1e1a12; border: 1px solid #2e2a1e; color: #d4ba88; font: 11px 'Cinzel', serif; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+#opts button.on { border-color: #c8a84b; color: #c8a84b; }
+</style>
+</head>
+<body>
+<div id="screen">
+  <div id="board"><div></div><div></div><div></div><div></div><div></div></div>
+  <div id="miniBox"><div class="halo" id="miniHalo"></div><canvas id="mini"></canvas></div>
+  <div id="ov"><div class="wrap"><div class="halo" id="bigHalo"></div><canvas id="big"></canvas></div></div>
+  <div id="cmp"></div>
+  <div id="crt"></div>
+</div>
+<div id="opts"></div>
+<div id="hint"></div>
+<script src="pixel_locks.js"></script>
+<script>
+const { C, MAT, px, rect, glyph, inArch, star, popWord, fitWord } = PL.parts;
+let digitSet = 'ar';
+
+// ── Geometry (art px). The plate is a long box whose left and right ends are
+// pointed arches lying on their side; everything is mirrored about the middle.
+const DW = 20, DH = 30, GAP = 3;                    // one dial, the rim between dials
+const CAP = 20;                                       // length of each pointed end
+function geo() {
+  const winW = DW * 4 + GAP * 3 + 2, winH = DH + 2;
+  const bodyW = winW + 16;                            // straight middle part
+  const plateH = winH + 22;
+  const W = bodyW + CAP * 2 + 2, plateTop = 1;
+  const cx = W / 2;
+  const xa = Math.round(cx - bodyW / 2), xb = W - 1 - xa;   // where the ends start (mirrored)
+  const wx = Math.round(cx - winW / 2), wy = plateTop + Math.round((plateH - winH) / 2);
+  const H = plateTop + plateH + 22;
+  return { W, H, cx, xa, xb, top: plateTop, bot: plateTop + plateH - 1, winW, winH, wx, wy };
+}
+// inside the plate? Each end is a pointed (Moorish) arch lying on its side:
+// two circular arcs that meet in a point CAP px out. k: how full the arcs are.
+function inPlate(G, x, y, inset = 0, k = .72) {
+  const t0 = G.top + inset, t1 = G.bot - inset;
+  if (y < t0 || y > t1) return false;
+  if (x >= G.xa && x <= G.xb) return true;
+  const half = (t1 - t0) / 2 + .5, t = Math.abs(y - (t0 + t1) / 2);
+  const d = x < G.xa ? G.xa - x : x - G.xb, len = CAP - inset;   // how far into the end
+  if (d > len) return false;
+  const R = k * 2 * half, Hh = Math.sqrt(R * R - (R - half) * (R - half));
+  const yy = d * Hh / len;
+  return t <= Math.sqrt(Math.max(0, R * R - yy * yy)) - (R - half);
+}
+function plate(g, G, L) {
+  const M = MAT[L.mat], P = L.pal, tiles = P.tiles, e = 3, bw = 4, o = e + 1;
+  const IN = (x, y, i = 0) => inPlate(G, x, y, i);
+  for (let y = 0; y <= G.bot + 1; y++) for (let x = 0; x < G.W; x++) {
+    if (!IN(x, y)) { if (IN(x - 1, y) || IN(x + 1, y) || IN(x, y - 1) || IN(x, y + 1)) px(g, x, y, C.ink); continue; }
+    // bevel: light along the top, dark along the bottom (same on both ends)
+    const edge = !IN(x - e, y) || !IN(x + e, y) || !IN(x, y - e) || !IN(x, y + e);
+    if (edge) { px(g, x, y, !IN(x, y - e) ? (!IN(x, y - 1) ? M.H : M.L) : M.S); continue; }
+    if (!IN(x, y, o + bw) && IN(x, y, o)) {
+      const xm = x < G.cx ? x : G.W - 1 - x;           // mirror the tile pattern
+      const gr = (xm + y) % 3 === 0 || (xm - y + 300) % 3 === 0;
+      const t = Math.floor((xm + y) / 3) + 2 * Math.floor((xm - y + 300) / 3);
+      px(g, x, y, gr ? P.grout : tiles[((t % tiles.length) + tiles.length) % tiles.length]);
+      continue;
+    }
+    const xm = x < G.cx ? x : G.W - 1 - x;
+    px(g, x, y, (xm + y) % 6 === 0 || (xm - y + 600) % 6 === 0 ? M.lat : M.B);
+  }
+}
+function drawLock(g, L, st, now) {
+  const G = geo(), M = MAT[L.mat], P = L.pal;
+  g.clearRect(0, 0, G.W, G.H);
+  plate(g, G, L);
+  // a star in each end
+  const sy = Math.round((G.top + G.bot) / 2);
+  for (const sx of [Math.round(G.xa - CAP * .3), Math.round(G.xb + CAP * .3)]) {
+    star(g, sx, sy, 6, P.star[0], C.ink); star(g, sx, sy, 3, P.star[1], P.star[2]);
+  }
+  // dial window
+  const { wx, wy, winW, winH } = G;
+  rect(g, wx - 2, wy - 2, winW + 4, winH + 4, C.ink);
+  rect(g, wx - 1, wy - 1, winW + 2, winH + 2, M.D);
+  rect(g, wx, wy, winW, winH, C.win);
+  for (let i = 0; i < 4; i++) {
+    const dx = wx + 1 + i * (DW + GAP), dy = wy + 1, h = DH;
+    for (let y = 0; y < h; y++) {
+      const t = Math.abs(y - (h - 1) / 2) / ((h - 1) / 2);
+      rect(g, dx, dy + y, DW, 1, t > .8 ? C.ivoryD : t > .5 ? C.ivoryS : C.ivory);
+    }
+    rect(g, dx, dy + 2, 1, h - 4, C.cream); rect(g, dx + DW - 1, dy + 2, 1, h - 4, C.ivoryS);   // round both sides
+    const d = st.dials[i], r = st.roll[i], gx = dx + DW / 2 - 5, step = 14 + 5;
+    for (const kk of [-1, 0, 1]) {
+      const yy = dy + Math.round((h - 14) / 2) + kk * step + Math.round(r * 2);
+      glyph(g, digitSet, (d + kk + 10) % 10, gx, yy, 2, kk ? C.ivoryD : C.digit, dy, dy + h);
+    }
+    const mx = dx + DW / 2 - 1;
+    rect(g, mx - 1, dy + 1, 3, 1, C.caret); px(g, mx, dy, C.caret);
+    rect(g, mx - 1, dy + h - 2, 3, 1, C.caret); px(g, mx, dy + h - 1, C.caret);
+    if (i < 3) { rect(g, dx + DW, dy, 1, h, P.rim[0]); rect(g, dx + DW + 1, dy, 1, h, P.rim[1]); rect(g, dx + DW + 2, dy, 1, h, P.rim[0]); }
+    // studs above and below each dial
+    for (const yy of [wy - 5, wy + winH + 2]) { rect(g, dx + DW / 2 - 2, yy, 3, 3, C.ink); px(g, dx + DW / 2 - 1, yy + 1, P.studs); }
+  }
+  // button under the plate, centred
+  const pressed = now - st.pressAt < 140;
+  const bw = 64, bh = 16, bx = Math.round(G.cx - bw / 2), by = G.bot + 5 + (pressed ? 1 : 0);
+  if (!pressed) rect(g, bx, by + 2, bw, bh, C.ink);
+  rect(g, bx, by, bw, bh, C.ink);
+  rect(g, bx + 1, by + 1, bw - 2, bh - 2, P.btn[0]); rect(g, bx + 1, by + 1, bw - 2, bh - 4, P.btn[1]); rect(g, bx + 2, by + 2, bw - 4, 1, P.btn[2]);
+  return { G, button: { x: bx, y: by, w: bw, h: bh } };
+}
+
+// ── Mini: a small cartouche with four slots ──
+function drawMini(g, L) {
+  const W = 38, H = 17, M = MAT[L.mat], P = L.pal;
+  const G = { W, top: 1, bot: H - 2, xa: 9, xb: W - 10, cx: W / 2 };
+  const IN = (x, y, i = 0) => { const t0 = G.top + i, t1 = G.bot - i; if (y < t0 || y > t1) return false; if (x >= G.xa && x <= G.xb) return true;
+    const half = (t1 - t0) / 2, t = y - (t0 + t1) / 2, d = x < G.xa ? G.xa - x : x - G.xb; return d <= 8 - i && Math.abs(t) <= half * (1 - d / (9 - i)) + .5; };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!IN(x, y)) { if (IN(x - 1, y) || IN(x + 1, y) || IN(x, y - 1) || IN(x, y + 1)) px(g, x, y, C.ink); continue; }
+    const edge = !IN(x - 1, y) || !IN(x + 1, y) || !IN(x, y - 1) || !IN(x, y + 1);
+    const band = !edge && !IN(x, y, 2);
+    px(g, x, y, edge ? (!IN(x, y - 1) ? M.H : M.S) : band ? ((x + y) % 2 ? P.tiles[0] : P.tiles[2]) : M.B);
+  }
+  rect(g, 11, 4, 16, 9, C.ink);
+  for (let i = 0; i < 4; i++) { rect(g, 12 + i * 4, 5, 3, 7, C.ivory); rect(g, 12 + i * 4, 10, 3, 1, C.ivoryS); rect(g, 13 + i * 4, 6, 1, 3, C.digit); }
+  px(g, 5, 8, P.star[0]); px(g, W - 6, 8, P.star[0]);
+  return { W, H };
+}
+
+// ── Page ──
+let cur = PL.LOCKS[0];
+const st = { dials: [1, 9, 4, 7], roll: [0, 0, 0, 0], pressAt: -1e9, popAt: -1e9 };
+const art = document.createElement('canvas');
+const big = document.getElementById('big'), mini = document.getElementById('mini');
+let S = 4, hit = null;
+function blit(target, w, h, s, fn) {
+  art.width = w; art.height = h;
+  const r = fn(art.getContext('2d'));
+  target.width = Math.round(w * s); target.height = Math.round(h * s);
+  const g = target.getContext('2d'); g.imageSmoothingEnabled = false;
+  g.drawImage(art, 0, 0, target.width, target.height);
+  return { g, r };
+}
+function drawBigTo(canvas, L, s, state, now, live) {
+  const G = geo();
+  const { g, r } = blit(canvas, G.W, G.H, s, ag => drawLock(ag, L, state, now));
+  const b = r.button;
+  popWord(g, 'UNLOCK', (b.x + b.w / 2) * s, (b.y + b.h / 2 - 1) * s, fitWord(g, 'UNLOCK', (b.w - 6) * s, Math.round(s * 7)), '#ffd166');
+  if (live) {
+    hit = r;
+    const e = (now - state.popAt) / 1300;
+    if (e >= 0 && e < 1) {
+      g.save(); g.globalAlpha = e > .7 ? (1 - e) / .3 : 1;
+      const sc = e < .15 ? .6 + .46 * Math.sin(e / .15 * Math.PI / 2) : 1;
+      g.translate(canvas.width / 2, (G.wy - 3) * s - e * 40); g.scale(sc, sc);
+      popWord(g, 'UNLOCK!', 0, 0, Math.round(s * 8), '#7ee08a');
+      g.restore();
+    }
+  }
+}
+function fitScale(fw = 1, fh = 1) { const G = geo(); const f = Math.min((innerWidth * fw - 30) / G.W, (innerHeight * fh - 90) / G.H); return f >= 2 ? Math.floor(f) : f; }
+function drawAll(now = performance.now()) {
+  const ms = innerWidth < 700 ? 2 : 3;
+  const m = blit(mini, 38, 17, ms, ag => drawMini(ag, cur));
+  const mh = document.getElementById('miniHalo'); mh.style.width = 38 * ms * 1.9 + 'px'; mh.style.height = 17 * ms * 3.2 + 'px'; mh.style.background = PL.glowCSS('px:' + cur.id);
+  if (document.getElementById('ov').classList.contains('open')) {
+    drawBigTo(big, cur, S, st, now, true);
+    const h = document.getElementById('bigHalo'); h.style.width = big.width * 1.6 + 'px'; h.style.height = big.height * 2.2 + 'px'; h.style.background = PL.glowCSS('px:' + cur.id);
+  }
+}
+function buildCompare() {
+  const box = document.getElementById('cmp'); box.innerHTML = '';
+  const s = Math.max(2, Math.floor(Math.min((innerWidth / 2 - 80) / geo().W, (innerHeight / 2 - 90) / geo().H)));
+  for (const L of PL.LOCKS) {
+    const f = document.createElement('figure'), w = document.createElement('div'), h = document.createElement('div'), c = document.createElement('canvas');
+    w.className = 'wrap'; h.className = 'halo';
+    drawBigTo(c, L, s, { dials: [1, 9, 4, 7], roll: [0, 0, 0, 0], pressAt: -1e9, popAt: -1e9 }, 0, false);
+    h.style.width = c.width * 1.5 + 'px'; h.style.height = c.height * 2 + 'px'; h.style.background = PL.glowCSS('px:' + L.id);
+    w.append(h, c);
+    const cap = document.createElement('figcaption'); cap.textContent = L.name;
+    f.append(w, cap); f.onclick = () => { cur = L; openBig(); };
+    box.appendChild(f);
+  }
+}
+function showCompare(on) { document.getElementById('cmp').classList.toggle('open', on); if (on) { document.getElementById('ov').classList.remove('open'); buildCompare(); } opts(); }
+function openBig() { showCompare(false); S = fitScale(.9, 1); document.getElementById('ov').classList.add('open'); drawAll(); opts(); }
+function opts() {
+  const o = document.getElementById('opts'), on = document.getElementById('cmp').classList.contains('open'); o.innerHTML = '';
+  const btn = (t, a, fn) => { const b = document.createElement('button'); b.textContent = t; if (a) b.className = 'on'; b.onclick = fn; o.appendChild(b); };
+  btn('Compare all', on, () => showCompare(true));
+  for (const L of PL.LOCKS) btn(L.name, !on && L === cur, () => { cur = L; showCompare(false); drawAll(); });
+  btn('٠١٢٣', digitSet === 'ar', () => { digitSet = 'ar'; refresh(); });
+  btn('0123', digitSet === 'en', () => { digitSet = 'en'; refresh(); });
+  document.getElementById('hint').textContent = on ? 'Tap a lock to try it · or pick one above and tap the small lock in the top-right corner'
+    : 'Tap the small lock (top-right) · tap the top / bottom half of a dial, or swipe it · tap outside to close';
+}
+function refresh() { opts(); if (document.getElementById('cmp').classList.contains('open')) buildCompare(); drawAll(); }
+function turn(i, dir) { st.dials[i] = (st.dials[i] + dir + 10) % 10; st.roll[i] = dir * 9.5; }
+function loop(now) {
+  let m = false;
+  for (let i = 0; i < 4; i++) if (st.roll[i]) { st.roll[i] *= .72; if (Math.abs(st.roll[i]) < .3) st.roll[i] = 0; m = true; }
+  if (m || now - st.pressAt < 200 || now - st.popAt < 1300) drawAll(now);
+  requestAnimationFrame(loop);
+}
+document.getElementById('miniBox').onclick = openBig;
+document.getElementById('ov').addEventListener('pointerdown', e => { if (e.target.id === 'ov') e.currentTarget.classList.remove('open'); });
+let sw = null;
+big.addEventListener('pointerdown', e => {
+  const r = big.getBoundingClientRect(), G = geo(), x = (e.clientX - r.left) / r.width * G.W, y = (e.clientY - r.top) / r.height * G.H, b = hit.button;
+  if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h + 2) { st.pressAt = st.popAt = performance.now(); return; }
+  const i = Math.floor((x - G.wx - 1) / (DW + GAP));
+  if (i < 0 || i > 3 || y < G.wy - 6 || y > G.wy + G.winH + 6) return;
+  sw = { i, y: e.clientY, mid: G.wy + 1 + DH / 2, moved: false }; big.setPointerCapture(e.pointerId);
+});
+big.addEventListener('pointermove', e => {
+  if (!sw) return; const step = S * 9;
+  while (e.clientY - sw.y > step) { turn(sw.i, -1); sw.y += step; sw.moved = true; }
+  while (sw.y - e.clientY > step) { turn(sw.i, 1); sw.y -= step; sw.moved = true; }
+});
+big.addEventListener('pointerup', e => {
+  if (sw && !sw.moved) { const r = big.getBoundingClientRect(), y = (e.clientY - r.top) / r.height * geo().H; turn(sw.i, y < sw.mid ? -1 : 1); }
+  sw = null;
+});
+addEventListener('resize', () => { S = fitScale(.9, 1); refresh(); });
+document.fonts.load("700 20px 'Silkscreen'").then(refresh);
+const Q = new URLSearchParams(location.search);
+if (Q.get('v')) cur = PL.LOCKS.find(L => L.id === Q.get('v')) || cur;
+opts(); drawAll(); requestAnimationFrame(loop);
+if (Q.get('open') === '1') openBig(); else showCompare(true);
+</script>
+</body>
+</html>
