@@ -69,6 +69,7 @@ const C = {
 const MAT = {
   brass: { D: C.brassD, S: C.brassS, B: C.brass, L: C.brassL, H: C.brassH, lat: C.brassS },
   wood:  { D: C.woodD,  S: C.woodS,  B: C.wood,  L: C.woodL,  H: C.woodH,  lat: C.woodS },
+  copper:{ D: '#4a2414', S: '#7c3c22', B: '#a95a35', L: '#d48a5a', H: '#f6c79a', lat: '#7c3c22' },
 };
 const BAND = {
   tq:   [C.tq, C.ivory, C.tqD],
@@ -111,16 +112,26 @@ let digitSet = 'ar';
 // (1 = 5×7, 2 = 10×14) · arrows: 'side' (▲▼ beside each dial) or 'carets'
 // (tap the top / bottom half of a dial) · dial: 'ivory' | 'ebony'
 const VARIANTS = [
-  { id: 'A', name: 'Courtyard', note: 'the first one · wide, small digits',
-    W: 84, k: .6, springY: 58, ww: 26, gs: 1, pad: 4, arrows: 'side', dial: 'ivory', mat: 'brass', band: 'tq', star: 8 },
-  { id: 'B', name: 'Minaret', note: 'thinner · big digits · arrows beside',
-    W: 62, k: .62, springY: 50, ww: 30, gs: 2, pad: 3, arrows: 'side', dial: 'ivory', mat: 'brass', band: 'tq', star: 7 },
-  { id: 'C', name: 'Lantern', note: 'thinnest · big digits · tap top / bottom of a dial',
+  { id: 'C', name: 'Lantern', note: 'the one you picked · for reference',
     W: 46, k: .64, springY: 42, ww: 30, gs: 2, pad: 3, arrows: 'carets', dial: 'ivory', mat: 'brass', band: 'tq', star: 6 },
-  { id: 'D', name: 'Cedar Door', note: 'thin · carved wood · dark dials, gold digits',
-    W: 54, k: .55, springY: 46, ww: 32, gs: 2, pad: 3, arrows: 'carets', dial: 'ebony', mat: 'wood', band: 'brass', star: 6 },
-  { id: 'E', name: 'Blue Tile', note: 'thin · brass with blue tiles · arrows beside',
-    W: 56, k: .7, springY: 46, ww: 28, gs: 2, pad: 3, arrows: 'side', dial: 'ivory', mat: 'brass', band: 'blue', star: 6 },
+  // bulkier: wider plate, thicker bevel and tile border, chunkier dials, and
+  // more colours (a 3–4 colour tile border, a coloured star, button and rims)
+  { id: 'C2', name: 'Saffron', note: 'bulkier · turquoise, saffron & red',
+    W: 60, k: .64, springY: 46, ww: 34, gs: 2, pad: 4, arrows: 'carets', dial: 'ivory', mat: 'brass', star: 7, edge: 3, bw: 4,
+    pal: { tiles: ['#2a9d8f', '#efe3c4', '#e0a030', '#efe3c4'], grout: '#17594f', star: ['#b0392c', '#f2c14e', '#6e1f17'],
+      btn: ['#17594f', '#2a9d8f', '#7fdccd'], rim: ['#6e1f17', '#d0564a'], studs: '#e0a030' } },
+  { id: 'C3', name: 'Garden', note: 'bulkier · emerald, rose & ivory',
+    W: 60, k: .64, springY: 46, ww: 34, gs: 2, pad: 4, arrows: 'carets', dial: 'ivory', mat: 'brass', star: 7, edge: 3, bw: 4,
+    pal: { tiles: ['#2f8f55', '#efe3c4', '#d47a8c', '#efe3c4'], grout: '#1b4f30', star: ['#2f8f55', '#f5d0d8', '#1b4f30'],
+      btn: ['#8a3a4a', '#d47a8c', '#f5c4cf'], rim: ['#1b4f30', '#5cbf83'], studs: '#d47a8c' } },
+  { id: 'C4', name: 'Majlis', note: 'bulkier · cobalt, turquoise & ochre',
+    W: 60, k: .64, springY: 46, ww: 34, gs: 2, pad: 4, arrows: 'carets', dial: 'ivory', mat: 'brass', star: 7, edge: 3, bw: 4,
+    pal: { tiles: ['#2f5fa8', '#efe3c4', '#2a9d8f', '#d79a35'], grout: '#1d3a68', star: ['#d79a35', '#fff0b0', '#7a4f12'],
+      btn: ['#1d3a68', '#2f5fa8', '#7fa6e0'], rim: ['#1d3a68', '#5b8bd6'], studs: '#2a9d8f' } },
+  { id: 'C5', name: 'Sunset', note: 'bulkier · copper, terracotta & turquoise',
+    W: 60, k: .64, springY: 46, ww: 34, gs: 2, pad: 4, arrows: 'carets', dial: 'ivory', mat: 'copper', star: 7, edge: 3, bw: 4,
+    pal: { tiles: ['#c4553a', '#f3e2bf', '#2a9d8f', '#f3e2bf'], grout: '#6e2a1a', star: ['#2a9d8f', '#bff0e6', '#17594f'],
+      btn: ['#6e2a1a', '#c4553a', '#f0a080'], rim: ['#17594f', '#4cc2b2'], studs: '#2a9d8f' } },
 ];
 // Derived layout (art px) for a version
 function geo(v) {
@@ -163,16 +174,17 @@ function tri(g, cx, y, dir, M) {
 }
 function plate(g, v, G, M, band) {
   const { x0, x1, yb, yBot } = G, k = v.k, IN = (x, y, a = 0, b = 0, c = 0) => inArch(x, y, x0 + a, x1 - a, yb + b, yBot - c, k);
-  const H = G.H;
+  const H = G.H, e = v.edge || 2, o = e + 1, bw = v.bw || 3;
+  const tiles = v.pal ? v.pal.tiles : [band[0], band[1]], grout = v.pal ? v.pal.grout : band[2];
   for (let y = 0; y < H; y++) for (let x = 0; x < v.W; x++) {
     if (!IN(x, y)) { if (IN(x - 1, y) || IN(x + 1, y) || IN(x, y + 1) || IN(x, y - 1)) px(g, x, y, C.ink); continue; }
-    const edge = !IN(x - 2, y) || !IN(x + 2, y) || !IN(x, y - 2) || !IN(x, y + 2);
-    if (edge) { px(g, x, y, !IN(x - 2, y - 2) ? M.H : M.S); continue; }
-    const inBand = !IN(x, y, 6, 2, 6) && IN(x, y, 3, 0, 3);
+    const edge = !IN(x - e, y) || !IN(x + e, y) || !IN(x, y - e) || !IN(x, y + e);
+    if (edge) { px(g, x, y, !IN(x - e, y - e) ? (!IN(x - 1, y - 1) ? M.H : M.L) : M.S); continue; }
+    const inBand = !IN(x, y, o + bw, 2, o + bw) && IN(x, y, o, 0, o);
     if (inBand) {
-      const grout = (x + y) % 3 === 0 || (x - y + 300) % 3 === 0;
-      const k2 = (Math.floor((x + y) / 3) + Math.floor((x - y + 300) / 3)) % 2;
-      px(g, x, y, grout ? band[2] : k2 ? band[0] : band[1]);
+      const gr = (x + y) % 3 === 0 || (x - y + 300) % 3 === 0;
+      const t = Math.floor((x + y) / 3) + 2 * Math.floor((x - y + 300) / 3);
+      px(g, x, y, gr ? grout : tiles[((t % tiles.length) + tiles.length) % tiles.length]);
       continue;
     }
     const lat = (x + y) % 6 === 0 || (x - y + 600) % 6 === 0;
@@ -182,12 +194,13 @@ function plate(g, v, G, M, band) {
 
 // ── A whole big lock ──
 function drawLock(g, v, st, now) {
-  const G = geo(v), M = MAT[v.mat], band = BAND[v.band];
+  const G = geo(v), M = MAT[v.mat], band = BAND[v.band] || BAND.tq;
   g.clearRect(0, 0, v.W, G.H);
   plate(g, v, G, M, band);
   const { cx, wx, wy, ww, dh, gh } = G;
-  star(g, cx, Math.round(wy - v.star - 6), v.star, band === BAND.brass ? C.brassL : band[0], C.ink);
-  star(g, cx, Math.round(wy - v.star - 6), Math.max(2, Math.round(v.star / 2)), band === BAND.brass ? C.brassH : C.tqL, band === BAND.brass ? C.brassS : band[2]);
+  const P = v.pal;
+  star(g, cx, Math.round(wy - v.star - 6), v.star, P ? P.star[0] : band === BAND.brass ? C.brassL : band[0], C.ink);
+  star(g, cx, Math.round(wy - v.star - 6), Math.max(2, Math.round(v.star / 2)), P ? P.star[1] : band === BAND.brass ? C.brassH : C.tqL, P ? P.star[2] : band === BAND.brass ? C.brassS : band[2]);
   // dial window
   rect(g, wx - 2, wy - 2, ww + 4, G.wh + 4, C.ink);
   rect(g, wx - 1, wy - 1, ww + 2, G.wh + 2, M.D);
@@ -206,18 +219,17 @@ function drawLock(g, v, st, now) {
       const yy = dy + Math.round((h - gh) / 2) + kk * step + Math.round(r * v.gs);
       glyph(g, (d + kk + 10) % 10, gx, yy, v.gs, kk ? (ebony ? C.goldD : C.ivoryD) : (ebony ? C.gold : '#3a2410'), dy, dy + h);
     }
-    // carets drawn on the dial (tap the top / bottom half)
+    // carets on the dial: tap its top / bottom half
     if (v.arrows === 'carets') {
-      const cc = ebony ? C.goldD : C.ivoryD;
-      for (const [yy, dir] of [[dy + 1, -1], [dy + h - 2, 1]]) { px(g, cx - 1, yy, cc); px(g, cx, yy + dir * 0, cc); px(g, cx + 1, yy, cc); px(g, cx, yy + (dir < 0 ? -0 : 0), cc); }
+      const cc = ebony ? C.goldD : '#a8956a';
       rect(g, cx - 1, dy + 1, 3, 1, cc); px(g, cx, dy, cc);
       rect(g, cx - 1, dy + h - 2, 3, 1, cc); px(g, cx, dy + h - 1, cc);
     }
-    // brass band between dials
-    rect(g, wx, dy + h, ww, 1, M.S); rect(g, wx, dy + h + 1, ww, 1, M.L);
+    // band between dials (coloured rim on the colourful versions)
+    rect(g, wx, dy + h, ww, 1, P ? P.rim[0] : M.S); rect(g, wx, dy + h + 1, ww, 1, P ? P.rim[1] : M.L);
     const mid = dy + Math.floor(h / 2);
     if (v.arrows === 'side') { tri(g, G.ax, mid - 6, 1, M); tri(g, G.ax, mid + 2, -1, M); }
-    else { rect(g, wx - 5, mid - 1, 3, 3, C.ink); px(g, wx - 4, mid, band[0]); rect(g, wx + ww + 2, mid - 1, 3, 3, C.ink); px(g, wx + ww + 3, mid, band[0]); }
+    else { const sc = P ? P.studs : band[0]; rect(g, wx - 5, mid - 1, 3, 3, C.ink); px(g, wx - 4, mid, sc); rect(g, wx + ww + 2, mid - 1, 3, 3, C.ink); px(g, wx + ww + 3, mid, sc); }
   }
   // keyhole + rivets
   const ky = wy + G.wh + 4;
@@ -228,7 +240,7 @@ function drawLock(g, v, st, now) {
   const bx = Math.max(2, Math.round(v.W / 2 - 34)), bw = v.W - 2 * bx, by = G.yBot + 7 + (pressed ? 1 : 0), bh = 15;
   if (!pressed) rect(g, bx, by + 2, bw, bh, C.ink);
   rect(g, bx, by, bw, bh, C.ink);
-  const B0 = band === BAND.brass ? [C.brassS, C.brass, C.brassH] : [band[2], band[0], band === BAND.blue ? C.blueL : C.tqL];
+  const B0 = P ? P.btn : band === BAND.brass ? [C.brassS, C.brass, C.brassH] : [band[2], band[0], band === BAND.blue ? C.blueL : C.tqL];
   rect(g, bx + 1, by + 1, bw - 2, bh - 2, B0[0]); rect(g, bx + 1, by + 1, bw - 2, bh - 4, B0[1]); rect(g, bx + 2, by + 2, bw - 4, 1, B0[2]);
   return { G, button: { x: bx, y: by, w: bw, h: bh } };
 }
@@ -248,7 +260,7 @@ function fitWord(g, text, maxW, size) {
 // ── Mini (top-right corner): the same plate in miniature ──
 function miniSize(v) { const W = Math.max(14, Math.round(v.W * .3)); return { W, H: Math.round(W * 1.45) }; }
 function drawMini(g, v) {
-  const { W, H } = miniSize(v), M = MAT[v.mat], band = BAND[v.band];
+  const { W, H } = miniSize(v), M = MAT[v.mat], band = v.pal ? [v.pal.tiles[0], v.pal.tiles[2], v.pal.grout] : BAND[v.band];
   const x0 = 1, x1 = W - 2, yb = Math.round(H * .38), yBot = H - 2, k = v.k;
   const IN = (x, y, a = 0, b = 0) => inArch(x, y, x0 + a, x1 - a, yb + b, yBot - a, k);
   g.clearRect(0, 0, W, H);
@@ -259,7 +271,7 @@ function drawMini(g, v) {
     px(g, x, y, edge ? (!IN(x - 1, y - 1) ? M.H : M.S) : inB ? ((x + y) % 2 ? band[0] : band[1]) : M.B);
   }
   const cx = Math.round((x0 + x1) / 2), sw = Math.max(4, W - 10), wx = cx - Math.floor(sw / 2), wy = yb - 2;
-  star(g, cx, wy - 4, 1, band[0], C.ink);
+  star(g, cx, wy - 4, 1, v.pal ? v.pal.star[0] : band[0], C.ink);
   const slot = Math.max(3, Math.floor((yBot - 6 - wy) / 4)), ebony = v.dial === 'ebony';
   rect(g, wx - 1, wy - 1, sw + 2, slot * 4 + 1, C.ink);
   for (let i = 0; i < 4; i++) {
@@ -271,7 +283,7 @@ function drawMini(g, v) {
 }
 
 // ── State, scaling and drawing ──
-let cur = VARIANTS[2];
+let cur = VARIANTS[1];
 const st = { dials: [1, 9, 4, 7], roll: [0, 0, 0, 0], pressAt: -1e9, popAt: -1e9 };
 const art = document.createElement('canvas');
 const big = document.getElementById('big'), mini = document.getElementById('mini');
