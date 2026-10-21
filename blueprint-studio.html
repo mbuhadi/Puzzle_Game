@@ -2113,7 +2113,7 @@ function drawThumbPreview() {
   document.getElementById('tpThumbHint').innerHTML = !t.chunk ? 'Pick a puzzle or given first.'
     : !tb ? 'Loading thumbnail…'
     : !has ? `No thumbnail for ${t.chunk} yet — make one in the <a href="puzzles_curated.html" style="color:var(--gold)">Puzzle Guide</a> (Thumbnail button by its label).`
-    : 'Drag the picture to choose what shows in the tile; the slider zooms.';
+    : 'Drag to move the tile\'s outline over the picture and choose what shows; the slider zooms.';
   c.style.display = t.chunk ? '' : 'none';
   if (!t || t.pts.length < 3) return;
   const { P } = previewMap(t), r = thumbRect(t);
@@ -2138,7 +2138,9 @@ function resetThumb() { const t = selTileObj(); if (!t) return; t.thumb = null; 
   });
   c.addEventListener('pointermove', e => {
     const t = selTileObj(); if (!drag || !t) return;
-    t.thumb = { ...drag.a, dx: drag.a.dx + (e.clientX - drag.x) / drag.k / drag.bw, dy: drag.a.dy + (e.clientY - drag.y) / drag.k / drag.bh };
+    // the preview re-fits around the picture, so what you see move is the
+    // tile's outline: dragging moves the outline with the pointer
+    t.thumb = { ...drag.a, dx: drag.a.dx - (e.clientX - drag.x) / drag.k / drag.bw, dy: drag.a.dy - (e.clientY - drag.y) / drag.k / drag.bh };
     drawThumbPreview(); render();
   });
   const end = () => { if (drag) { drag = null; pushHistory(); } };
