@@ -78,6 +78,15 @@
   .tag.on[data-tag="complete"], .tag.on[data-tag="done"]{
     border-color:#5db87a; color:#5db87a; background:rgba(93,184,122,0.14);}
   .chunk-tags{margin-left:10px;}
+  /* Thumbnail button after each chunk label: a small preview of the chunk's
+     tile thumbnail (thumbnails/<id>.json); opens Thumbnail Studio */
+  .thumb-btn{display:inline-flex; align-items:center; gap:6px; margin-left:10px; vertical-align:middle; cursor:pointer;
+    background:#1e1a12; border:1px solid #2e2a1e; color:#d4ba88; border-radius:4px; padding:2px 8px 2px 2px; font:11px 'Cinzel',serif;}
+  .thumb-btn:hover{border-color:#c8a84b; color:#c8a84b;}
+  .thumb-btn canvas{width:48px; height:36px; image-rendering:pixelated; border-radius:2px; background:#0a0908; display:block;}
+  #thumbOverlay{position:fixed; inset:0; z-index:900; background:rgba(0,0,0,.8); display:none; padding:2vh 2vw;}
+  #thumbOverlay.open{display:block;}
+  #thumbOverlay iframe{width:100%; height:100%; border:1px solid #7a6030; border-radius:6px; background:#0e0d0a;}
   .chunk-tags .tag{font-size:10px; padding:3px 9px;}
 
   .section{margin-bottom:32px; max-width:1150px;}
@@ -306,6 +315,7 @@
 <script src="puzzles_studio.js"></script>
 <script src="puzzles_curated_data.js"></script>
 <script src="assets/custom_tiles.js"></script>
+<script src="thumb_runtime.js"></script>
 <script>
 /* ───────────────── Ported game logic ───────────────── */
 
@@ -1435,6 +1445,40 @@ const CHUNK_TAGS=[['revision','Needs revision'],['done','Done']];
 function loadTags(){ try{ return JSON.parse(localStorage.getItem(TAG_STORE_KEY))||{}; }catch(e){ return {}; } }
 function saveTags(t){ try{ localStorage.setItem(TAG_STORE_KEY,JSON.stringify(t)); }catch(e){} }
 
+// ── Tile thumbnails (made in Thumbnail Studio, shown on blueprint tiles) ──
+function makeThumbButton(id){
+  const b=document.createElement('button');
+  b.type='button'; b.className='thumb-btn'; b.title='Make / edit the tile thumbnail for '+id;
+  const c=document.createElement('canvas'); c.width=TH.W; c.height=TH.H;
+  const lbl=document.createElement('span'); lbl.textContent='Thumbnail';
+  b.append(c,lbl);
+  const show=()=>TH.load(id).then(e=>{
+    const g=c.getContext('2d'); g.clearRect(0,0,c.width,c.height);
+    if(e&&e.canvas){ g.drawImage(e.canvas,0,0); lbl.textContent='Thumbnail'; }
+    else { g.fillStyle='#3a3226'; g.font='bold 90px monospace'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('+',c.width/2,c.height/2); lbl.textContent='Add thumbnail'; }
+  });
+  b._refresh=()=>{ TH.forget(id); show(); };
+  b.dataset.thumb=id;
+  show();
+  b.onclick=()=>openThumbStudio(id);
+  return b;
+}
+function openThumbStudio(id){
+  let ov=document.getElementById('thumbOverlay');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='thumbOverlay';
+    document.body.appendChild(ov);
+    window.addEventListener('message',e=>{
+      const d=e.data||{};
+      if(d.type==='thumbSaved'||d.type==='thumbClose')
+        document.querySelectorAll('.thumb-btn[data-thumb="'+d.id+'"]').forEach(b=>b._refresh());
+      if(d.type==='thumbClose'){ ov.classList.remove('open'); ov.innerHTML=''; }
+    });
+  }
+  ov.innerHTML='<iframe src="thumbnail-studio.html?embed=1&chunk='+encodeURIComponent(id)+'"></iframe>';
+  ov.classList.add('open');
+}
+
 function makeTagRow(scopeKey,defs,extraClass){
   const wrap=document.createElement('span');
   wrap.className='tags'+(extraClass?' '+extraClass:'');
@@ -1591,6 +1635,7 @@ function select(i){
     const id=cl.textContent.trim();
     const nodes=[];
     nodes.push(makeTagRow('chunk:'+id,CHUNK_TAGS,'chunk-tags'));
+    nodes.push(makeThumbButton(id));
     cl.after(...nodes);
   });
   // Interactive canvases (incl. any hidden in the solution) are drawn once here.

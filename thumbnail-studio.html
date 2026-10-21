@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thumbnail Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cinzel+Decorative:wght@400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/tileset_picker.css">
+<style>
+/* Thumbnail Studio — the static picture shown on a blueprint tile once it has
+   been opened. One per puzzle / given chunk (?chunk=p1p1), all the same size
+   (TH.W × TH.H, see thumb_runtime.js), painted with Map Studio's tileset
+   sprites. Opened from the Puzzle Guide (embedded, ?embed=1) or on its own. */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --gold: #c8a84b; --gold-dim: #7a6030;
+  --bg: #0e0d0a; --bg2: #14120e; --bg3: #1e1a12;
+  --border: #2e2a1e; --text: #d4ba88; --dim: #6a5c3a; --hover: #231d0e;
+}
+html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Cinzel', serif; }
+#app { display: flex; flex-direction: column; height: 100%; }
+#topbar { min-height: 42px; flex-shrink: 0; background: var(--bg2); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 4px; padding: 4px 10px; flex-wrap: wrap; }
+.tb-title { font-family: 'Cinzel Decorative', serif; font-size: 12px; color: var(--gold); letter-spacing: 2px; margin-right: 8px; white-space: nowrap; }
+#chunkLbl { font-family: monospace; font-size: 13px; background: #ff8c00; color: #000; padding: 1px 7px; border-radius: 3px; font-weight: bold; }
+#flash { font-family: monospace; font-size: 11px; margin-left: 6px; white-space: nowrap; }
+.grow { flex: 1; }
+button { background: var(--bg3); border: 1px solid var(--border); color: var(--text); font-family: 'Cinzel', serif;
+  font-size: 11px; letter-spacing: .5px; padding: 5px 10px; border-radius: 3px; cursor: pointer; white-space: nowrap; touch-action: manipulation; }
+button:hover { border-color: var(--gold-dim); color: var(--gold); }
+button.active { border-color: var(--gold); color: var(--gold); background: var(--hover); }
+button:disabled { opacity: .35; cursor: default; }
+button.save { border-color: #5a9a48; color: #aaee88; }
+.hint-text { font-family: sans-serif; font-size: 10px; color: var(--dim); line-height: 1.5; letter-spacing: 0; }
+#main { flex: 1; display: flex; min-height: 0; }
+#side { width: 210px; flex-shrink: 0; background: var(--bg2); border-right: 1px solid var(--border); padding: 10px;
+  overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.sec { font-size: 9px; letter-spacing: 2.5px; color: var(--dim); margin-bottom: 5px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+#brushPrev { width: 100%; height: 72px; background: #0a0908; border: 1px solid var(--border); border-radius: 4px;
+  image-rendering: pixelated; display: block; margin-bottom: 5px; }
+input[type=color] { width: 100%; height: 28px; background: var(--bg3); border: 1px solid var(--border); border-radius: 3px; }
+#stage { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden;
+  background: repeating-conic-gradient(#14120f 0 25%, #191612 0 50%) 0 0 / 24px 24px; }
+#cv { image-rendering: pixelated; box-shadow: 0 6px 30px rgba(0,0,0,.6); outline: 1px solid var(--gold-dim); touch-action: none; }
+/* tileset picker host styles (same as Puzzle Studio) */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.82); z-index: 500; display: none; align-items: center; justify-content: center; }
+.overlay.open { display: flex; }
+.overlay-box { display: flex; flex-direction: column; max-width: 94vw; background: var(--bg2); border: 1px solid var(--gold-dim); border-radius: 6px; overflow: hidden; }
+.overlay-head { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border);
+  font-size: 10px; letter-spacing: 1.5px; color: var(--dim); flex-wrap: wrap; }
+@media (max-width: 700px) { #side { width: 160px; padding: 8px; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <span class="tb-title">THUMBNAIL STUDIO</span>
+    <span id="chunkLbl">—</span>
+    <span id="flash"></span>
+    <span class="grow"></span>
+    <button id="undoBtn" onclick="undo()" title="Undo (Ctrl+Z)">↶</button>
+    <button id="redoBtn" onclick="redo()" title="Redo (Ctrl+Y)">↷</button>
+    <button class="save" id="saveBtn" onclick="save()" title="Save to the website (Ctrl+S)">Save</button>
+    <button id="closeBtn" onclick="closeStudio()">Close</button>
+  </div>
+  <div id="main">
+    <div id="side">
+      <div>
+        <div class="sec">BRUSH</div>
+        <canvas id="brushPrev" width="180" height="72"></canvas>
+        <button style="width:100%" onclick="openTileset()" title="Pick sprites from the tilesets (T)">Browse Tileset…</button>
+      </div>
+      <div>
+        <div class="sec">TOOL</div>
+        <div class="grid2">
+          <button id="tPaint" onclick="setTool('paint')" title="Click / drag to paint the brush (P)">✏ Paint</button>
+          <button id="tErase" onclick="setTool('erase')" title="Click / drag to erase the top sprite (E)">⌫ Erase</button>
+          <button id="tMove" onclick="setTool('move')" title="Drag a sprite to move it; it stays selected (M)">✥ Move</button>
+          <button onclick="fillWithBrush()" title="Cover the whole picture with the brush, behind everything">▦ Fill</button>
+        </div>
+      </div>
+      <div>
+        <div class="sec">SNAP</div>
+        <div class="grid2" id="snapRow">
+          <button data-snap="16" onclick="setSnap(16)">16px</button>
+          <button data-snap="8" onclick="setSnap(8)">8px</button>
+          <button data-snap="4" onclick="setSnap(4)">4px</button>
+          <button data-snap="1" onclick="setSnap(1)">Free</button>
+        </div>
+      </div>
+      <div id="selBox">
+        <div class="sec">SELECTED SPRITE</div>
+        <div class="grid2">
+          <button onclick="resizeSel(2)" title="Twice as big">Bigger</button>
+          <button onclick="resizeSel(.5)" title="Half as big">Smaller</button>
+          <button onclick="orderSel(1)" title="In front of everything">To front</button>
+          <button onclick="orderSel(-1)" title="Behind everything">To back</button>
+        </div>
+        <button style="width:100%;margin-top:4px" onclick="deleteSel()">Delete (Del)</button>
+      </div>
+      <div>
+        <div class="sec">BACKGROUND</div>
+        <input type="color" id="bgIn" value="#2a2620">
+      </div>
+      <div>
+        <button style="width:100%" onclick="clearAll()">Clear everything</button>
+      </div>
+      <div class="hint-text" id="sizeHint"></div>
+    </div>
+    <div id="stage"><canvas id="cv"></canvas></div>
+  </div>
+</div>
+<script src="assets/anim_manifest.js"></script>
+<script src="assets/tileset_picker.js"></script>
+<script src="thumb_runtime.js"></script>
+<script>
+const Q = new URLSearchParams(location.search);
+const CHUNK = (Q.get('chunk') || '').trim();
+const EMBED = Q.get('embed') === '1';
+const W = TH.W, H = TH.H;
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+document.getElementById('chunkLbl').textContent = CHUNK || 'no chunk';
+document.getElementById('sizeHint').textContent =
+  `Every thumbnail is ${W}×${H} px (${TH.COLS}×${TH.ROWS} tiles). On a blueprint tile you can move and zoom it to choose what shows.`;
+
+let doc = TH.normalize({});      // { bg, items }
+let brush = null;                 // a tileset-picker pick
+let tool = 'paint', snap = 16, sel = null, hover = null, Z = 3;
+let savedJSON = JSON.stringify(doc);
+
+// ── History ──
+let hist = [], hIdx = -1;
+function push() {
+  const s = JSON.stringify(doc);
+  if (hist[hIdx] === s) return;
+  hist = hist.slice(0, hIdx + 1); hist.push(s); hIdx = hist.length - 1;
+  if (hist.length > 200) { hist.shift(); hIdx--; }
+  ui();
+}
+function undo() { if (hIdx > 0) { hIdx--; doc = JSON.parse(hist[hIdx]); sel = null; ui(); draw(); } }
+function redo() { if (hIdx < hist.length - 1) { hIdx++; doc = JSON.parse(hist[hIdx]); sel = null; ui(); draw(); } }
+
+function flash(msg, color) {
+  const f = document.getElementById('flash');
+  f.textContent = msg; f.style.color = color || '#7ee08a';
+}
+function dirty() { return JSON.stringify(doc) !== savedJSON; }
+
+// ── Layout: the biggest whole-number zoom that fits ──
+const stage = document.getElementById('stage');
+function fit() {
+  Z = Math.max(1, Math.floor(Math.min((stage.clientWidth - 24) / W, (stage.clientHeight - 24) / H)));
+  cv.width = W * Z; cv.height = H * Z;
+  draw();
+}
+new ResizeObserver(fit).observe(stage);
+
+// ── Drawing ──
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.setTransform(Z, 0, 0, Z, 0, 0);
+  TH.paint(ctx, doc);
+  // faint 16px grid
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = TH.CELL; x < W; x += TH.CELL) { ctx.moveTo(x * Z + .5, 0); ctx.lineTo(x * Z + .5, H * Z); }
+  for (let y = TH.CELL; y < H; y += TH.CELL) { ctx.moveTo(0, y * Z + .5); ctx.lineTo(W * Z, y * Z + .5); }
+  ctx.stroke();
+  // brush ghost
+  if (tool === 'paint' && brush && hover) {
+    const s = TH.source(brush), im = TH.img(s.src), p = placeAt(hover, s);
+    ctx.globalAlpha = .55; ctx.imageSmoothingEnabled = false;
+    if (im.complete && im.naturalWidth) ctx.drawImage(im, s.x, s.y, s.w, s.h, p.x * Z, p.y * Z, s.w * Z, s.h * Z);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = 'rgba(255,209,102,.8)'; ctx.strokeRect(p.x * Z + .5, p.y * Z + .5, s.w * Z - 1, s.h * Z - 1);
+  }
+  if (tool === 'erase' && hover) {
+    const it = itemAt(hover);
+    if (it) { ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 2; ctx.strokeRect(it.x * Z, it.y * Z, it.w * Z, it.h * Z); }
+  }
+  if (sel && doc.items.includes(sel)) {
+    ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.strokeRect(sel.x * Z, sel.y * Z, sel.w * Z, sel.h * Z); ctx.setLineDash([]);
+  }
+}
+// redraw again once sprite sheets arrive
+function whenLoaded(src) { const im = TH.img(src); if (!(im.complete && im.naturalWidth)) im.addEventListener('load', () => { draw(); drawBrush(); }, { once: true }); }
+
+function drawBrush() {
+  const c = document.getElementById('brushPrev'), g = c.getContext('2d');
+  g.clearRect(0, 0, c.width, c.height);
+  if (!brush) { g.fillStyle = '#6a5c3a'; g.font = '11px sans-serif'; g.textAlign = 'center'; g.fillText('no brush — Browse Tileset…', c.width / 2, c.height / 2 + 4); return; }
+  const s = TH.source(brush), im = TH.img(s.src);
+  whenLoaded(s.src);
+  const k = Math.max(1, Math.floor(Math.min((c.width - 8) / s.w, (c.height - 8) / s.h))) || 1;
+  const kk = Math.min(k, (c.width - 8) / s.w, (c.height - 8) / s.h);
+  g.imageSmoothingEnabled = false;
+  if (im.complete && im.naturalWidth) g.drawImage(im, s.x, s.y, s.w, s.h, (c.width - s.w * kk) / 2, (c.height - s.h * kk) / 2, s.w * kk, s.h * kk);
+}
+
+// ── Helpers ──
+const snapV = v => Math.round(v / snap) * snap;
+function placeAt(p, s) {
+  // sprite's top-left: the cell under the pointer (free snap: centred on it)
+  if (snap === 1) return { x: Math.round(p.x - s.w / 2), y: Math.round(p.y - s.h / 2) };
+  return { x: Math.floor(p.x / snap) * snap, y: Math.floor(p.y / snap) * snap };
+}
+function itemAt(p) {
+  for (let i = doc.items.length - 1; i >= 0; i--) {
+    const it = doc.items[i];
+    if (p.x >= it.x && p.x < it.x + it.w && p.y >= it.y && p.y < it.y + it.h) return it;
+  }
+  return null;
+}
+function ptOf(e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H }; }
+// natural size, but an uploaded picture bigger than the thumbnail is shrunk to fit
+function sizeOf(s) { const k = Math.min(1, W / s.w, H / s.h); return { w: Math.round(s.w * k), h: Math.round(s.h * k) }; }
+
+function stamp(p) {
+  if (!brush) { openTileset(); return false; }
+  const s = TH.source(brush), sz = sizeOf(s), at = placeAt(p, { w: sz.w, h: sz.h });
+  const top = doc.items[doc.items.length - 1];
+  if (top && top.x === at.x && top.y === at.y && JSON.stringify(top.pick) === JSON.stringify(brush)) return false;
+  doc.items.push({ pick: JSON.parse(JSON.stringify(brush)), x: at.x, y: at.y, w: sz.w, h: sz.h });
+  return true;
+}
+
+// ── Pointer ──
+let g = null;
+cv.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  cv.setPointerCapture(e.pointerId);
+  const p = ptOf(e);
+  hover = p;
+  g = { changed: false };
+  if (tool === 'paint') g.changed = stamp(p);
+  else if (tool === 'erase') { const it = itemAt(p); if (it) { doc.items.splice(doc.items.indexOf(it), 1); g.changed = true; if (sel === it) sel = null; } }
+  else if (tool === 'move') {
+    sel = itemAt(p);
+    if (sel) { g.it = sel; g.ox = sel.x; g.oy = sel.y; g.start = p; }
+  }
+  ui(); draw();
+});
+cv.addEventListener('pointermove', e => {
+  const p = ptOf(e);
+  hover = p;
+  if (g) {
+    if (tool === 'paint') g.changed = stamp(p) || g.changed;
+    else if (tool === 'erase') { const it = itemAt(p); if (it) { doc.items.splice(doc.items.indexOf(it), 1); g.changed = true; if (sel === it) sel = null; } }
+    else if (tool === 'move' && g.it) {
+      const nx = g.ox + p.x - g.start.x, ny = g.oy + p.y - g.start.y;
+      g.it.x = snap === 1 ? Math.round(nx) : snapV(nx); g.it.y = snap === 1 ? Math.round(ny) : snapV(ny);
+      g.changed = true;
+    }
+  }
+  draw();
+});
+const up = () => { if (g && g.changed) push(); g = null; draw(); };
+cv.addEventListener('pointerup', up);
+cv.addEventListener('pointercancel', up);
+cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse' && !g) { hover = null; draw(); } });
+cv.addEventListener('contextmenu', e => e.preventDefault());
+
+// ── Tools & actions ──
+function setTool(t) { tool = t; if (t !== 'move') sel = null; ui(); draw(); }
+function setSnap(v) { snap = v; ui(); }
+function onTilesetUse(pick) { brush = pick; whenLoaded(TH.source(pick).src); drawBrush(); setTool('paint'); }
+function fillWithBrush() {
+  if (!brush) { openTileset(); return; }
+  const s = TH.source(brush), sz = sizeOf(s), fill = [];
+  for (let y = 0; y < H; y += sz.h) for (let x = 0; x < W; x += sz.w) fill.push({ pick: JSON.parse(JSON.stringify(brush)), x, y, w: sz.w, h: sz.h });
+  doc.items = [...fill, ...doc.items];
+  push(); draw();
+}
+function resizeSel(k) {
+  if (!sel) return;
+  const cx = sel.x + sel.w / 2, cy = sel.y + sel.h / 2;
+  sel.w = Math.max(1, Math.round(sel.w * k)); sel.h = Math.max(1, Math.round(sel.h * k));
+  sel.x = Math.round(cx - sel.w / 2); sel.y = Math.round(cy - sel.h / 2);
+  push(); draw();
+}
+function orderSel(dir) {
+  if (!sel) return;
+  doc.items.splice(doc.items.indexOf(sel), 1);
+  dir > 0 ? doc.items.push(sel) : doc.items.unshift(sel);
+  push(); draw();
+}
+function deleteSel() { if (!sel) return; doc.items.splice(doc.items.indexOf(sel), 1); sel = null; push(); draw(); }
+function clearAll() { if (!doc.items.length || !confirm('Remove every sprite from this thumbnail?')) return; doc.items = []; sel = null; push(); draw(); }
+document.getElementById('bgIn').oninput = e => { doc.bg = e.target.value; draw(); };
+document.getElementById('bgIn').onchange = () => push();
+
+function ui() {
+  for (const [id, t] of [['tPaint', 'paint'], ['tErase', 'erase'], ['tMove', 'move']]) document.getElementById(id).classList.toggle('active', tool === t);
+  document.querySelectorAll('#snapRow button').forEach(b => b.classList.toggle('active', +b.dataset.snap === snap));
+  document.getElementById('selBox').style.display = tool === 'move' ? '' : 'none';
+  document.querySelectorAll('#selBox button').forEach(b => b.disabled = !sel);
+  document.getElementById('undoBtn').disabled = hIdx <= 0;
+  document.getElementById('redoBtn').disabled = hIdx >= hist.length - 1;
+  document.getElementById('bgIn').value = doc.bg;
+  document.getElementById('saveBtn').disabled = !CHUNK;
+}
+
+// ── Load / save ──
+async function load() {
+  if (!CHUNK) { flash('open this page with ?chunk=<id> (e.g. from the Puzzle Guide)', '#cc7070'); return; }
+  flash('loading…', '#b8a06a');
+  const e = await TH.load(CHUNK);
+  if (e && e.data) { doc = JSON.parse(JSON.stringify(e.data)); flash('loaded'); }
+  else flash('new thumbnail');
+  for (const it of doc.items) whenLoaded(TH.source(it.pick).src);
+  savedJSON = JSON.stringify(doc);
+  hist = []; hIdx = -1; push(); draw();
+}
+let saving = false;
+async function save() {
+  if (saving || !CHUNK) return;
+  if (!tsGhToken()) {
+    const t = (prompt('Saving writes the thumbnail to the website (GitHub repo).\nPaste your GitHub token — the same one the studios use:') || '').trim();
+    if (!t) return;
+    localStorage.setItem('ghToken', t);
+  }
+  saving = true;
+  flash('saving…', '#b8a06a');
+  try {
+    await TH.save(CHUNK, doc);
+    savedJSON = JSON.stringify(doc);
+    flash(`saved ${CHUNK} ✓`);
+    if (EMBED && parent !== window) parent.postMessage({ type: 'thumbSaved', id: CHUNK }, '*');
+  } catch (e) {
+    if (/bad credentials/i.test(e.message)) localStorage.removeItem('ghToken');
+    flash('save failed ✗ ' + e.message, '#cc7070');
+  } finally { saving = false; }
+}
+function closeStudio() {
+  if (dirty() && !confirm('Close without saving this thumbnail?')) return;
+  if (EMBED && parent !== window) parent.postMessage({ type: 'thumbClose', id: CHUNK }, '*');
+  else location.href = 'puzzles_curated.html';
+}
+window.addEventListener('beforeunload', e => { if (!EMBED && dirty()) { e.preventDefault(); e.returnValue = ''; } });
+
+document.addEventListener('keydown', e => {
+  if (document.getElementById('tsOverlay').classList.contains('open')) {
+    if (e.key === 'Escape') tsCancel(); else if (e.key === 'Enter') tsUse();
+    return;
+  }
+  if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  const k = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && k === 's') { e.preventDefault(); save(); return; }
+  if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redo(); return; }
+  if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSel(); return; }
+  if (k === 'p') setTool('paint'); else if (k === 'e') setTool('erase'); else if (k === 'm') setTool('move'); else if (k === 't') openTileset();
+});
+
+ui(); drawBrush(); load();
+</script>
+</body>
+</html>
