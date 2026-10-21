@@ -28,6 +28,13 @@ html, body { height: 100%; background: #0e0d0a; color: #d4ba88; font-family: 'Ci
 @keyframes bob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-3px) } }
 #ov { position: absolute; inset: 0; z-index: 20; background: rgba(8,8,10,.62); display: none; align-items: center; justify-content: center; }
 #ov.open { display: flex; }
+/* A very faint halo behind a lock in its own colours (see glowCSS) */
+.lockWrap { position: relative; display: flex; }
+.glow { position: absolute; pointer-events: none; border-radius: 50%; }
+#bigGlow { inset: -12% -45%; }
+#miniGlow { top: -16px; right: -6px; width: 120px; height: 150px; z-index: 9; }
+#cmp figure .lockWrap .glow { inset: -14% -50%; }
+#big, #cmp canvas { position: relative; }
 #big { image-rendering: pixelated; touch-action: none; filter: drop-shadow(0 10px 0 rgba(0,0,0,.35)); animation: pop .32s cubic-bezier(.3,1.7,.5,1); }
 @keyframes pop { from { transform: scale(.6) } to { transform: scale(1) } }
 /* compare view: every version side by side */
@@ -48,8 +55,9 @@ html, body { height: 100%; background: #0e0d0a; color: #d4ba88; font-family: 'Ci
 <body>
 <div id="screen">
   <div id="board"><div></div><div></div><div></div><div></div><div></div></div>
+  <div id="miniGlow" class="glow"></div>
   <canvas id="mini" title="Open the lock"></canvas>
-  <div id="ov"><canvas id="big"></canvas></div>
+  <div id="ov"><div class="lockWrap"><div id="bigGlow" class="glow"></div><canvas id="big"></canvas></div></div>
   <div id="cmp"></div>
   <div id="crt"></div>
 </div>
@@ -331,7 +339,10 @@ function buildCompare() {
     drawBigTo(c, v, s, { dials: [1, 9, 4, 7], roll: [0, 0, 0, 0], pressAt: -1e9, popAt: -1e9 }, 0, false);
     const cap = document.createElement('figcaption');
     cap.innerHTML = `${v.id} · ${v.name}<small>${v.note}</small>`;
-    f.append(c, cap);
+    const wrap = document.createElement('div'); wrap.className = 'lockWrap';
+    const gl = document.createElement('div'); gl.className = 'glow'; gl.style.background = glowCSS(v);
+    wrap.append(gl, c);
+    f.append(wrap, cap);
     f.onclick = () => { pick(v); openBig(); };
     box.appendChild(f);
   }
@@ -344,7 +355,20 @@ function loop(now) {
 }
 
 // ── Controls ──
-function pick(v) { cur = v; renderOpts(); drawAll(); }
+// Halo colours: the lock's main tile colour in the middle fading through its
+// accent (star) colour to nothing. Kept very faint.
+const GLOW_ALPHA = .3;
+function glowCSS(v) {
+  const main = v.pal ? v.pal.tiles[0] : (BAND[v.band] || BAND.tq)[0];
+  const acc = v.pal ? v.pal.star[0] : MAT[v.mat].L;
+  const a = (hex, k) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${k})`; };
+  return `radial-gradient(closest-side, ${a(main, GLOW_ALPHA)} 0%, ${a(acc, GLOW_ALPHA * .55)} 55%, ${a(acc, 0)} 100%)`;
+}
+function applyGlow() {
+  document.getElementById('bigGlow').style.background = glowCSS(cur);
+  document.getElementById('miniGlow').style.background = glowCSS(cur);
+}
+function pick(v) { cur = v; renderOpts(); applyGlow(); drawAll(); }
 function showCompare(on) { document.getElementById('cmp').classList.toggle('open', on); if (on) { document.getElementById('ov').classList.remove('open'); buildCompare(); } renderOpts(); hint(); }
 function openBig() {
   showCompare(false);
@@ -402,7 +426,7 @@ addEventListener('resize', () => { BS = bigScale(cur); if (document.getElementBy
 document.fonts.load("700 20px 'Silkscreen'").then(() => refresh());
 const Q = new URLSearchParams(location.search);
 if (Q.get('v')) cur = VARIANTS.find(v => v.id === Q.get('v').toUpperCase()) || cur;
-renderOpts(); drawAll(); requestAnimationFrame(loop);
+renderOpts(); applyGlow(); drawAll(); requestAnimationFrame(loop);
 if (Q.get('open') === '1') openBig(); else showCompare(true);
 </script>
 </body>
