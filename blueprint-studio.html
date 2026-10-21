@@ -138,6 +138,15 @@ body.playing #ulBar.has { display: flex; }
 .ul-icon img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
 .ul-icon span { font-size: 18px; color: var(--gold); }
 #ulHost { width: 100%; }
+/* Courtyard Locks (pixel_locks.js): no box, just the lock and its faint halo */
+.ul-icon.px { width: auto; height: auto; padding: 0; border: none; background: none; position: relative; overflow: visible; }
+.ul-icon.px canvas { display: block; image-rendering: pixelated; position: relative; filter: drop-shadow(0 3px 0 rgba(0,0,0,.35)); }
+.ul-icon.px .halo { position: absolute; left: 50%; top: 50%; width: 260%; height: 170%; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
+.ul-card .hdr canvas { width: 18px; height: 26px; image-rendering: pixelated; }
+#ulView.px .panel { background: none; border: none; box-shadow: none; width: auto !important; max-width: 100%; overflow: visible; }
+#ulView.px #ulTitle { display: none; }
+#ulView.px .row { justify-content: flex-end; }
+#ulView.px #ulMsg { color: #f4ecd8; font-size: 13px; text-shadow: 0 1px 2px #000; }
 /* ── Test mode "CRT TV" look (scanlines, grain, dark corners, tube edge) ── */
 #crt { position: absolute; inset: 0; pointer-events: none; z-index: 3; display: none; border-radius: 22px / 26px; overflow: hidden;
   box-shadow: inset 0 0 0 3px rgba(0,0,0,.55), inset 0 0 60px rgba(0,0,0,.55); }
@@ -288,10 +297,10 @@ body.playing .ul-icon:active { transform: scale(.9); }
       <div class="divider"></div>
 
       <div>
-        <div class="sec-title">CONSTANT UNLOCKERS</div>
+        <div class="sec-title">CONSTANT UNLOCKER</div>
         <div id="ulList"></div>
-        <div class="row" style="margin-top:4px"><select id="ulAddSel"></select><button style="flex:0 0 auto" onclick="attachUnlocker()">Add</button></div>
-        <div class="hint" style="margin-top:4px">Design them in <a href="unlocker-studio.html" style="color:var(--gold)">Unlocker Studio</a>. They stay in the top-right corner all game; each combination can be entered once and opens / cancels tiles.</div>
+        <div class="row" style="margin-top:4px"><select id="ulAddSel"></select><button style="flex:0 0 auto" id="ulAddBtn" onclick="attachUnlocker()">Add</button></div>
+        <div class="hint" style="margin-top:4px">One per blueprint. It stays in the top-right corner all game; each combination can be entered once and opens / cancels tiles. The Courtyard Locks are built in; others come from <a href="unlocker-studio.html" style="color:var(--gold)">Unlocker Studio</a>.</div>
       </div>
       <div class="divider"></div>
 
@@ -401,6 +410,7 @@ window.addEventListener('load', nudgeBrowserChrome);
 </script>
 <script src="unlocker_runtime.js"></script>
 <script src="thumb_runtime.js"></script>
+<script src="pixel_locks.js"></script>
 <script src="puzzles_studio.js"></script>
 <script src="puzzles_curated_data.js"></script>
 <script>
@@ -2913,13 +2923,16 @@ function solveOpenTile() {
 // the top-right corner for the whole game.
 const allCombos = () => unlockers.flatMap(u => u.combos);
 const unlockerName = u => (designs.get(u.design) || {}).name || u.design;
+const ulDigits = () => labelLang === 'ar' ? 'ar' : 'en';
 function comboLabel(c) {
   const u = unlockers.find(x => x.combos.includes(c)), d = u && designs.get(u.design);
+  if (u && PL.isPixel(u.design)) return '[' + PL.codeText(c.code, ulDigits()) + ']';
   return '[' + (d ? UL.codeText(d, c.code) : c.code.join(' · ')) + ']';
 }
 async function loadUnlockerDesigns() {
   for (const u of unlockers) {
     if (designs.has(u.design)) continue;
+    if (PL.isPixel(u.design)) { const L = PL.get(u.design); designs.set(u.design, L ? { pixel: true, name: L.name } : null); continue; }
     designs.set(u.design, null);
     UL.loadDesign(u.design).then(d => { designs.set(u.design, d); refreshAll(); renderUlBar(); })
       .catch(() => { refreshAll(); });
@@ -2929,12 +2942,33 @@ let designList = [];
 async function loadDesignList() {
   try { designList = await UL.listDesigns(); } catch (e) { designList = []; }
   const s = document.getElementById('ulAddSel');
-  s.innerHTML = designList.length ? '<option value="">— choose an unlocker —</option>' : '<option value="">no unlockers designed yet</option>';
-  for (const n of designList) { const o = document.createElement('option'); o.value = n; o.textContent = n; s.appendChild(o); }
+  s.innerHTML = '<option value="">— choose an unlocker —</option>';
+  const grp = (label, items) => {
+    if (!items.length) return;
+    const og = document.createElement('optgroup'); og.label = label;
+    for (const [v, t] of items) { const o = document.createElement('option'); o.value = v; o.textContent = t; og.appendChild(o); }
+    s.appendChild(og);
+  };
+  grp('Courtyard Locks', PL.LOCKS.map(L => ['px:' + L.id, L.name]));
+  grp('Unlocker Studio', designList.map(n => [n, n]));
 }
+// One unlocker per blueprint: adding another swaps it in. Combinations carry
+// over between Courtyard Locks (same four dials); otherwise they're dropped.
 function attachUnlocker() {
   const slug = document.getElementById('ulAddSel').value;
-  if (!slug) { setStatus('Choose an unlocker to add (design them in Unlocker Studio).'); return; }
+  if (!slug) { setStatus('Choose an unlocker first.'); return; }
+  const old = unlockers[0];
+  if (old) {
+    if (old.design === slug) return;
+    const keep = PL.isPixel(old.design) && PL.isPixel(slug);
+    if (!keep && old.combos.length && !confirm(`Swap ${unlockerName(old)} for the new unlocker? Its ${old.combos.length} combination(s) will be removed.`)) return;
+    old.design = slug;
+    if (!keep) old.combos = [];
+    if (pickCombo && !allCombos().includes(pickCombo)) setMode('select');
+    loadUnlockerDesigns();
+    pushHistory(); refreshAll(); renderUlBar();
+    return;
+  }
   unlockers.push({ id: 'u' + (nextId++), design: slug, combos: [] });
   loadUnlockerDesigns();
   pushHistory(); refreshAll();
@@ -2952,12 +2986,14 @@ function deleteCombo(u, c) {
 }
 function renderUnlockers() {
   const el = document.getElementById('ulList');
+  document.getElementById('ulAddBtn').textContent = unlockers.length ? 'Swap' : 'Add';
   el.innerHTML = unlockers.length ? '' : '<div class="hint">None on this blueprint yet.</div>';
   for (const u of unlockers) {
     const d = designs.get(u.design);
     const card = document.createElement('div'); card.className = 'ul-card';
     const hdr = document.createElement('div'); hdr.className = 'hdr';
-    if (d && (d.icon || d.body)) { const im = document.createElement('img'); UL.setImg(im, d.icon || d.body); hdr.appendChild(im); }
+    if (PL.isPixel(u.design)) { const c = document.createElement('canvas'); PL.drawMini(c, u.design, 1); hdr.appendChild(c); }
+    else if (d && (d.icon || d.body)) { const im = document.createElement('img'); UL.setImg(im, d.icon || d.body); hdr.appendChild(im); }
     const nm = document.createElement('span'); nm.textContent = unlockerName(u) + (designs.has(u.design) && !d ? ' (loading…)' : ''); hdr.appendChild(nm);
     const rm = document.createElement('button'); rm.className = 'danger'; rm.textContent = '×'; rm.title = 'Remove from this blueprint'; rm.style.padding = '2px 7px';
     rm.onclick = () => detachUnlocker(u);
@@ -2991,9 +3027,30 @@ function renderUnlockers() {
   }
 }
 // Editor: set a combination by turning the real dials, then save it
+let ulCtl = null;   // the mounted Courtyard Lock, if one is showing
+function openPixelLock(u, opts) {
+  document.getElementById('ulView').classList.add('px', 'open');
+  ulCtl = PL.mount(document.getElementById('ulHost'), u.design, { digits: ulDigits(), maxW: innerWidth * .9, maxH: innerHeight * .8, ...opts });
+  return ulCtl;
+}
 function openUlSetter(u, combo) {
   const d = designs.get(u.design);
   if (!d) return;
+  if (PL.isPixel(u.design)) {
+    document.getElementById('ulMsg').textContent = (combo ? 'Change the combination' : 'New combination') + ': turn the dials, then press SAVE.';
+    const ctl = openPixelLock(u, { code: combo ? combo.code : [0, 0, 0, 0], submitLabel: 'SAVE', onSubmit: code => {
+      const dup = u.combos.find(c => c !== combo && PL.sameCode(c.code, code));
+      if (dup) { ctl.shake(); document.getElementById('ulMsg').textContent = `${unlockerName(u)} already has ${comboLabel(dup)}.`; return; }
+      if (combo) combo.code = code;
+      else u.combos.push({ id: 'c' + (nextId++), code, opens: [], cancels: [] });
+      ctl.flashOk('SAVED!');
+      setTimeout(() => {
+        closeUlView(); pushHistory(); refreshAll();
+        setStatus(combo ? 'Combination changed.' : 'Combination added — now pick the tiles it opens or cancels.');
+      }, 550);
+    } });
+    return;
+  }
   fitUlHost(d);
   document.getElementById('ulTitle').textContent = `${unlockerName(u)} — ${combo ? 'change combination' : 'new combination'}`;
   document.getElementById('ulMsg').textContent = 'Turn the dials to the combination, then press Save.';
@@ -3016,7 +3073,8 @@ function fitUlHost(d) {
   document.getElementById('ulHost').style.cssText = `width: min(100%, calc((88vh - 110px) * ${d.w} / ${d.h})); margin: 0 auto;`;
 }
 function closeUlView() {
-  document.getElementById('ulView').classList.remove('open');
+  if (ulCtl) { ulCtl.destroy(); ulCtl = null; }
+  document.getElementById('ulView').classList.remove('open', 'px');
   document.getElementById('ulHost').innerHTML = '';
 }
 // Test mode: the corner icons and playing an unlocker
@@ -3027,7 +3085,12 @@ function renderUlBar() {
   for (const u of unlockers) {
     const d = designs.get(u.design);
     const b = document.createElement('button'); b.className = 'ul-icon'; b.title = unlockerName(u);
-    if (d && (d.icon || d.body)) { const im = document.createElement('img'); UL.setImg(im, d.icon || d.body); b.appendChild(im); }
+    if (PL.isPixel(u.design)) {
+      b.classList.add('px');
+      const halo = document.createElement('div'); halo.className = 'halo'; halo.style.background = PL.glowCSS(u.design);
+      const c = document.createElement('canvas'); PL.drawMini(c, u.design, innerWidth < 700 ? 2 : 3);
+      b.append(halo, c);
+    } else if (d && (d.icon || d.body)) { const im = document.createElement('img'); UL.setImg(im, d.icon || d.body); b.appendChild(im); }
     else { const sp = document.createElement('span'); sp.textContent = '⚿'; b.appendChild(sp); }
     b.onclick = () => openUlPlay(u);
     bar.appendChild(b);
@@ -3036,6 +3099,22 @@ function renderUlBar() {
 function openUlPlay(u) {
   const d = designs.get(u.design);
   if (!d || !playing || play.seq) return;
+  if (PL.isPixel(u.design)) {
+    const msg = document.getElementById('ulMsg');
+    msg.textContent = '';
+    const ctl = openPixelLock(u, { onSubmit: code => {
+      const c = u.combos.find(x => PL.sameCode(x.code, code));
+      if (!c) { ctl.shake(); msg.textContent = 'Nothing happens.'; return; }
+      if (play.usedCombos.has(c.id)) { ctl.shake(); msg.textContent = 'That combination has already been used.'; return; }
+      play.usedCombos.add(c.id);
+      ctl.flashOk('UNLOCK!');
+      kick(5);
+      msg.textContent = '';
+      const summary = applyEffects(c, null, 900);
+      setTimeout(() => { closeUlView(); setStatus(`${unlockerName(u)} ${comboLabel(c)} entered` + summary); }, 900);
+    } });
+    return;
+  }
   fitUlHost(d);
   const msg = document.getElementById('ulMsg');
   document.getElementById('ulTitle').textContent = unlockerName(u);
