@@ -58,17 +58,17 @@ let digitSet = 'ar';
 
 // ── Geometry (art px). The plate is a long box whose left and right ends are
 // pointed arches lying on their side; everything is mirrored about the middle.
-const DW = 20, DH = 30, GAP = 3;                    // one dial, the rim between dials
-const CAP = 20;                                       // length of each pointed end
+const DW = 20, DH = 25, GAP = 3;                    // one dial, the rim between dials (thinner: was 30 tall)
+const CAP = 17;                                       // length of each pointed end
 function geo() {
   const winW = DW * 4 + GAP * 3 + 2, winH = DH + 2;
   const bodyW = winW + 16;                            // straight middle part
-  const plateH = winH + 22;
+  const plateH = winH + 18;   // just the bevel + tile border around the dials
   const W = bodyW + CAP * 2 + 2, plateTop = 1;
   const cx = W / 2;
   const xa = Math.round(cx - bodyW / 2), xb = W - 1 - xa;   // where the ends start (mirrored)
   const wx = Math.round(cx - winW / 2), wy = plateTop + Math.round((plateH - winH) / 2);
-  const H = plateTop + plateH + 22;
+  const H = plateTop + plateH + 21;
   return { W, H, cx, xa, xb, top: plateTop, bot: plateTop + plateH - 1, winW, winH, wx, wy };
 }
 // inside the plate? Each end is a pointed (Moorish) arch lying on its side:
@@ -124,7 +124,7 @@ function drawLock(g, L, st, now) {
       rect(g, dx, dy + y, DW, 1, t > .8 ? C.ivoryD : t > .5 ? C.ivoryS : C.ivory);
     }
     rect(g, dx, dy + 2, 1, h - 4, C.cream); rect(g, dx + DW - 1, dy + 2, 1, h - 4, C.ivoryS);   // round both sides
-    const d = st.dials[i], r = st.roll[i], gx = dx + DW / 2 - 5, step = 14 + 5;
+    const d = st.dials[i], r = st.roll[i], gx = dx + DW / 2 - 5, step = 14 + 3;
     for (const kk of [-1, 0, 1]) {
       const yy = dy + Math.round((h - 14) / 2) + kk * step + Math.round(r * 2);
       glyph(g, digitSet, (d + kk + 10) % 10, gx, yy, 2, kk ? C.ivoryD : C.digit, dy, dy + h);
@@ -133,12 +133,10 @@ function drawLock(g, L, st, now) {
     rect(g, mx - 1, dy + 1, 3, 1, C.caret); px(g, mx, dy, C.caret);
     rect(g, mx - 1, dy + h - 2, 3, 1, C.caret); px(g, mx, dy + h - 1, C.caret);
     if (i < 3) { rect(g, dx + DW, dy, 1, h, P.rim[0]); rect(g, dx + DW + 1, dy, 1, h, P.rim[1]); rect(g, dx + DW + 2, dy, 1, h, P.rim[0]); }
-    // studs above and below each dial
-    for (const yy of [wy - 5, wy + winH + 2]) { rect(g, dx + DW / 2 - 2, yy, 3, 3, C.ink); px(g, dx + DW / 2 - 1, yy + 1, P.studs); }
   }
   // button under the plate, centred
   const pressed = now - st.pressAt < 140;
-  const bw = 64, bh = 16, bx = Math.round(G.cx - bw / 2), by = G.bot + 5 + (pressed ? 1 : 0);
+  const bw = 64, bh = 15, bx = Math.round(G.cx - bw / 2), by = G.bot + 5 + (pressed ? 1 : 0);
   if (!pressed) rect(g, bx, by + 2, bw, bh, C.ink);
   rect(g, bx, by, bw, bh, C.ink);
   rect(g, bx + 1, by + 1, bw - 2, bh - 2, P.btn[0]); rect(g, bx + 1, by + 1, bw - 2, bh - 4, P.btn[1]); rect(g, bx + 2, by + 2, bw - 4, 1, P.btn[2]);
@@ -231,7 +229,7 @@ function opts() {
     : 'Tap the small lock (top-right) · tap the top / bottom half of a dial, or swipe it · tap outside to close';
 }
 function refresh() { opts(); if (document.getElementById('cmp').classList.contains('open')) buildCompare(); drawAll(); }
-function turn(i, dir) { st.dials[i] = (st.dials[i] + dir + 10) % 10; st.roll[i] = dir * 9.5; }
+function turn(i, dir) { st.dials[i] = (st.dials[i] + dir + 10) % 10; st.roll[i] = dir * 8.5; }
 function loop(now) {
   let m = false;
   for (let i = 0; i < 4; i++) if (st.roll[i]) { st.roll[i] *= .72; if (Math.abs(st.roll[i]) < .3) st.roll[i] = 0; m = true; }
