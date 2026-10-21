@@ -141,8 +141,8 @@ body.playing #ulBar.has { display: flex; }
 /* Courtyard Locks (pixel_locks.js): no box, just the lock and its faint halo */
 .ul-icon.px { width: auto; height: auto; padding: 0; border: none; background: none; position: relative; overflow: visible; }
 .ul-icon.px canvas { display: block; image-rendering: pixelated; position: relative; filter: drop-shadow(0 3px 0 rgba(0,0,0,.35)); }
-.ul-icon.px .halo { position: absolute; left: 50%; top: 50%; width: 260%; height: 170%; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
-.ul-card .hdr canvas { width: 18px; height: 26px; image-rendering: pixelated; }
+.ul-icon.px .halo { position: absolute; left: 50%; top: 50%; width: 190%; height: 320%; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
+.ul-card .hdr canvas { width: 38px; height: 17px; image-rendering: pixelated; }
 #ulView.px { padding: 4px; }
 #ulView.px .panel { background: none; border: none; box-shadow: none; width: auto !important; max-width: 100%; max-height: none; overflow: visible; padding: 4px; gap: 4px; }
 #ulView.px #ulTitle { display: none; }
@@ -3033,7 +3033,7 @@ function openPixelLock(u, opts) {
   document.getElementById('ulView').classList.add('px', 'open');
   // room left for the lock: the screen minus the Close row and message line
   const vh = window.visualViewport ? visualViewport.height : innerHeight, vw = window.visualViewport ? visualViewport.width : innerWidth;
-  ulCtl = PL.mount(document.getElementById('ulHost'), u.design, { digits: ulDigits(), maxW: vw - 24, maxH: vh - 78, ...opts });
+  ulCtl = PL.mount(document.getElementById('ulHost'), u.design, { digits: ulDigits(), maxW: Math.min(vw - 24, vw * .8), maxH: vh - 78, ...opts });
   return ulCtl;
 }
 function openUlSetter(u, combo) {
