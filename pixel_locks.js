@@ -250,7 +250,7 @@ const PL = (() => {
     g.drawImage(art, 0, 0, canvas.width, canvas.height);
   }
   // The faint halo: main tile colour in the middle, fading through the star colour
-  function glowCSS(design, alpha = .3) {
+  function glowCSS(design, alpha = .38) {
     const L = get(design); if (!L) return 'none';
     const a = (hex, k) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${k})`; };
     return `radial-gradient(closest-side, ${a(L.pal.tiles[0], alpha)} 0%, ${a(L.pal.star[0], alpha * .55)} 55%, ${a(L.pal.star[0], 0)} 100%)`;
