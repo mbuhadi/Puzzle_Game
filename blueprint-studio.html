@@ -153,16 +153,26 @@ body.playing .ul-icon.px canvas { animation: ulRattle 45s linear infinite; anima
 #ulView.px { padding: 4px; }
 /* pop in / out with a bounce (same feel as the unlocker previews) */
 #ulView.px.popin { animation: ulFadeIn .2s ease-out; }
-#ulView.px.popin .panel { animation: ulPopIn .34s cubic-bezier(.3,1.7,.5,1); }
+#ulView.px.popin .panel { animation: ulPopIn .42s ease-out; }
 #ulView.px.closing { animation: ulFadeOut .32s ease-in forwards; pointer-events: none; }
-#ulView.px.closing .panel { animation: ulPopOut .32s cubic-bezier(.5,-.6,.75,.4) forwards; }
-@keyframes ulPopIn { from { transform: scale(.6); } to { transform: scale(1); } }
-@keyframes ulPopOut { from { transform: scale(1); } to { transform: scale(.4); opacity: 0; } }
+#ulView.px.closing .panel { animation: ulPopOut .34s ease-in forwards; }
+/* --fx / --fy: from the lock's middle to the corner lock's middle, so it
+   grows out of the small one and shrinks back into it (0 = from the middle) */
+@keyframes ulPopIn {
+  0% { transform: translate(var(--fx, 0px), var(--fy, 0px)) scale(.14); opacity: .3; }
+  65% { transform: translate(0, 0) scale(1.06); opacity: 1; }
+  100% { transform: none; }
+}
+@keyframes ulPopOut {
+  0% { transform: none; }
+  25% { transform: scale(1.05); opacity: 1; }
+  100% { transform: translate(var(--fx, 0px), var(--fy, 0px)) scale(.14); opacity: 0; }
+}
 @keyframes ulFadeIn { from { background-color: rgba(0,0,0,0); } }
 @keyframes ulFadeOut { to { background-color: rgba(0,0,0,0); } }
 #ulView.px .panel { background: none; border: none; box-shadow: none; width: auto !important; max-width: 100%; max-height: none; overflow: visible; padding: 4px; gap: 4px; }
 #ulView.px #ulTitle { display: none; }
-#ulView.px .row { justify-content: flex-end; }
+#ulView.px .row { display: none; }   /* no Close button: tap anywhere off the lock */
 #ulView.px #ulMsg { color: #f4ecd8; font-size: 13px; text-shadow: 0 1px 2px #000; }
 /* ── Test mode "CRT TV" look (scanlines, grain, dark corners, tube edge) ── */
 #crt { position: absolute; inset: 0; pointer-events: none; z-index: 3; display: none; border-radius: 22px / 26px; overflow: hidden;
@@ -3047,15 +3057,28 @@ function renderUnlockers() {
 let ulCtl = null;   // the mounted Courtyard Lock, if one is showing
 function openPixelLock(u, opts) {
   const ov = document.getElementById('ulView');
-  clearTimeout(ulCloseTimer); ov.classList.remove('closing');
+  clearTimeout(ulCloseTimer); ov.classList.remove('closing', 'popin');
   ov.classList.add('px', 'open');
-  // pop in with a little bounce (restart the animation each time)
-  ov.classList.remove('popin'); void ov.offsetWidth; ov.classList.add('popin');
-  // room left for the lock: the screen minus the Close row and message line
+  // room left for the lock: the screen minus the message line
   const vh = window.visualViewport ? visualViewport.height : innerHeight, vw = window.visualViewport ? visualViewport.width : innerWidth;
-  ulCtl = PL.mount(document.getElementById('ulHost'), u.design, { digits: ulDigits(), maxW: Math.min(vw - 24, vw * .8), maxH: vh - 78, ...opts });
+  ulCtl = PL.mount(document.getElementById('ulHost'), u.design, { digits: ulDigits(), maxW: Math.min(vw - 24, vw * .8), maxH: vh - 50,
+    onOutside: () => closeUlView(), ...opts });
+  // grow out of the corner lock (when it's showing), with a little bounce
+  const panel = ov.querySelector('.panel'), icon = playing ? document.querySelector('#ulBar .ul-icon') : null;
+  let fx = 0, fy = 0;
+  if (icon) {
+    const a = icon.getBoundingClientRect(), b = panel.getBoundingClientRect();
+    fx = (a.left + a.width / 2) - (b.left + b.width / 2); fy = (a.top + a.height / 2) - (b.top + b.height / 2);
+  }
+  panel.style.setProperty('--fx', fx + 'px'); panel.style.setProperty('--fy', fy + 'px');
+  void ov.offsetWidth; ov.classList.add('popin');
   return ulCtl;
 }
+// Tap anywhere that isn't the lock itself to put it away
+document.getElementById('ulView').addEventListener('pointerdown', e => {
+  const ov = e.currentTarget;
+  if (ov.classList.contains('px') && ov.classList.contains('open') && !e.target.closest('#ulHost canvas')) closeUlView();
+});
 function openUlSetter(u, combo) {
   const d = designs.get(u.design);
   if (!d) return;
@@ -3097,7 +3120,7 @@ function fitUlHost(d) {
 }
 // A Courtyard Lock leaves the way it came: a little swell, then it shrinks
 // away with the backdrop fading (UL_POP_OUT_MS), then the view closes.
-const UL_POP_OUT_MS = 320;
+const UL_POP_OUT_MS = 340;
 let ulPlayU = null;   // the unlocker being played (its dials are remembered on close)
 let ulCloseTimer = 0;
 function closeUlView(now) {

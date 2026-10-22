@@ -15,7 +15,7 @@
      PL.glowCSS(design, alpha)      CSS background for its faint halo
      PL.codeText(code, digits)      '١٩٤٧' / '1947'
      PL.mount(host, design, opts)   the big interactive lock inside host
-       opts: { code, digits: 'ar'|'en', submitLabel, maxW, maxH, onSubmit(code) }
+       opts: { code, digits: 'ar'|'en', submitLabel, maxW, maxH, onSubmit(code), onOutside() }
        returns { shake(), flashOk(word), code(), destroy() } */
 const PL = (() => {
   const C = {
@@ -319,6 +319,8 @@ const PL = (() => {
         if (opts.onSubmit) opts.onSubmit([...st.dials]);
         return;
       }
+      // anywhere off the plate and the button (its transparent corners too)
+      if (!inPlate(G, x, y, -1)) { if (opts.onOutside) opts.onOutside(); return; }
       const i = Math.floor((x - G.wx - 1 + GAP / 2) / (DW + GAP));
       if (i < 0 || i > 3 || y < G.wy - 6 || y > G.wy + G.winH + 6) return;
       swipe = { i, y: e.clientY, mid: G.wy + 1 + DH / 2, moved: false };
