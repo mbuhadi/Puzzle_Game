@@ -116,6 +116,8 @@ body.playing .edit-only { display: none; }
 #mpStatus { font-family: sans-serif; font-size: 11px; min-height: 14px; }
 
 #tileView .panel { width: min(1100px, 100%); height: min(92vh, 900px); max-height: none; padding: 10px; }
+#tileView.fadein { animation: tvFadeIn var(--fade, 70ms) ease-out; }
+@keyframes tvFadeIn { from { opacity: 0; } }
 #tvFrame { flex: 1; width: 100%; border: 1px solid var(--border); border-radius: 6px; background: #0e0d0a; }
 #tvEmpty { flex: 1; display: flex; align-items: center; justify-content: center; font-family: sans-serif; color: var(--dim); font-size: 13px; text-align: center; }
 #tvTitle { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2669,10 +2671,10 @@ function playTap(w) {
 }
 // Opening a tile, step by step: it shakes (SHAKE_MS), then flips over to its
 // dark back while being lifted toward the player — growing and gliding to the
-// middle of the screen until it fills it (LIFT_MS); then the interface is
-// simply there (no fade). Closing: the interface goes at once and the card,
+// middle of the screen until it fills it (LIFT_MS); then the interface fades
+// in over it (IFACE_FADE_MS). Closing: the interface goes at once and the card,
 // filling the screen, shrinks back to its place and flips back over.
-const LIFT_MS = 560;
+const LIFT_MS = 560, IFACE_FADE_MS = 70;
 const CARD_BACK = [20, 18, 14];   // the card's other side: the interface's background colour (#14120e)
 const easeInOut = e => e < .5 ? 4 * e * e * e : 1 - Math.pow(-2 * e + 2, 3) / 2;
 function liftProgress(now) {
@@ -2769,7 +2771,11 @@ function liftAndOpen(t) {
     if (!playing || play !== P) return;
     play.lift.held = true;
     play.opened.add(t.id);
-    document.getElementById('tileView').classList.add('open');
+    // the interface fades in over the card (IFACE_FADE_MS)
+    const tv = document.getElementById('tileView');
+    tv.style.setProperty('--fade', IFACE_FADE_MS + 'ms');
+    tv.classList.remove('fadein'); void tv.offsetWidth;
+    tv.classList.add('open', 'fadein');
     play.busy = false;
   }, LIFT_MS);
 }
