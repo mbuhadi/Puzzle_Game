@@ -12,7 +12,7 @@
      PL.isPixel(design)             true for a 'px:…' design id
      PL.get(design)                 the lock for a design id (or null)
      PL.drawMini(canvas, design, s) the small corner version, s× pixels
-     PL.glowCSS(design, alpha)      CSS background for its faint halo
+     PL.glowFilter(design, r, y)    CSS filter: its glow (+ drop shadow)
      PL.codeText(code, digits)      '١٩٤٧' / '1947'
      PL.mount(host, design, opts)   the big interactive lock inside host
        opts: { code, digits: 'ar'|'en', submitLabel, maxW, maxH, onSubmit(code), onOutside() }
@@ -249,7 +249,18 @@ const PL = (() => {
     g.imageSmoothingEnabled = false;
     g.drawImage(art, 0, 0, canvas.width, canvas.height);
   }
-  // The faint halo: main tile colour in the middle, fading through the star colour
+  // The faint glow, coming straight off the lock's own outline (CSS
+  // drop-shadows follow the drawn pixels): a tight one in the main tile colour
+  // and a wider, softer one in the star colour. r: glow size in px. The dark
+  // drop shadow under the lock is part of it, applied first so it isn't lit.
+  const GLOW_ALPHA = .6;
+  function glowFilter(design, r = 16, shadowY = 0) {
+    const L = get(design); if (!L) return 'none';
+    const a = (hex, k) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${k})`; };
+    return (shadowY ? `drop-shadow(0 ${shadowY}px 0 rgba(0,0,0,.35)) ` : '') +
+      `drop-shadow(0 0 ${Math.round(r * .35)}px ${a(L.pal.tiles[0], GLOW_ALPHA)}) drop-shadow(0 0 ${r}px ${a(L.pal.star[0], GLOW_ALPHA * .7)})`;
+  }
+  // (older) an elliptical halo as a CSS background
   function glowCSS(design, alpha = .38) {
     const L = get(design); if (!L) return 'none';
     const a = (hex, k) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${k})`; };
@@ -273,10 +284,8 @@ const PL = (() => {
     wrap.style.cssText = 'position:relative;display:flex;justify-content:center;margin:0 auto;';
     const cv = document.createElement('canvas');
     cv.width = Math.round(G.W * S); cv.height = Math.round(G.H * S);
-    const glow = document.createElement('div');
-    glow.style.cssText = `position:absolute;left:50%;top:50%;width:${cv.width * 1.6}px;height:${cv.height * 2.2}px;transform:translate(-50%,-50%);pointer-events:none;border-radius:50%;background:${glowCSS(design)}`;
-    cv.style.cssText = 'position:relative;image-rendering:pixelated;touch-action:none;filter:drop-shadow(0 8px 0 rgba(0,0,0,.35));';
-    wrap.append(glow, cv);
+    cv.style.cssText = `position:relative;image-rendering:pixelated;touch-action:none;filter:${glowFilter(design, Math.round(8 * S), Math.round(2 * S))};`;
+    wrap.append(cv);
     host.appendChild(wrap);
     const art = document.createElement('canvas');
     art.width = G.W; art.height = G.H;
@@ -354,5 +363,5 @@ const PL = (() => {
 
   // drawing pieces, shared with the design previews (unlocker-preview*.html)
   const parts = { C, MAT, GLYPHS, px, rect, glyph, inArch, star, popWord, fitWord };
-  return { parts, LOCKS, isPixel, get, drawMini, glowCSS, codeText, mount, sameCode: (a, b) => a.length === b.length && a.every((x, i) => +x === +b[i]) };
+  return { parts, LOCKS, isPixel, get, drawMini, glowCSS, glowFilter, codeText, mount, sameCode: (a, b) => a.length === b.length && a.every((x, i) => +x === +b[i]) };
 })();
