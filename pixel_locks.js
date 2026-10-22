@@ -254,11 +254,12 @@ const PL = (() => {
   // and a wider, softer one in the star colour. r: glow size in px. The dark
   // drop shadow under the lock is part of it, applied first so it isn't lit.
   const GLOW_ALPHA = .6;
-  function glowFilter(design, r = 16, shadowY = 0) {
+  // m: strength (1 = normal; the corner lock pulses it up and down)
+  function glowFilter(design, r = 16, shadowY = 0, m = 1) {
     const L = get(design); if (!L) return 'none';
-    const a = (hex, k) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${k})`; };
+    const a = (hex, k) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${Math.min(1, k).toFixed(3)})`; };
     return (shadowY ? `drop-shadow(0 ${shadowY}px 0 rgba(0,0,0,.35)) ` : '') +
-      `drop-shadow(0 0 ${Math.round(r * .35)}px ${a(L.pal.tiles[0], GLOW_ALPHA)}) drop-shadow(0 0 ${r}px ${a(L.pal.star[0], GLOW_ALPHA * .7)})`;
+      `drop-shadow(0 0 ${Math.round(r * .35)}px ${a(L.pal.tiles[0], GLOW_ALPHA * m)}) drop-shadow(0 0 ${r}px ${a(L.pal.star[0], GLOW_ALPHA * .7 * m)})`;
   }
   // (older) an elliptical halo as a CSS background
   function glowCSS(design, alpha = .38) {

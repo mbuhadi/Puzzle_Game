@@ -3142,12 +3142,38 @@ function renderUlBar() {
       // shows the dials where the player last left them; glows straight off its outline
       const c = document.createElement('canvas'); PL.drawMini(c, u.design, 2, { dials: play && play.ulDials[u.id], digits: ulDigits() });
       c.style.filter = PL.glowFilter(u.design, 10, 3);
+      c.dataset.design = u.design;
+      startCornerPulse();
       b.append(c);
     } else if (d && (d.icon || d.body)) { const im = document.createElement('img'); UL.setImg(im, d.icon || d.body); b.appendChild(im); }
     else { const sp = document.createElement('span'); sp.textContent = '⚿'; b.appendChild(sp); }
     b.onclick = () => openUlPlay(u);
     bar.appendChild(b);
   }
+}
+// The corner lock's glow breathes: it rises for 0.5 s, holds at its peak for
+// 0.2 s, fades to very faint over 0.5 s and holds there for 0.2 s, then again.
+// Strength 1 is the steady glow it had before, halfway between the two.
+const PULSE = { rise: 500, peak: 200, fall: 500, low: 200, hi: 1.7, lo: .3 };
+let pulseRaf = 0, pulseLast = -1;
+function cornerGlowStrength(now) {
+  const P = PULSE, T = P.rise + P.peak + P.fall + P.low, t = now % T, ease = e => .5 - .5 * Math.cos(Math.PI * e);
+  if (t < P.rise) return P.lo + (P.hi - P.lo) * ease(t / P.rise);
+  if (t < P.rise + P.peak) return P.hi;
+  if (t < P.rise + P.peak + P.fall) return P.hi - (P.hi - P.lo) * ease((t - P.rise - P.peak) / P.fall);
+  return P.lo;
+}
+function startCornerPulse() {
+  if (pulseRaf) return;
+  const step = now => {
+    const c = document.querySelector('#ulBar .ul-icon.px canvas');
+    if (!playing || !c) { pulseRaf = 0; return; }
+    const m = Math.round(cornerGlowStrength(now) * 50) / 50;   // only restyle when it visibly changes
+    if (m !== pulseLast) { pulseLast = m; c.style.filter = PL.glowFilter(c.dataset.design, 10, 3, m); }
+    pulseRaf = requestAnimationFrame(step);
+  };
+  pulseLast = -1;
+  pulseRaf = requestAnimationFrame(step);
 }
 function openUlPlay(u) {
   const d = designs.get(u.design);
