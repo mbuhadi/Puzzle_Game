@@ -154,7 +154,9 @@ body.playing .ul-icon.px canvas { animation: ulRattle 45s linear infinite; anima
 /* pop in / out with a bounce (same feel as the unlocker previews) */
 #ulView.px.popin { animation: ulFadeIn .2s ease-out; }
 #ulView.px.popin .panel { animation: ulPopIn .42s ease-out; }
-#ulView.px.closing { animation: ulFadeOut .32s ease-in forwards; pointer-events: none; }
+/* keeps catching taps while it closes, so the tap that closed it can't land on
+   (and reopen) the corner lock or a tile underneath */
+#ulView.px.closing { animation: ulFadeOut .34s ease-in forwards; }
 #ulView.px.closing .panel { animation: ulPopOut .34s ease-in forwards; }
 /* --fx / --fy: from the lock's middle to the corner lock's middle, so it
    grows out of the small one and shrinks back into it (0 = from the middle) */
@@ -3165,6 +3167,7 @@ function renderUlBar() {
 function openUlPlay(u) {
   const d = designs.get(u.design);
   if (!d || !playing || play.seq) return;
+  if (document.getElementById('ulView').classList.contains('open')) return;   // already showing (or closing)
   if (PL.isPixel(u.design)) {
     const msg = document.getElementById('ulMsg');
     msg.textContent = '';
