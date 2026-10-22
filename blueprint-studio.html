@@ -2673,12 +2673,9 @@ function playTap(w) {
 // dark-grey back while being lifted toward the player — growing and gliding
 // to the middle of the screen until it fills it (LIFT_MS); the screen then
 // quickly fades to black (VEIL_OUT_MS) and the interface fades in
-// (VEIL_IN_MS). Closing plays the same in reverse: the interface fades out,
-// the dark card fades in filling the screen, shrinks back to its place and
-// flips back over.
+// (VEIL_IN_MS). Closing: the interface goes at once and the card, filling
+// the screen, shrinks back to its place and flips back over.
 const LIFT_MS = 560, VEIL_OUT_MS = 130, VEIL_IN_MS = 220;
-// closing has its own fades: a slow fade to black, then the black lifts quickly
-const CLOSE_VEIL_OUT_MS = 50, CLOSE_VEIL_IN_MS = 50;
 const CARD_BACK = [20, 18, 14];   // the card's other side: the interface's background colour (#14120e)
 function veil(on, ms) {
   const v = document.getElementById('veil');
@@ -2791,29 +2788,20 @@ function liftAndOpen(t) {
 }
 // The reverse; after() runs once the card is back in its place
 function closeTileAnimated(after) {
-  if (!openTile || !play || play.closing) { closeTileView(); if (after) after(); return; }
+  if (play && play.lift && play.lift.dir < 0) return;   // already on its way back
+  if (!openTile || !play) { closeTileView(); if (after) after(); return; }
   const P = play, id = openTile.id;
-  play.busy = true; play.closing = true;
-  veil(true, CLOSE_VEIL_OUT_MS);
+  play.busy = true;
+  // no fade: the interface goes and the full-size card starts shrinking back at once
+  closeTileView();
+  play.lift = { id, dir: -1, t0: performance.now() };
+  render();
   setTimeout(() => {
     if (!playing || play !== P) return;
-    closeTileView();
-    play.lift = { id, dir: -1, held: true };
-    play.closing = false;
-    veil(false, CLOSE_VEIL_IN_MS);
+    play.lift = null; play.busy = false;
     render();
-    setTimeout(() => {
-      if (!playing || play !== P) return;
-      play.lift = { id, dir: -1, t0: performance.now() };
-      render();
-      setTimeout(() => {
-        if (!playing || play !== P) return;
-        play.lift = null; play.busy = false;
-        render();
-        if (after) after();
-      }, LIFT_MS);
-    }, CLOSE_VEIL_IN_MS);
-  }, CLOSE_VEIL_OUT_MS);
+    if (after) after();
+  }, LIFT_MS);
 }
 function openTileView(t, show = true) {
   openTile = t;
