@@ -1471,6 +1471,9 @@ const swirl = { cv: document.createElement('canvas'), data: null, last: -1e9, ke
 // Swirl speed. 1 = the first version (one full turn every ~90 s, churn
 // cycles of ~23-29 s). Lower = slower; at 0.1 a full turn takes ~15 minutes.
 const SWIRL_SPEED = .1;
+// The background's five brightness bands, as fractions of the (muted) base
+// colour: 45%, 50%, 55%, 60%, 65%
+const BAND_MIN = .45, BAND_STEP = .05;
 // Each movement fills FIELD.a (0-1: main paint, banded into flat steps) and
 // FIELD.s (0-1: highlight streaks above ~0.84) for a point (nx, ny) at time t
 const FIELD = { a: 0, s: 0 };
@@ -1541,7 +1544,7 @@ function drawSwirl(W, H, now) {
     swirl.last = now; swirl.key = key;
     const field = BG_FIELDS[bgStyle] || BG_FIELDS.spiral;
     const base = theme().bg;   // muted (see BG_MUTE)
-    const deep = base.map(v => v * .5), mid = base.map(v => v * .75), hi = base.map(v => v + (255 - v) * .4);
+    const hi = base.map(v => v + (255 - v) * .4);
     const t = now / 1000 * SWIRL_SPEED, d = swirl.data.data, asp = w / h;
     let i = 0;
     for (let y = 0; y < h; y++) {
@@ -1553,9 +1556,9 @@ function drawSwirl(W, H, now) {
         let a = FIELD.a;
         a = Math.max(0, Math.min(1, Math.round((a + dither * .22) * 4) / 4));   // a few flat, dithered bands
         const streak = FIELD.s + dither * .08 > .84;
-        let c0, c1, k;
-        if (a < .5) { c0 = deep; c1 = mid; k = a * 2; } else { c0 = mid; c1 = base; k = (a - .5) * 2; }
-        let r = c0[0] + (c1[0] - c0[0]) * k, gg = c0[1] + (c1[1] - c0[1]) * k, bb = c0[2] + (c1[2] - c0[2]) * k;
+        // band n (0–4) is BAND_MIN + n × BAND_STEP of the base colour's brightness
+        const f = BAND_MIN + Math.round(a * 4) * BAND_STEP;
+        let r = base[0] * f, gg = base[1] * f, bb = base[2] * f;
         if (streak) { r += (hi[0] - r) * .6; gg += (hi[1] - gg) * .6; bb += (hi[2] - bb) * .6; }
         d[i++] = r; d[i++] = gg; d[i++] = bb; d[i++] = 255;
       }
