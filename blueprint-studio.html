@@ -2677,6 +2677,8 @@ function playTap(w) {
 // the dark card fades in filling the screen, shrinks back to its place and
 // flips back over.
 const LIFT_MS = 560, VEIL_OUT_MS = 130, VEIL_IN_MS = 220;
+// closing has its own fades: a slow fade to black, then the black lifts quickly
+const CLOSE_VEIL_OUT_MS = 700, CLOSE_VEIL_IN_MS = 130;
 const CARD_BACK = [20, 18, 14];   // the card's other side: the interface's background colour (#14120e)
 function veil(on, ms) {
   const v = document.getElementById('veil');
@@ -2792,13 +2794,13 @@ function closeTileAnimated(after) {
   if (!openTile || !play || play.closing) { closeTileView(); if (after) after(); return; }
   const P = play, id = openTile.id;
   play.busy = true; play.closing = true;
-  veil(true, VEIL_OUT_MS);
+  veil(true, CLOSE_VEIL_OUT_MS);
   setTimeout(() => {
     if (!playing || play !== P) return;
     closeTileView();
     play.lift = { id, dir: -1, held: true };
     play.closing = false;
-    veil(false, VEIL_IN_MS);
+    veil(false, CLOSE_VEIL_IN_MS);
     render();
     setTimeout(() => {
       if (!playing || play !== P) return;
@@ -2810,8 +2812,8 @@ function closeTileAnimated(after) {
         render();
         if (after) after();
       }, LIFT_MS);
-    }, VEIL_IN_MS);
-  }, VEIL_OUT_MS);
+    }, CLOSE_VEIL_IN_MS);
+  }, CLOSE_VEIL_OUT_MS);
 }
 function openTileView(t, show = true) {
   openTile = t;
