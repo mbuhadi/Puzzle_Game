@@ -388,7 +388,6 @@ body.playing .ul-icon:active { transform: scale(.9); }
   </div>
 </div>
 
-<div id="veil" style="position:fixed;inset:0;background:#08080a;opacity:0;pointer-events:none;z-index:60"></div>
 <!-- Test mode: a flipped tile's interface -->
 <div id="tileView" class="overlay">
   <div class="panel">
@@ -2607,7 +2606,6 @@ async function preloadInExplorationOrder() {
   }
 }
 function resetPlay() {
-  veil(false, 0);
   play = { explored: new Set(tiles.filter(t => t.start).map(t => t.id)),
     flipped: new Set(), opened: new Set(), solved: new Set(), locked: new Set(), flip: new Map(), reveal: new Map(), shake: new Map(), stillAt: new Map(), usedCombos: new Set(), ulDials: {}, busy: false, pendingLock: new Set(), pendingOpen: new Set(),
     fx: new Map(), hover: null, hoverW: null, press: null, parts: [], pops: [], kick: null };
@@ -2628,7 +2626,7 @@ function togglePlay() {
   document.getElementById('playBtn').classList.toggle('active', playing);
   statusMsg = '';
   if (playing) { resetPlay(); preloadInExplorationOrder(); const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1); lockLandscape(); nudgeBrowserChrome(); }
-  else { closeTileView(); closeUlView(true); veil(false, 0); refreshAll(); unlockLandscape(); }
+  else { closeTileView(); closeUlView(true); refreshAll(); unlockLandscape(); }
   updateStatus();
 }
 // The game is landscape-only on phones and tablets. Where the browser allows it
@@ -2670,19 +2668,12 @@ function playTap(w) {
   setTimeout(() => { if (playing && play === P) liftAndOpen(t); }, SHAKE_MS);
 }
 // Opening a tile, step by step: it shakes (SHAKE_MS), then flips over to its
-// dark-grey back while being lifted toward the player — growing and gliding
-// to the middle of the screen until it fills it (LIFT_MS); the screen then
-// quickly fades to black (VEIL_OUT_MS) and the interface fades in
-// (VEIL_IN_MS). Closing: the interface goes at once and the card, filling
-// the screen, shrinks back to its place and flips back over.
-const LIFT_MS = 560, VEIL_OUT_MS = 130, VEIL_IN_MS = 220;
+// dark back while being lifted toward the player — growing and gliding to the
+// middle of the screen until it fills it (LIFT_MS); then the interface is
+// simply there (no fade). Closing: the interface goes at once and the card,
+// filling the screen, shrinks back to its place and flips back over.
+const LIFT_MS = 560;
 const CARD_BACK = [20, 18, 14];   // the card's other side: the interface's background colour (#14120e)
-function veil(on, ms) {
-  const v = document.getElementById('veil');
-  v.style.transition = `opacity ${ms}ms ease`;
-  v.style.opacity = on ? 1 : 0;
-  v.style.pointerEvents = on ? 'auto' : 'none';
-}
 const easeInOut = e => e < .5 ? 4 * e * e * e : 1 - Math.pow(-2 * e + 2, 3) / 2;
 function liftProgress(now) {
   const L = play.lift;
@@ -2773,17 +2764,13 @@ function liftAndOpen(t) {
   openTileView(t, false);                         // start loading behind the scenes
   play.lift = { id: t.id, dir: 1, t0: performance.now() };
   render();
+  // no fade: once the card fills the screen the interface is simply there
   setTimeout(() => {
     if (!playing || play !== P) return;
-    veil(true, VEIL_OUT_MS);
-    setTimeout(() => {
-      if (!playing || play !== P) return;
-      play.lift.held = true;
-      play.opened.add(t.id);
-      document.getElementById('tileView').classList.add('open');
-      veil(false, VEIL_IN_MS);
-      setTimeout(() => { if (play === P) play.busy = false; }, VEIL_IN_MS);
-    }, VEIL_OUT_MS);
+    play.lift.held = true;
+    play.opened.add(t.id);
+    document.getElementById('tileView').classList.add('open');
+    play.busy = false;
   }, LIFT_MS);
 }
 // The reverse; after() runs once the card is back in its place
