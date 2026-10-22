@@ -1912,9 +1912,18 @@ if (!CHUNK_PARAM) (function(){
   let soundFilesPromise = null;
   function fetchSoundFiles() {
     if (soundFilesPromise) return soundFilesPromise;
+    // listing a folder needs the GitHub API (60 requests an hour without a
+    // token): remember the list for a few minutes
+    const KEY = 'sndFileList', MAX_AGE = 5 * 60 * 1000;
+    try { const c = JSON.parse(localStorage.getItem(KEY) || 'null'); if (c && Date.now() - c.at < MAX_AGE) return soundFilesPromise = Promise.resolve(c.list); } catch (e) {}
     return soundFilesPromise = fetch(sndGhApi('assets/sounds'), { headers: sndGhHeaders(), cache: 'no-store' })
-      .then(r => r.ok ? r.json() : [])
-      .then(files => files.filter(f => f.type === 'file').map(f => 'assets/sounds/' + f.name))
+      .then(r => r.ok ? r.json() : null)
+      .then(files => {
+        if (!files) return [];
+        const list = files.filter(f => f.type === 'file').map(f => 'assets/sounds/' + f.name);
+        try { localStorage.setItem(KEY, JSON.stringify({ at: Date.now(), list })); } catch (e) {}
+        return list;
+      })
       .catch(() => []);
   }
 

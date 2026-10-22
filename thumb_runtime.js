@@ -98,20 +98,29 @@ const TH = (() => {
     return h;
   };
   const fileOf = id => `${GH.dir}/${id}.json`;
-  const decode = b64 => decodeURIComponent(escape(atob(b64.replace(/\s/g, ''))));
 
-  // The saved thumbnail for a chunk, or null. Reads the repo first (fresh
-  // right after a save), then the deployed site.
-  async function fetchData(id) {
+  // The saved thumbnail for a chunk, or null. Reading never uses the GitHub
+  // API (it allows only 60 requests an hour without a token): a copy this
+  // browser saved in the last few minutes (the site takes a minute or two to
+  // catch up), else the site itself, else GitHub's plain-file address.
+  const RECENT_MS = 10 * 60 * 1000;
+  const recentKey = id => 'thumbSaved:' + id;
+  function recent(id) {
     try {
-      const r = await fetch(api(fileOf(id)) + '?ref=' + GH.branch, { headers: headers(), cache: 'no-store' });
-      if (r.status === 404) return null;
-      if (r.ok) return normalize(JSON.parse(decode((await r.json()).content)));
-    } catch (e) { /* fall back to the site copy */ }
-    try {
-      const r = await fetch(fileOf(id), { cache: 'no-store' });
-      return r.ok ? normalize(await r.json()) : null;
+      const j = JSON.parse(localStorage.getItem(recentKey(id)) || 'null');
+      return j && Date.now() - j.at < RECENT_MS ? j.data : null;
     } catch (e) { return null; }
+  }
+  async function fetchData(id) {
+    const mine = recent(id);
+    if (mine) return normalize(mine);
+    for (const url of [fileOf(id), `https://raw.githubusercontent.com/${GH.owner}/${GH.repo}/${GH.branch}/${fileOf(id)}`]) {
+      try {
+        const r = await fetch(url, { cache: 'no-cache' });
+        if (r.ok) return normalize(await r.json());
+      } catch (e) { /* try the next one */ }
+    }
+    return null;
   }
 
   // Cache: id → { promise, data, canvas, grey } (canvas null = no thumbnail)
@@ -146,6 +155,7 @@ const TH = (() => {
     if (sha) body.sha = sha;
     const w = await fetch(api(path), { method: 'PUT', headers: headers(), body: JSON.stringify(body) });
     if (!w.ok) { let m = w.statusText; try { m = (await w.json()).message || m; } catch (e) {} throw new Error(m); }
+    try { localStorage.setItem(recentKey(id), JSON.stringify({ at: Date.now(), data: d })); } catch (e) {}
     forget(id);
   }
 

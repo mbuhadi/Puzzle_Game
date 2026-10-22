@@ -35,7 +35,12 @@ const UL = (() => {
 
   function token() { try { return localStorage.getItem('ghToken') || ''; } catch (e) { return ''; } }
   function apiUrl(path) { return `https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}`; }
+  // A repo file: from the site, else GitHub's plain-file address, and only
+  // then the API (which allows just 60 requests an hour without a token).
   async function raw(path) {
+    for (const url of [encodeURI(path), `https://raw.githubusercontent.com/${OWNER}/${REPO}/main/${encodeURI(path)}`]) {
+      try { const r = await fetch(url, { cache: 'no-cache' }); if (r.ok) return r; } catch (e) { /* next */ }
+    }
     const h = { Accept: 'application/vnd.github.raw' };
     if (token()) h.Authorization = 'Bearer ' + token();
     const r = await fetch(apiUrl(path), { headers: h, cache: 'no-store' });
@@ -61,7 +66,16 @@ const UL = (() => {
     img.src = encodeURI(path);
   }
 
+  // Listing a folder needs the API: remember the answer for a few minutes so
+  // opening pages again and again doesn't use up the hourly limit.
   async function listDesigns() {
+    const KEY = 'ulDesignList', MAX_AGE = 5 * 60 * 1000;
+    try { const c = JSON.parse(localStorage.getItem(KEY) || 'null'); if (c && Date.now() - c.at < MAX_AGE) return c.list; } catch (e) {}
+    const list = await listDesignsLive();
+    try { localStorage.setItem(KEY, JSON.stringify({ at: Date.now(), list })); } catch (e) {}
+    return list;
+  }
+  async function listDesignsLive() {
     const h = { Accept: 'application/vnd.github+json' };
     if (token()) h.Authorization = 'Bearer ' + token();
     const r = await fetch(apiUrl('unlockers'), { headers: h, cache: 'no-store' });
