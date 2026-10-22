@@ -2678,7 +2678,7 @@ function playTap(w) {
 // flips back over.
 const LIFT_MS = 560, VEIL_OUT_MS = 130, VEIL_IN_MS = 220;
 // closing has its own fades: a slow fade to black, then the black lifts quickly
-const CLOSE_VEIL_OUT_MS = 700, CLOSE_VEIL_IN_MS = 130;
+const CLOSE_VEIL_OUT_MS = 50, CLOSE_VEIL_IN_MS = 50;
 const CARD_BACK = [20, 18, 14];   // the card's other side: the interface's background colour (#14120e)
 function veil(on, ms) {
   const v = document.getElementById('veil');
