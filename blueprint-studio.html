@@ -1495,9 +1495,9 @@ const swirl = { cv: document.createElement('canvas'), data: null, last: -1e9, ke
 // Swirl speed. 1 = the first version (one full turn every ~90 s, churn
 // cycles of ~23-29 s). Lower = slower; at 0.1 a full turn takes ~15 minutes.
 const SWIRL_SPEED = .1;
-// The background's five brightness bands, as fractions of the (muted) base
-// colour: 45%, 50%, 55%, 60%, 65%
-const BAND_MIN = .45, BAND_STEP = .05;
+// The background's five brightness bands, as fractions of the base colour:
+// 50%, 62.5%, 75%, 87.5%, 100%
+const BAND_MIN = .5, BAND_STEP = .125;
 // Each movement fills FIELD.a (0-1: main paint, banded into flat steps) and
 // FIELD.s (0-1: highlight streaks above ~0.84) for a point (nx, ny) at time t
 const FIELD = { a: 0, s: 0 };
