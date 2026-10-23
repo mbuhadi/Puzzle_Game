@@ -204,6 +204,10 @@ body.playing #canvasWrap { border-radius: 22px / 26px; }
 .swatch:hover { transform: scale(1.12); border-color: rgba(255,255,255,.6); }
 .swatch.sel { border-color: #fff; transform: scale(1.15); box-shadow: 0 0 0 2px rgba(0,0,0,.45); }
 .swatch-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.pal-btn { display: flex; align-items: center; gap: 8px; padding: 4px 6px; text-align: left; }
+.pal-btn.sel { border-color: var(--gold); color: var(--gold); background: var(--hover); }
+.pal-strip { display: flex; border-radius: 3px; overflow: hidden; border: 1px solid rgba(0,0,0,.4); flex: 0 0 auto; }
+.pal-strip i { width: 14px; height: 16px; display: block; }
 /* juicy corner icons: idle bob, pop on hover, squish on press */
 body.playing .ul-icon { animation: ulBob 3.2s ease-in-out infinite; transition: transform .15s cubic-bezier(.3,1.8,.5,1); }
 body.playing .ul-icon:nth-child(2n) { animation-delay: -1.1s; }
@@ -268,8 +272,8 @@ body.playing .ul-icon:active { transform: scale(.9); }
       <div class="divider"></div>
 
       <div>
-        <div class="sec-title">BACKGROUND COLOUR</div>
-        <div class="swatch-row" id="palSide" style="margin-bottom:8px"></div>
+        <div class="sec-title">BACKGROUND PALETTE</div>
+        <div id="palSide" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px"></div>
         <div class="sec-title">BACKGROUND TYPE</div>
         <div class="style-row" id="styleSide"></div>
         <div class="hint" style="margin-top:6px">What the player sees behind the map. Press ▶ Test to see it moving.</div>
@@ -595,7 +599,7 @@ function toData() {
     tiles: tiles.map(t => ({ id: t.id, pts: t.pts.map(p => [r2(p[0]), r2(p[1])]), start: !!t.start,
       chunk: t.chunk || '', label: t.label || '', opens: [...t.opens], cancels: [...t.cancels],
       ...(t.thumb ? { thumb: { dx: r2(t.thumb.dx * 1000) / 1000, dy: r2(t.thumb.dy * 1000) / 1000, zoom: r2(t.thumb.zoom) } } : {}) })),
-    bg: playBg, bgStyle,
+    bg: playBg, bgPal, bgStyle,
     labels: labels.map(l => ({ id: l.id, pts: l.pts.map(p => [r2(p[0]), r2(p[1])]), en: l.en || '', ar: l.ar || '', size: l.size, belly: l.belly })),
     unlockers: unlockers.map(u => ({ id: u.id, design: u.design,
       combos: u.combos.map(c => ({ id: c.id, code: [...c.code], opens: [...c.opens], cancels: [...c.cancels] })) })),
@@ -613,7 +617,8 @@ function fromData(d) {
     t.opens = t.opens.filter(id => ids.has(id) && id !== t.id);
     t.cancels = t.cancels.filter(id => ids.has(id) && id !== t.id);
   }
-  playBg = /^#[0-9a-f]{6}$/i.test(d.bg || '') ? (OLD_PALETTE[d.bg.toLowerCase()] || d.bg) : PALETTE[DEFAULT_BG].c;
+  bgPal = PALETTES.some(p => p.id === d.bgPal) ? d.bgPal : DEFAULT_PAL;   // older single-colour blueprints get the default
+  playBg = palOf(bgPal).cols[0];
   bgStyle = BG_STYLES.some(x => x.id === d.bgStyle) ? d.bgStyle : 'spiral';
   unlockers = (d.unlockers || []).map(u => ({ id: String(u.id), design: String(u.design || ''),
     combos: (u.combos || []).map(c => ({ id: String(c.id), code: (c.code || []).map(Number),
@@ -1374,17 +1379,29 @@ function blitChalk() {
 // colour, chunky pixel-art "?" signs, a CRT-TV glow, and "juice" — tiles
 // that sway, lift and lean toward the pointer, squish when pressed, pop in,
 // and a jolt + pixel burst + pop-up label when something is solved.
-// Vivid versions of the old faded-rainbow palette (same hues, 82% saturation,
-// 60% lightness). OLD_PALETTE maps the earlier soft colours, which saved
-// blueprints may still hold, onto these.
-const PALETTE = [
-  { n: 'Rose', c: '#ed455c' }, { n: 'Apricot', c: '#ed8645' }, { n: 'Butter', c: '#edc545' },
-  { n: 'Sage', c: '#62ed45' }, { n: 'Seafoam', c: '#45edcc' }, { n: 'Sky', c: '#4595ed' },
-  { n: 'Periwinkle', c: '#5945ed' }, { n: 'Lilac', c: '#c445ed' },
+// Background palettes: the test-mode background slowly cycles through a
+// palette's colours — each held for BG_HOLD_MS, then blended into the next
+// over BG_BLEND_MS, looping. The tiles take a steady tint from the first
+// colour (playBg) so they don't flicker as the background changes.
+const PALETTES = [
+  { id: 'courtyard', n: 'Courtyard House', cols: ['#3f9a8c', '#c9963f', '#b5603f', '#3f62a8', '#6f8a4a'] },
+  { id: 'ghost', n: 'Dark Ghost', cols: ['#3f4a8f', '#5b3f8f', '#8a6fc0', '#7a3f7a', '#4f8f9a'] },
+  { id: 'underwater', n: 'Underwater', cols: ['#2f5f9a', '#2f8a8f', '#3fa0a8', '#3f8a6a', '#c06a5a'] },
+  { id: 'garden', n: 'Garden', cols: ['#4f8f4f', '#8a8f3f', '#c4a03f', '#b8607a', '#8a6fb0'] },
 ];
-const OLD_PALETTE = { '#d4848f': '#ed455c', '#dda07a': '#ed8645', '#d8c27a': '#edc545', '#93b98b': '#62ed45', '#7fb8ad': '#45edcc', '#85a9d1': '#4595ed', '#9a93cf': '#5945ed', '#bb93c8': '#c445ed' };
-const DEFAULT_BG = 5;
-let playBg = PALETTE[DEFAULT_BG].c;
+const DEFAULT_PAL = 'courtyard';
+const BG_HOLD_MS = 6000, BG_BLEND_MS = 8000;
+const palOf = id => PALETTES.find(p => p.id === id) || PALETTES[0];
+let bgPal = DEFAULT_PAL;
+let playBg = palOf(bgPal).cols[0];
+// the background colour right now (RGB), somewhere along the palette's cycle
+function bgNow(now) {
+  const cols = palOf(bgPal).cols.map(hexRgb), T = BG_HOLD_MS + BG_BLEND_MS;
+  const k = Math.floor(now / T) % cols.length, t = now % T;
+  if (t < BG_HOLD_MS) return cols[k];
+  const e = (t - BG_HOLD_MS) / BG_BLEND_MS, f = e * e * (3 - 2 * e), a = cols[k], b = cols[(k + 1) % cols.length];
+  return [0, 1, 2].map(i => a[i] + (b[i] - a[i]) * f);
+}
 let shakeOff = [0, 0];
 const SWAY_RAD = .012;   // idle rock, radians (~0.7°)
 const hexRgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
@@ -1429,16 +1446,18 @@ function theme() {
 const easeOutBack = e => { const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(e - 1, 3) + c1 * Math.pow(e - 1, 2); };
 
 function renderPalettes() {
-  for (const id of ['palSide']) {
-    const el = document.getElementById(id);
-    el.innerHTML = '';
-    for (const p of PALETTE) {
-      const b = document.createElement('button');
-      b.className = 'swatch' + (p.c === playBg ? ' sel' : '');
-      b.style.background = p.c; b.title = p.n;
-      b.onclick = () => setPlayBg(p.c);
-      el.appendChild(b);
-    }
+  const el = document.getElementById('palSide');
+  el.innerHTML = '';
+  for (const p of PALETTES) {
+    const b = document.createElement('button');
+    b.className = 'pal-btn' + (p.id === bgPal ? ' sel' : '');
+    b.title = p.n;
+    const strip = document.createElement('span'); strip.className = 'pal-strip';
+    for (const c of p.cols) { const sw = document.createElement('i'); sw.style.background = c; strip.appendChild(sw); }
+    const nm = document.createElement('span'); nm.textContent = p.n;
+    b.append(strip, nm);
+    b.onclick = () => setBgPal(p.id);
+    el.appendChild(b);
   }
 }
 // Background movements
@@ -1465,9 +1484,10 @@ function renderStyles() {
     }
   }
 }
-function setPlayBg(c) {
-  if (c === playBg) return;
-  playBg = c;
+function setBgPal(id) {
+  if (id === bgPal) return;
+  bgPal = id;
+  playBg = palOf(id).cols[0];
   pushHistory();
   renderPalettes();
   document.getElementById('mapNameLbl').textContent = bpName + (isDirty() ? ' •' : '');
@@ -1552,7 +1572,7 @@ function drawSwirl(W, H, now) {
   if (now - swirl.last > 40 || swirl.key !== key) {
     swirl.last = now; swirl.key = key;
     const field = BG_FIELDS[bgStyle] || BG_FIELDS.spiral;
-    const base = theme().bg;   // muted (see BG_MUTE)
+    const base = bgNow(now);   // the palette's colour of the moment
     const hi = base.map(v => v + (255 - v) * .4);
     const t = now / 1000 * SWIRL_SPEED, d = swirl.data.data, asp = w / h;
     let i = 0;
