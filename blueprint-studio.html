@@ -671,7 +671,9 @@ const S = p => [p[0] * view.z + view.x, p[1] * view.z + view.y];
 const toWorld = (sx, sy) => [(sx - view.x) / view.z, (sy - view.y) / view.z];
 
 function resizeCanvas() {
-  dpr = window.devicePixelRatio || 1;
+  // capped at 2: on 3× phone screens the extra pixels cost far more drawing
+  // time than they add in sharpness
+  dpr = Math.min(2, window.devicePixelRatio || 1);
   const r = cv.getBoundingClientRect();
   cv.width = Math.round(r.width * dpr);
   cv.height = Math.round(r.height * dpr);
@@ -836,9 +838,22 @@ function drawGrid(W, H) {
   }
 }
 
+// Frame meter (open the page with ?fps): frames per second and how long
+// each frame's drawing takes, to check smoothness on a real device
+const fpsMeter = /[?&]fps\b/.test(location.search) ? { el: null, n: 0, ms: 0, at: 0 } : null;
+function meterFrame(ms, now) {
+  const m = fpsMeter;
+  if (!m.el) { m.el = document.createElement('div'); m.el.style.cssText = 'position:fixed;left:6px;top:6px;z-index:99999;background:rgba(0,0,0,.7);color:#7f7;font:12px monospace;padding:3px 6px;pointer-events:none'; document.body.appendChild(m.el); m.at = now; }
+  m.n++; m.ms += ms;
+  if (now - m.at >= 1000) { m.el.textContent = `${Math.round(m.n * 1000 / (now - m.at))} fps · draw ${(m.ms / m.n).toFixed(1)} ms · ${cv.width}×${cv.height}`; m.n = 0; m.ms = 0; m.at = now; }
+}
 function draw() {
-  const W = cv.width / dpr, H = cv.height / dpr;
   const now = performance.now();
+  drawFrame(now);
+  if (fpsMeter) meterFrame(performance.now() - now, now);
+}
+function drawFrame(now) {
+  const W = cv.width / dpr, H = cv.height / dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   let camMoving = false;
   if (playing && play.cam) { stepCam(now); camMoving = true; }
@@ -909,7 +924,7 @@ function draw() {
     if (play.lift) { drawLiftedCard(now); if (!play.lift.held) animating = true; }
     crtGlow();
   }
-  if (animating || camMoving) render();
+  if (animating || camMoving || playing) render();   // in test mode the background always moves
 }
 
 // ── Tile thumbnails ───────────────────────────────────────────────────────────
@@ -1491,7 +1506,7 @@ function setPlayBg(c) {
 
 // Swirling paint, computed at low resolution and blown up with hard pixel
 // edges. Recomputed ~25 times a second; the colour comes from playBg.
-const swirl = { cv: document.createElement('canvas'), data: null, last: -1e9, key: '' };
+const swirl = { cv: document.createElement('canvas'), data: null, last: -1e9, key: '', row: 0, t: 0 };
 // Swirl speed. 1 = the first version (one full turn every ~90 s, churn
 // cycles of ~23-29 s). Lower = slower; at 0.1 a full turn takes ~15 minutes.
 const SWIRL_SPEED = .1;
@@ -1557,47 +1572,62 @@ const BG_FIELDS = {
   },
 };
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+// The pattern changes only a few dozen cells at a time, so it's worked out a
+// few rows per frame (at most SWIRL_BUDGET_MS each) instead of all at once:
+// a fresh pass starts every SWIRL_EVERY_MS and is shown when its last row is
+// done. A new colour or movement is worked out in full straight away.
+const SWIRL_EVERY_MS = 60, SWIRL_BUDGET_MS = 3;
+function swirlRows(y0, y1, w, h, t, field) {
+  const asp = w / h;
+  for (let y = y0, j = y0 * w; y < y1; y++) {
+    const ny = y / h - .5;
+    for (let x = 0; x < w; x++, j++) {
+      const nx = (x / w - .5) * asp;
+      field(nx, ny, t);
+      const dither = (BAYER[(y & 3) * 4 + (x & 3)] - 7.5) / 16;
+      const a = Math.max(0, Math.min(1, Math.round((FIELD.a + dither * .22) * 4) / 4));   // a few flat, dithered bands
+      swirl.band[j] = Math.round(a * 4);
+      swirl.lit[j] = FIELD.s + dither * .08 > .84 ? 1 : 0;
+    }
+  }
+}
+function swirlPaint(w, h, g) {
+  const base = bgNow(), hi = base.map(v => v + (255 - v) * .4), d = swirl.data.data;
+  // band n (0–4) is BAND_MIN + n × BAND_STEP of the base colour's brightness
+  const lut = [];
+  for (let n = 0; n < 5; n++) {
+    const f = BAND_MIN + n * BAND_STEP, c = base.map(v => v * f);
+    lut.push(c, c.map((v, k) => v + (hi[k] - v) * .6));
+  }
+  for (let j = 0, i = 0; j < w * h; j++) {
+    const c = lut[swirl.band[j] * 2 + swirl.lit[j]];
+    d[i++] = c[0]; d[i++] = c[1]; d[i++] = c[2]; d[i++] = 255;
+  }
+  g.putImageData(swirl.data, 0, 0);
+}
 function drawSwirl(W, H, now) {
   const cell = Math.max(3, Math.ceil(W / 170));
   const w = Math.ceil(W / cell), h = Math.ceil(H / cell), sc = swirl.cv;
   if (sc.width !== w || sc.height !== h) { sc.width = w; sc.height = h; swirl.data = null; }
   const g = sc.getContext('2d');
-  if (!swirl.data) { swirl.data = g.createImageData(w, h); swirl.last = -1e9; swirl.band = new Uint8Array(w * h); swirl.lit = new Uint8Array(w * h); swirl.t = NaN; }
+  const field = BG_FIELDS[bgStyle] || BG_FIELDS.spiral;
+  if (!swirl.data) { swirl.data = g.createImageData(w, h); swirl.band = new Uint8Array(w * h); swirl.lit = new Uint8Array(w * h); swirl.key = ''; }
+  if (swirl.key.split('|')[1] !== bgStyle) {   // new movement (or size): everything at once
+    swirlRows(0, h, w, h, now / 1000 * SWIRL_SPEED, field);
+    swirl.row = h; swirl.last = now;
+    swirl.key = '';
+  }
   const key = playBg + '|' + bgStyle;
-  if (now - swirl.last > 40 || swirl.key !== key) {
-    const field = BG_FIELDS[bgStyle] || BG_FIELDS.spiral;
-    const base = bgNow();
-    const hi = base.map(v => v + (255 - v) * .4);
-    const t = now / 1000 * SWIRL_SPEED, d = swirl.data.data, asp = w / h;
-    // the pattern (each pixel's band and highlight) only needs working out
-    // again when it has moved; while frozen just the colours change
-    if (t !== swirl.t || swirl.key !== key) {
-      swirl.t = t;
-      let j = 0;
-      for (let y = 0; y < h; y++) {
-        const ny = y / h - .5;
-        for (let x = 0; x < w; x++, j++) {
-          const nx = (x / w - .5) * asp;
-          field(nx, ny, t);
-          const dither = (BAYER[(y & 3) * 4 + (x & 3)] - 7.5) / 16;
-          const a = Math.max(0, Math.min(1, Math.round((FIELD.a + dither * .22) * 4) / 4));   // a few flat, dithered bands
-          swirl.band[j] = Math.round(a * 4);
-          swirl.lit[j] = FIELD.s + dither * .08 > .84 ? 1 : 0;
-        }
-      }
+  if (swirl.key !== key) { swirl.key = key; swirlPaint(w, h, g); }   // new colour: just repaint
+  if (swirl.row >= h && now - swirl.last >= SWIRL_EVERY_MS) { swirl.row = 0; swirl.last = now; swirl.t = now / 1000 * SWIRL_SPEED; }
+  if (swirl.row < h) {
+    const stop = performance.now() + SWIRL_BUDGET_MS;
+    while (swirl.row < h && performance.now() < stop) {
+      const y1 = Math.min(h, swirl.row + 4);
+      swirlRows(swirl.row, y1, w, h, swirl.t, field);
+      swirl.row = y1;
     }
-    swirl.last = now; swirl.key = key;
-    // band n (0–4) is BAND_MIN + n × BAND_STEP of the base colour's brightness
-    const lut = [];
-    for (let n = 0; n < 5; n++) {
-      const f = BAND_MIN + n * BAND_STEP, c = base.map(v => v * f);
-      lut.push(c, c.map((v, k) => v + (hi[k] - v) * .6));
-    }
-    for (let j = 0, i = 0; j < w * h; j++) {
-      const c = lut[swirl.band[j] * 2 + swirl.lit[j]];
-      d[i++] = c[0]; d[i++] = c[1]; d[i++] = c[2]; d[i++] = 255;
-    }
-    g.putImageData(swirl.data, 0, 0);
+    if (swirl.row >= h) swirlPaint(w, h, g);
   }
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(sc, 0, 0, w * cell, h * cell);
@@ -1722,35 +1752,39 @@ function kick(amp = 6) { play.kick = { t: performance.now(), amp }; }
 
 // CRT glow: a blurred quarter-size copy of the frame screened back on top
 // (bloom), plus faint red / blue copies nudged sideways (colour fringing)
-const glow = { a: document.createElement('canvas'), r: document.createElement('canvas'), b: document.createElement('canvas') };
+// Bloom: a small, soft copy of the screen plus faint red / blue fringes,
+// combined into one layer (on black, so 'screen' blending leaves the rest
+// alone) and laid over the screen in a single pass
+const glow = { src: document.createElement('canvas'), mix: document.createElement('canvas'), tint: document.createElement('canvas') };
 let glowAt = -1e9;
 const GLOW_REFRESH_MS = 120;   // the bloom is soft: rebuilding it ~8×/s is plenty
 function crtGlow() {
   const w = Math.max(1, Math.ceil(cv.width / 6)), h = Math.max(1, Math.ceil(cv.height / 6));
   const now = performance.now();
-  if (glow.a.width !== w || glow.a.height !== h) { for (const c of Object.values(glow)) { c.width = w; c.height = h; } glowAt = -1e9; }
+  if (glow.mix.width !== w || glow.mix.height !== h) { for (const c of Object.values(glow)) { c.width = w; c.height = h; } glowAt = -1e9; }
   if (now - glowAt > GLOW_REFRESH_MS) { glowAt = now; buildGlow(w, h); }
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalCompositeOperation = 'screen';
-  ctx.globalAlpha = .26;
-  ctx.drawImage(glow.a, 0, 0, cv.width, cv.height);
-  ctx.globalAlpha = .1;
-  ctx.drawImage(glow.r, 1.6 * dpr, 0, cv.width, cv.height);
-  ctx.drawImage(glow.b, -1.6 * dpr, 0, cv.width, cv.height);
+  ctx.drawImage(glow.mix, 0, 0, cv.width, cv.height);
   ctx.restore();
 }
 function buildGlow(w, h) {
-  const ga = glow.a.getContext('2d');
-  ga.clearRect(0, 0, w, h);
-  ga.drawImage(cv, 0, 0, w, h);   // already 1/6 size and drawn back smoothed: soft enough without a blur filter
-  const tint = (c, col) => {
-    const g = c.getContext('2d');
-    g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, w, h); g.drawImage(cv, 0, 0, w, h);
-    g.globalCompositeOperation = 'multiply'; g.fillStyle = col; g.fillRect(0, 0, w, h);
-    g.globalCompositeOperation = 'source-over';
-  };
-  tint(glow.r, '#ff3030'); tint(glow.b, '#3070ff');
+  const gs = glow.src.getContext('2d');
+  gs.clearRect(0, 0, w, h);
+  gs.drawImage(cv, 0, 0, w, h);   // the only read of the full-size screen
+  const gm = glow.mix.getContext('2d'), gt = glow.tint.getContext('2d');
+  gm.globalCompositeOperation = 'source-over'; gm.globalAlpha = 1;
+  gm.fillStyle = '#000'; gm.fillRect(0, 0, w, h);
+  gm.globalCompositeOperation = 'screen';
+  gm.globalAlpha = .26; gm.drawImage(glow.src, 0, 0);
+  const shift = 1.6 * dpr * w / cv.width;   // the fringes sit 1.6px either side
+  for (const [col, dx] of [['#ff3030', shift], ['#3070ff', -shift]]) {
+    gt.globalCompositeOperation = 'source-over'; gt.clearRect(0, 0, w, h); gt.drawImage(glow.src, 0, 0);
+    gt.globalCompositeOperation = 'multiply'; gt.fillStyle = col; gt.fillRect(0, 0, w, h);
+    gm.globalAlpha = .1; gm.drawImage(glow.tint, dx, 0);
+  }
+  gm.globalAlpha = 1; gm.globalCompositeOperation = 'source-over';
 }
 // Film-grain tile for the CRT overlay
 (function makeCrtGrain() {
