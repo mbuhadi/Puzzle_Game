@@ -142,9 +142,21 @@ body.playing #ulBar.has { display: flex; }
 #ulHost { width: 100%; }
 /* Courtyard Locks (pixel_locks.js): no box, just the lock and its faint glow */
 .ul-icon.px { width: auto; height: auto; padding: 0; border: none; background: none; position: relative; overflow: visible; }
-.ul-icon.px canvas { display: block; image-rendering: pixelated; position: relative; filter: drop-shadow(0 3px 0 rgba(0,0,0,.35)); }
+.ul-icon.px .ulc { position: relative; display: block; }
+.ul-icon.px canvas { display: block; image-rendering: pixelated; }
+.ul-icon.px canvas.lock { position: relative; filter: drop-shadow(0 3px 0 rgba(0,0,0,.35)); }
+.ul-icon.px canvas.glow { position: absolute; left: 0; top: 0; opacity: .18; will-change: opacity; }
+body.playing .ul-icon.px canvas.glow { animation: ulBreathe 10s infinite; }
+body.playing .ul-icon.px:hover canvas.glow { animation: none; opacity: 1; }
+@keyframes ulBreathe {
+  0% { opacity: .18; animation-timing-function: ease-in-out; }
+  30% { opacity: 1; }
+  50% { opacity: 1; animation-timing-function: ease-in-out; }
+  80% { opacity: .18; }
+  100% { opacity: .18; }
+}
 /* every ~45 s the corner lock gives a tiny rattle (on the canvas, so it adds to the bob) */
-body.playing .ul-icon.px canvas { animation: ulRattle 45s linear infinite; animation-delay: 6s; }
+body.playing .ul-icon.px .ulc { animation: ulRattle 45s linear infinite; animation-delay: 6s; }
 @keyframes ulRattle {
   0%, 1.6%, 100% { transform: none; }
   .2% { transform: rotate(-5deg); } .45% { transform: rotate(4.5deg); } .7% { transform: rotate(-3.5deg); }
@@ -214,9 +226,9 @@ body.playing .ul-icon:nth-child(2n) { animation-delay: -1.1s; }
 body.playing .ul-icon:nth-child(3n) { animation-delay: -2.2s; }
 body.playing .ul-icon:hover { animation-play-state: paused; transform: scale(1.14) rotate(-4deg); }
 /* Courtyard Lock under the mouse: a quick 0.15 s shake, then it sits level
-   (no bob, no tilt) with its glow at the peak (see startCornerPulse) */
+   (no bob, no tilt) with its glow at the peak */
 body.playing .ul-icon.px:hover { animation: none; transform: scale(1.08); }
-body.playing .ul-icon.px:hover canvas { animation: ulHoverShake .15s linear 1; }
+body.playing .ul-icon.px:hover .ulc { animation: ulHoverShake .15s linear 1; }
 @keyframes ulHoverShake { 0% { transform: translateX(0); } 25% { transform: translateX(-3px); } 50% { transform: translateX(3px); } 75% { transform: translateX(-2px); } 100% { transform: translateX(0); } }
 body.playing .ul-icon:active { transform: scale(.9); }
 @keyframes ulBob { 0%, 100% { transform: translateY(0) rotate(-1deg) } 50% { transform: translateY(-3px) rotate(1.5deg) } }
@@ -1719,11 +1731,12 @@ function kick(amp = 6) { play.kick = { t: performance.now(), amp }; }
 // (bloom), plus faint red / blue copies nudged sideways (colour fringing)
 const glow = { a: document.createElement('canvas'), r: document.createElement('canvas'), b: document.createElement('canvas') };
 let glowAt = -1e9;
+const GLOW_REFRESH_MS = 120;   // the bloom is soft: rebuilding it ~8×/s is plenty
 function crtGlow() {
   const w = Math.max(1, Math.ceil(cv.width / 6)), h = Math.max(1, Math.ceil(cv.height / 6));
   const now = performance.now();
   if (glow.a.width !== w || glow.a.height !== h) { for (const c of Object.values(glow)) { c.width = w; c.height = h; } glowAt = -1e9; }
-  if (now - glowAt > 50) { glowAt = now; buildGlow(w, h); }
+  if (now - glowAt > GLOW_REFRESH_MS) { glowAt = now; buildGlow(w, h); }
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalCompositeOperation = 'screen';
@@ -1737,9 +1750,7 @@ function crtGlow() {
 function buildGlow(w, h) {
   const ga = glow.a.getContext('2d');
   ga.clearRect(0, 0, w, h);
-  ga.filter = 'blur(2px)';
-  ga.drawImage(cv, 0, 0, w, h);
-  ga.filter = 'none';
+  ga.drawImage(cv, 0, 0, w, h);   // already 1/6 size and drawn back smoothed: soft enough without a blur filter
   const tint = (c, col) => {
     const g = c.getContext('2d');
     g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, w, h); g.drawImage(cv, 0, 0, w, h);
@@ -3169,43 +3180,28 @@ function renderUlBar() {
     if (PL.isPixel(u.design)) {
       b.classList.add('px');
       // shows the dials where the player last left them; glows straight off its outline
-      const c = document.createElement('canvas'); PL.drawMini(c, u.design, 2, { dials: play && play.ulDials[u.id], digits: ulDigits() });
-      c.style.filter = PL.glowFilter(u.design, CORNER_GLOW_PX, 3);
-      c.dataset.design = u.design;
-      startCornerPulse();
-      b.append(c);
+      // Two copies: the lock itself, and under it a copy whose only job is
+      // the glow (at its peak). The glow's breathing is just that copy's
+      // opacity, animated in CSS — cheap, no repainting every frame.
+      const wrap = document.createElement('span'); wrap.className = 'ulc';
+      const opts = { dials: play && play.ulDials[u.id], digits: ulDigits() };
+      const g = document.createElement('canvas'); g.className = 'glow'; PL.drawMini(g, u.design, 2, opts);
+      g.style.filter = PL.glowFilter(u.design, CORNER_GLOW_PX, 0, PULSE_PEAK);
+      const c = document.createElement('canvas'); c.className = 'lock'; PL.drawMini(c, u.design, 2, opts);
+      wrap.append(g, c);
+      b.append(wrap);
     } else if (d && (d.icon || d.body)) { const im = document.createElement('img'); UL.setImg(im, d.icon || d.body); b.appendChild(im); }
     else { const sp = document.createElement('span'); sp.textContent = '⚿'; b.appendChild(sp); }
     b.onclick = () => openUlPlay(u);
     bar.appendChild(b);
   }
 }
-// The corner lock's glow breathes: it rises for 3 s, holds at its peak for
-// 2 s, fades to very faint over 3 s and holds there for 2 s, then again.
-// Under the mouse it stays at the peak.
-// Strength 1 is the steady glow it had before, halfway between the two.
-const PULSE = { rise: 3000, peak: 2000, fall: 3000, low: 2000, hi: 1.7, lo: .3 };
-const CORNER_GLOW_PX = 14;   // how far the corner lock's glow reaches (was 10)
-let pulseRaf = 0, pulseLast = -1;
-function cornerGlowStrength(now) {
-  const P = PULSE, T = P.rise + P.peak + P.fall + P.low, t = now % T, ease = e => .5 - .5 * Math.cos(Math.PI * e);
-  if (t < P.rise) return P.lo + (P.hi - P.lo) * ease(t / P.rise);
-  if (t < P.rise + P.peak) return P.hi;
-  if (t < P.rise + P.peak + P.fall) return P.hi - (P.hi - P.lo) * ease((t - P.rise - P.peak) / P.fall);
-  return P.lo;
-}
-function startCornerPulse() {
-  if (pulseRaf) return;
-  const step = now => {
-    const c = document.querySelector('#ulBar .ul-icon.px canvas');
-    if (!playing || !c) { pulseRaf = 0; return; }
-    const m = c.parentElement.matches(':hover') ? PULSE.hi : Math.round(cornerGlowStrength(now) * 50) / 50;   // only restyle when it visibly changes
-    if (m !== pulseLast) { pulseLast = m; c.style.filter = PL.glowFilter(c.dataset.design, CORNER_GLOW_PX, 3, m); }
-    pulseRaf = requestAnimationFrame(step);
-  };
-  pulseLast = -1;
-  pulseRaf = requestAnimationFrame(step);
-}
+// The corner lock's glow breathes (CSS ulBreathe on the glow copy): rises for
+// 3 s, holds at its peak for 2 s, fades to very faint over 3 s, holds 2 s.
+// Under the mouse it stays at the peak. Peak = 1.7× the old steady glow,
+// very faint = 0.3× (opacity .18 of the peak copy).
+const PULSE_PEAK = 1.7;
+const CORNER_GLOW_PX = 14;   // how far the corner lock's glow reaches
 function openUlPlay(u) {
   const d = designs.get(u.design);
   if (!d || !playing || play.seq) return;
