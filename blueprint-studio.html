@@ -1574,35 +1574,52 @@ const BG_FIELDS = {
   },
 };
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+// The pattern's own clock: it runs while a colour is held and stops while
+// the palette blends into the next colour — the pixels freeze in place,
+// change colour, then carry on moving from exactly where they stopped.
+function motionMs(now) {
+  const T = BG_HOLD_MS + BG_BLEND_MS, k = Math.floor(now / T);
+  return k * BG_HOLD_MS + Math.min(now - k * T, BG_HOLD_MS);
+}
 function drawSwirl(W, H, now) {
   const cell = Math.max(3, Math.ceil(W / 170));
   const w = Math.ceil(W / cell), h = Math.ceil(H / cell), sc = swirl.cv;
   if (sc.width !== w || sc.height !== h) { sc.width = w; sc.height = h; swirl.data = null; }
   const g = sc.getContext('2d');
-  if (!swirl.data) { swirl.data = g.createImageData(w, h); swirl.last = -1e9; }
+  if (!swirl.data) { swirl.data = g.createImageData(w, h); swirl.last = -1e9; swirl.band = new Uint8Array(w * h); swirl.lit = new Uint8Array(w * h); swirl.t = NaN; }
   const key = playBg + '|' + bgStyle;
   if (now - swirl.last > 40 || swirl.key !== key) {
-    swirl.last = now; swirl.key = key;
     const field = BG_FIELDS[bgStyle] || BG_FIELDS.spiral;
     const base = bgNow(now);   // the palette's colour of the moment
     const hi = base.map(v => v + (255 - v) * .4);
-    const t = now / 1000 * SWIRL_SPEED, d = swirl.data.data, asp = w / h;
-    let i = 0;
-    for (let y = 0; y < h; y++) {
-      const ny = y / h - .5;
-      for (let x = 0; x < w; x++) {
-        const nx = (x / w - .5) * asp;
-        field(nx, ny, t);
-        const dither = (BAYER[(y & 3) * 4 + (x & 3)] - 7.5) / 16;
-        let a = FIELD.a;
-        a = Math.max(0, Math.min(1, Math.round((a + dither * .22) * 4) / 4));   // a few flat, dithered bands
-        const streak = FIELD.s + dither * .08 > .84;
-        // band n (0–4) is BAND_MIN + n × BAND_STEP of the base colour's brightness
-        const f = BAND_MIN + Math.round(a * 4) * BAND_STEP;
-        let r = base[0] * f, gg = base[1] * f, bb = base[2] * f;
-        if (streak) { r += (hi[0] - r) * .6; gg += (hi[1] - gg) * .6; bb += (hi[2] - bb) * .6; }
-        d[i++] = r; d[i++] = gg; d[i++] = bb; d[i++] = 255;
+    const t = motionMs(now) / 1000 * SWIRL_SPEED, d = swirl.data.data, asp = w / h;
+    // the pattern (each pixel's band and highlight) only needs working out
+    // again when it has moved; while frozen just the colours change
+    if (t !== swirl.t || swirl.key !== key) {
+      swirl.t = t;
+      let j = 0;
+      for (let y = 0; y < h; y++) {
+        const ny = y / h - .5;
+        for (let x = 0; x < w; x++, j++) {
+          const nx = (x / w - .5) * asp;
+          field(nx, ny, t);
+          const dither = (BAYER[(y & 3) * 4 + (x & 3)] - 7.5) / 16;
+          const a = Math.max(0, Math.min(1, Math.round((FIELD.a + dither * .22) * 4) / 4));   // a few flat, dithered bands
+          swirl.band[j] = Math.round(a * 4);
+          swirl.lit[j] = FIELD.s + dither * .08 > .84 ? 1 : 0;
+        }
       }
+    }
+    swirl.last = now; swirl.key = key;
+    // band n (0–4) is BAND_MIN + n × BAND_STEP of the base colour's brightness
+    const lut = [];
+    for (let n = 0; n < 5; n++) {
+      const f = BAND_MIN + n * BAND_STEP, c = base.map(v => v * f);
+      lut.push(c, c.map((v, k) => v + (hi[k] - v) * .6));
+    }
+    for (let j = 0, i = 0; j < w * h; j++) {
+      const c = lut[swirl.band[j] * 2 + swirl.lit[j]];
+      d[i++] = c[0]; d[i++] = c[1]; d[i++] = c[2]; d[i++] = 255;
     }
     g.putImageData(swirl.data, 0, 0);
   }
