@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pattern Preview</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #14120e; color: #e8e2d0; font: 13px system-ui, sans-serif; overflow: hidden; }
+  #stage { position: fixed; inset: 0; }
+  #cv { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+  /* the same CRT look as test mode: scanlines and dark corners */
+  #crt { position: fixed; inset: 0; pointer-events: none; }
+  #crt::before { content: ''; position: absolute; inset: 0;
+    background: repeating-linear-gradient(to bottom, rgba(0,0,0,.16) 0, rgba(0,0,0,.16) 1px, transparent 1px, transparent 3px); }
+  #crt::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.45) 100%); }
+  #panel { position: fixed; left: 10px; top: 10px; background: rgba(20,18,14,.88); border: 1px solid #4a4434; border-radius: 8px;
+    padding: 8px 10px; max-width: min(360px, calc(100vw - 40px)); display: flex; flex-direction: column; gap: 6px; }
+  #panel.min > :not(.head) { display: none; }
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-weight: 600; letter-spacing: .5px; }
+  .row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  button { background: #2a261e; color: #e8e2d0; border: 1px solid #4a4434; border-radius: 5px; padding: 4px 8px; font: inherit; cursor: pointer; }
+  button.sel { border-color: #d6b25e; color: #d6b25e; }
+  .sw { width: 20px; height: 20px; border-radius: 50%; padding: 0; border: 2px solid rgba(0,0,0,.4); }
+  .sw.sel { border-color: #fff; }
+  label { display: flex; gap: 6px; align-items: center; }
+  input[type=range] { width: 130px; }
+  .dim { color: #9a927c; font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="cv"></canvas></div>
+<div id="crt"></div>
+<div id="panel">
+  <div class="head"><span>PATTERN PREVIEW</span><button id="hide">–</button></div>
+  <div class="row" id="pats"></div>
+  <div class="row" id="styles"></div>
+  <div class="row" id="cols"></div>
+  <label>Size <input type="range" id="size" min="12" max="48" value="26"><span id="sizeV" class="dim"></span></label>
+  <label>Speed <input type="range" id="speed" min="0" max="12" step=".5" value="3"><span id="speedV" class="dim"></span></label>
+  <div class="dim">120 pixels across · two brightness levels (50% and 100% of the colour)</div>
+</div>
+<script>
+// Each pattern gives every point (x, y), in background pixels, a region
+// label. Where the label changes between neighbouring pixels a line is drawn;
+// "filled" lights up the regions fill(label) picks instead.
+const R2 = Math.SQRT2;
+const near = (v, P) => v - P * Math.round(v / P);   // offset from the nearest lattice line
+const PATTERNS = [
+  { id: 'khatam', n: 'Eight-point stars & crosses',
+    label(x, y, P) {
+      const lx = Math.abs(near(x, P)), ly = Math.abs(near(y, P)), a = P * .354;
+      return Math.max(lx, ly) <= a || (lx + ly) / R2 <= a ? 1 : 0;
+    }, fill: l => l === 1 },
+  { id: 'hizb', n: 'Interlaced squares',
+    label(x, y, P) {
+      const lx = Math.abs(near(x, P)), ly = Math.abs(near(y, P)), a = P * .4;
+      return (Math.max(lx, ly) <= a ? 1 : 0) + ((lx + ly) / R2 <= a ? 2 : 0);
+    }, fill: l => l === 1 || l === 2 },
+  { id: 'arches', n: 'Moorish arches',
+    label(x, y, P) {
+      // rows of pointed arches (each from two circles, as in an arcade),
+      // every other row shifted by half an arch
+      const RH = P * 1.25, row = Math.floor(y / RH), sx = row % 2 ? P / 2 : 0;
+      const lx = near(x + sx, P), ly = y - row * RH;   // ly: 0 at the row's top
+      const b = P * .32, top = RH * .5, bottom = RH * .92;
+      if (Math.abs(lx) > b || ly > bottom) return 0;
+      if (ly >= top) return 1;
+      return Math.hypot(lx - b, ly - top) <= 2 * b && Math.hypot(lx + b, ly - top) <= 2 * b ? 1 : 0;
+    }, fill: l => l === 1 },
+  { id: 'mashrabiya', n: 'Mashrabiya lattice',
+    label(x, y, P) {
+      const u = (x + y) / P, v = (x - y) / P;
+      const fu = u - Math.round(u), fv = v - Math.round(v);
+      const gu = u - Math.floor(u) - .5, gv = v - Math.floor(v) - .5;
+      let l = (Math.floor(u) * 7 + Math.floor(v) * 13) * 4;
+      if (Math.max(Math.abs(fu), Math.abs(fv)) < .17) return -1;   // a small square where the bars cross
+      if (Math.abs(gu) + Math.abs(gv) < .22) l += 1;                // a little diamond in each opening
+      return l;
+    }, fill: l => l === -1 || (l & 3) === 1 },
+  { id: 'octagon', n: 'Octagons, squares & stars',
+    label(x, y, P) {
+      const ix = Math.round(x / P), iy = Math.round(y / P), lx = Math.abs(x - ix * P), ly = Math.abs(y - iy * P);
+      if ((lx + ly) / R2 > P / 2 * .93) return -1;   // the little squares between octagons
+      const a = P * .22, star = Math.max(lx, ly) <= a || (lx + ly) / R2 <= a;
+      return (ix * 31 + iy * 17) * 2 + (star ? 1 : 0);
+    }, fill: l => l === -1 || (l & 1) === 1 },
+];
+const COLOURS = [
+  ['Zellige turquoise', '#3f9a8c'], ['Saffron', '#c9963f'], ['Terracotta', '#b5603f'], ['Cobalt tile', '#3f62a8'], ['Palm green', '#6f8a4a'],
+  ['Midnight indigo', '#3f4a8f'], ['Deep violet', '#5b3f8f'], ['Spectral lavender', '#8a6fc0'], ['Haunted plum', '#7a3f7a'], ['Ghost teal', '#4f8f9a'],
+  ['Deep sea', '#2f5f9a'], ['Lagoon teal', '#2f8a8f'], ['Aqua', '#3fa0a8'], ['Seaweed', '#3f8a6a'], ['Coral', '#c06a5a'],
+  ['Leaf green', '#4f8f4f'], ['Olive', '#8a8f3f'], ['Sunflower', '#c4a03f'], ['Rose', '#b8607a'], ['Lavender', '#8a6fb0'],
+];
+const ACROSS = 120, LOW = .5, HIGH = 1;
+
+const q = new URLSearchParams(location.search);
+const st = {
+  pat: PATTERNS.find(p => p.id === q.get('p')) || PATTERNS[0],
+  style: q.get('style') === 'fill' ? 'fill' : 'line',
+  col: q.get('c') ? '#' + q.get('c') : COLOURS[0][1],
+  size: +q.get('size') || 26,
+  speed: q.has('speed') ? +q.get('speed') : 3,
+};
+const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+
+function ui() {
+  const pats = document.getElementById('pats'); pats.innerHTML = '';
+  for (const p of PATTERNS) { const b = document.createElement('button'); b.textContent = p.n; b.className = p === st.pat ? 'sel' : ''; b.onclick = () => { st.pat = p; ui(); }; pats.append(b); }
+  const sty = document.getElementById('styles'); sty.innerHTML = '';
+  for (const [id, n] of [['line', 'Lines'], ['fill', 'Filled']]) { const b = document.createElement('button'); b.textContent = n; b.className = id === st.style ? 'sel' : ''; b.onclick = () => { st.style = id; ui(); }; sty.append(b); }
+  const cols = document.getElementById('cols'); cols.innerHTML = '';
+  for (const [n, c] of COLOURS) { const b = document.createElement('button'); b.className = 'sw' + (c === st.col ? ' sel' : ''); b.style.background = c; b.title = n; b.onclick = () => { st.col = c; ui(); }; cols.append(b); }
+  document.getElementById('size').value = st.size; document.getElementById('sizeV').textContent = st.size + ' px';
+  document.getElementById('speed').value = st.speed; document.getElementById('speedV').textContent = st.speed + ' px/s';
+}
+document.getElementById('size').oninput = e => { st.size = +e.target.value; ui(); };
+document.getElementById('speed').oninput = e => { st.speed = +e.target.value; ui(); };
+document.getElementById('hide').onclick = () => document.getElementById('panel').classList.toggle('min');
+if (q.has('hide')) document.getElementById('panel').classList.add('min');
+ui();
+
+const cv = document.getElementById('cv'), g = cv.getContext('2d');
+let lab = null, img = null, lastKey = '';
+function frame(now) {
+  const W = innerWidth, H = innerHeight, w = ACROSS, h = Math.ceil(ACROSS * H / W);
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; img = g.createImageData(w, h); lab = new Float64Array((w + 1) * (h + 1)); lastKey = ''; }
+  // the pattern travels diagonally, one whole background pixel at a time
+  const d = (q.has('t') ? +q.get('t') : now / 1000) * st.speed, ox = Math.floor(d), oy = Math.floor(d * .5);
+  const key = [st.pat.id, st.style, st.col, st.size, ox, oy, w, h].join('|');
+  if (key !== lastKey) {
+    lastKey = key;
+    const P = st.size;
+    for (let y = 0, j = 0; y <= h; y++) for (let x = 0; x <= w; x++, j++) lab[j] = st.pat.label(x + ox + .5, y + oy + .5, P);
+    const base = hexRgb(st.col), lo = base.map(v => v * LOW), hi = base.map(v => v * HIGH), p = img.data;
+    for (let y = 0, i = 0; y < h; y++) for (let x = 0; x < w; x++, i += 4) {
+      const j = y * (w + 1) + x, l = lab[j];
+      const on = st.style === 'fill' ? st.pat.fill(l) : (l !== lab[j + 1] || l !== lab[j + w + 1]);
+      const c = on ? hi : lo;
+      p[i] = c[0]; p[i + 1] = c[1]; p[i + 2] = c[2]; p[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

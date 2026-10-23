@@ -1510,9 +1510,11 @@ const swirl = { cv: document.createElement('canvas'), data: null, last: -1e9, ke
 // Swirl speed. 1 = the first version (one full turn every ~90 s, churn
 // cycles of ~23-29 s). Lower = slower; at 0.1 a full turn takes ~15 minutes.
 const SWIRL_SPEED = .1;
-// The background's five brightness bands, as fractions of the base colour:
-// 50%, 62.5%, 75%, 87.5%, 100%
-const BAND_MIN = .5, BAND_STEP = .125;
+// The background's brightness bands, as fractions of the base colour:
+// BAND_COUNT bands from BAND_MIN up in steps of BAND_STEP (now 50% and 100%)
+const BAND_COUNT = 2, BAND_MIN = .5, BAND_STEP = .5;
+// How many background pixels fit across the screen
+const SWIRL_CELLS_ACROSS = 120;
 // Each movement fills FIELD.a (0-1: main paint, banded into flat steps) and
 // FIELD.s (0-1: highlight streaks above ~0.84) for a point (nx, ny) at time t
 const FIELD = { a: 0, s: 0 };
@@ -1585,17 +1587,18 @@ function swirlRows(y0, y1, w, h, t, field) {
       const nx = (x / w - .5) * asp;
       field(nx, ny, t);
       const dither = (BAYER[(y & 3) * 4 + (x & 3)] - 7.5) / 16;
-      const a = Math.max(0, Math.min(1, Math.round((FIELD.a + dither * .22) * 4) / 4));   // a few flat, dithered bands
-      swirl.band[j] = Math.round(a * 4);
+      // a few flat bands, dithered where they meet (dither scaled to the band size)
+      const q = BAND_COUNT - 1;
+      swirl.band[j] = Math.max(0, Math.min(q, Math.round((FIELD.a + dither * .88 / q) * q)));
       swirl.lit[j] = FIELD.s + dither * .08 > .84 ? 1 : 0;
     }
   }
 }
 function swirlPaint(w, h, g) {
   const base = bgNow(), hi = base.map(v => v + (255 - v) * .4), d = swirl.data.data;
-  // band n (0–4) is BAND_MIN + n × BAND_STEP of the base colour's brightness
+  // band n is BAND_MIN + n × BAND_STEP of the base colour's brightness
   const lut = [];
-  for (let n = 0; n < 5; n++) {
+  for (let n = 0; n < BAND_COUNT; n++) {
     const f = BAND_MIN + n * BAND_STEP, c = base.map(v => v * f);
     lut.push(c, c.map((v, k) => v + (hi[k] - v) * .6));
   }
@@ -1606,7 +1609,7 @@ function swirlPaint(w, h, g) {
   g.putImageData(swirl.data, 0, 0);
 }
 function drawSwirl(W, H, now) {
-  const cell = Math.max(3, Math.ceil(W / 170));
+  const cell = Math.max(3, Math.ceil(W / SWIRL_CELLS_ACROSS));
   const w = Math.ceil(W / cell), h = Math.ceil(H / cell), sc = swirl.cv;
   if (sc.width !== w || sc.height !== h) { sc.width = w; sc.height = h; swirl.data = null; }
   const g = sc.getContext('2d');
