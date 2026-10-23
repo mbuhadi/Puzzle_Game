@@ -613,7 +613,7 @@ function fromData(d) {
     t.opens = t.opens.filter(id => ids.has(id) && id !== t.id);
     t.cancels = t.cancels.filter(id => ids.has(id) && id !== t.id);
   }
-  playBg = /^#[0-9a-f]{6}$/i.test(d.bg || '') ? d.bg : PALETTE[DEFAULT_BG].c;
+  playBg = /^#[0-9a-f]{6}$/i.test(d.bg || '') ? (OLD_PALETTE[d.bg.toLowerCase()] || d.bg) : PALETTE[DEFAULT_BG].c;
   bgStyle = BG_STYLES.some(x => x.id === d.bgStyle) ? d.bgStyle : 'spiral';
   unlockers = (d.unlockers || []).map(u => ({ id: String(u.id), design: String(u.design || ''),
     combos: (u.combos || []).map(c => ({ id: String(c.id), code: (c.code || []).map(Number),
@@ -1374,11 +1374,15 @@ function blitChalk() {
 // colour, chunky pixel-art "?" signs, a CRT-TV glow, and "juice" — tiles
 // that sway, lift and lean toward the pointer, squish when pressed, pop in,
 // and a jolt + pixel burst + pop-up label when something is solved.
+// Vivid versions of the old faded-rainbow palette (same hues, 82% saturation,
+// 60% lightness). OLD_PALETTE maps the earlier soft colours, which saved
+// blueprints may still hold, onto these.
 const PALETTE = [
-  { n: 'Rose', c: '#d4848f' }, { n: 'Apricot', c: '#dda07a' }, { n: 'Butter', c: '#d8c27a' },
-  { n: 'Sage', c: '#93b98b' }, { n: 'Seafoam', c: '#7fb8ad' }, { n: 'Sky', c: '#85a9d1' },
-  { n: 'Periwinkle', c: '#9a93cf' }, { n: 'Lilac', c: '#bb93c8' },
+  { n: 'Rose', c: '#ed455c' }, { n: 'Apricot', c: '#ed8645' }, { n: 'Butter', c: '#edc545' },
+  { n: 'Sage', c: '#62ed45' }, { n: 'Seafoam', c: '#45edcc' }, { n: 'Sky', c: '#4595ed' },
+  { n: 'Periwinkle', c: '#5945ed' }, { n: 'Lilac', c: '#c445ed' },
 ];
+const OLD_PALETTE = { '#d4848f': '#ed455c', '#dda07a': '#ed8645', '#d8c27a': '#edc545', '#93b98b': '#62ed45', '#7fb8ad': '#45edcc', '#85a9d1': '#4595ed', '#9a93cf': '#5945ed', '#bb93c8': '#c445ed' };
 const DEFAULT_BG = 5;
 let playBg = PALETTE[DEFAULT_BG].c;
 let shakeOff = [0, 0];
