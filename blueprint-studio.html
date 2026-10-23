@@ -1587,9 +1587,9 @@ function swirlRows(y0, y1, w, h, t, field) {
       const nx = (x / w - .5) * asp;
       field(nx, ny, t);
       const dither = (BAYER[(y & 3) * 4 + (x & 3)] - 7.5) / 16;
-      // a few flat bands, dithered where they meet (dither scaled to the band size)
+      // a few flat bands, with a thin dithered seam where they meet
       const q = BAND_COUNT - 1;
-      swirl.band[j] = Math.max(0, Math.min(q, Math.round((FIELD.a + dither * .88 / q) * q)));
+      swirl.band[j] = Math.max(0, Math.min(q, Math.round((FIELD.a + dither * .22) * q)));
       swirl.lit[j] = FIELD.s + dither * .08 > .84 ? 1 : 0;
     }
   }
