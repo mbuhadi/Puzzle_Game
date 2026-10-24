@@ -84,6 +84,75 @@ const PATTERNS = [
       const a = P * .22, star = Math.max(lx, ly) <= a || (lx + ly) / R2 <= a;
       return (ix * 31 + iy * 17) * 2 + (star ? 1 : 0);
     }, fill: l => l === -1 || (l & 1) === 1 },
+  // ── New designs ── (each scales the size slider by its own k, as they need more room)
+  { id: 'rosette', n: 'Zellige rosettes', k: 1.15,
+    // an eight-point star ringed by eight pointed petals, the pieces cut apart
+    // by thin dark joints like tile work, with a small star where four
+    // rosettes meet
+    label(x, y, P) {
+      const ix = Math.round(x / P), iy = Math.round(y / P), sx = x - ix * P, sy = y - iy * P;
+      const lx = Math.abs(sx), ly = Math.abs(sy), r = Math.hypot(sx, sy), th = Math.atan2(sy, sx);
+      const star = a => Math.max(lx, ly) <= a || (lx + ly) / R2 <= a;
+      const a = P * .2, joint = .8;
+      if (star(a)) return 1;
+      // petals: between the star and an octagon turned 22.5°, so each petal
+      // ends in a point between two of the star's points
+      const t8 = Math.PI / 8, rx = Math.abs(sx * Math.cos(t8) + sy * Math.sin(t8)), ry = Math.abs(-sx * Math.sin(t8) + sy * Math.cos(t8));
+      const R = P * .44, oct = m => Math.max(rx, ry) <= R - m && (rx + ry) / R2 <= R - m;
+      if (!oct(0)) {
+        const cx = Math.abs(near(x - P / 2, P)), cy = Math.abs(near(y - P / 2, P)), b = P * .09;
+        return Math.max(cx, cy) <= b || (cx + cy) / R2 <= b ? 1 : 0;
+      }
+      if (!oct(joint * 1.5) || star(a + joint * 1.8)) return 0;
+      const k = Math.round(th / (Math.PI / 4)) * Math.PI / 4;
+      return r * Math.abs(Math.sin(th - k)) <= joint ? 0 : 1;   // joints running out from the star's points
+    }, fill: l => l === 1 },
+  { id: 'twelve', n: 'Twelve-point stars', k: 1.6,
+    // Alhambra-style twelve-point stars (three squares turned 30° apart) on a
+    // triangular lattice: each star has a dark inner outline and a bright
+    // centre, and a small hexagon sits in each gap between three stars
+    label(x, y, P) {
+      const H = P * Math.sqrt(3) / 2, v = y / H, u = x / P - v / 2;
+      let best = null, bd = 1e9;
+      for (const du of [0, 1]) for (const dv of [0, 1]) {
+        const i = Math.floor(u) + du, j = Math.floor(v) + dv, cx = (i + j / 2) * P, cy = j * H, d = (x - cx) ** 2 + (y - cy) ** 2;
+        if (d < bd) { bd = d; best = [x - cx, y - cy]; }
+      }
+      const [px, py] = best;
+      const star = a => [0, Math.PI / 6, Math.PI / 3].some(t => {
+        const c = Math.cos(t), s2 = Math.sin(t);
+        return Math.max(Math.abs(px * c + py * s2), Math.abs(-px * s2 + py * c)) <= a;
+      });
+      const a = P * .29;
+      if (star(a)) return star(a - 2.2) && !star(a - 3.3) ? 0 : 1;
+      const th = Math.atan2(py, px), k = Math.round((th - Math.PI / 6) / (Math.PI / 3)) * Math.PI / 3 + Math.PI / 6;
+      const gx = px - Math.cos(k) * P / Math.sqrt(3), gy = py - Math.sin(k) * P / Math.sqrt(3), hr = P * .085;
+      return [0, 1, 2].every(n => Math.abs(gx * Math.cos(n * Math.PI / 3 + Math.PI / 6) + gy * Math.sin(n * Math.PI / 3 + Math.PI / 6)) <= hr) ? 1 : 0;
+    }, fill: l => l === 1 },
+  { id: 'trellis', n: 'Moroccan quatrefoils', k: 1.45,
+    // quatrefoils (four round lobes) with pointed tips reaching out to their
+    // diagonal neighbours: the dark gaps between them form a curved trellis
+    label(x, y, P) {
+      const sx = near(x, P), sy = near(y, P), lx = Math.abs(sx), ly = Math.abs(sy);
+      const d = P * .23, rr = P * .135;
+      if (Math.hypot(lx - d, ly) <= rr || Math.hypot(lx, ly - d) <= rr || Math.hypot(lx, ly) <= P * .1) return 1;
+      // tips along the diagonals, narrowing to a point just short of the next one
+      const s2 = (lx + ly) / R2, t2 = Math.abs(lx - ly) / R2, L = P * .69, w = P * .075;
+      return s2 <= L && t2 <= w * (1 - s2 / L) ? 1 : 0;
+    }, fill: l => l === 1 },
+  { id: 'weave', n: 'Woven strapwork', k: 1.25,
+    // interlaced diagonal straps going over and under in turn, with a thin
+    // dark gap where a strap passes under, and a small diamond in each opening
+    label(x, y, P) {
+      const u = (x + y) / P, v = (x - y) / P, fu = Math.abs(u - Math.round(u)) * P / R2, fv = Math.abs(v - Math.round(v)) * P / R2;
+      const bw = P * .11, gap = 1.1, aOver = (Math.round(u) + Math.round(v)) % 2 === 0;
+      const inA = fu <= bw, inB = fv <= bw;
+      if (inA && inB) return 1;
+      if (inA) return !aOver && fv <= bw + gap ? 0 : 1;   // strap A dips under B
+      if (inB) return aOver && fu <= bw + gap ? 0 : 1;    // strap B dips under A
+      const gu = u - Math.floor(u) - .5, gv = v - Math.floor(v) - .5;
+      return Math.abs(gu) + Math.abs(gv) < .13 ? 1 : 0;
+    }, fill: l => l === 1 },
 ];
 const COLOURS = [
   ['Zellige turquoise', '#3f9a8c'], ['Saffron', '#c9963f'], ['Terracotta', '#b5603f'], ['Cobalt tile', '#3f62a8'], ['Palm green', '#6f8a4a'],
@@ -129,7 +198,7 @@ function frame(now) {
   const key = [st.pat.id, st.style, st.col, st.size, ox, oy, w, h].join('|');
   if (key !== lastKey) {
     lastKey = key;
-    const P = st.size;
+    const P = st.size * (st.pat.k || 1);
     for (let y = 0, j = 0; y <= h; y++) for (let x = 0; x <= w; x++, j++) lab[j] = st.pat.label(x + ox + .5, y + oy + .5, P);
     const base = hexRgb(st.col), lo = base.map(v => v * LOW), hi = base.map(v => v * HIGH), p = img.data;
     for (let y = 0, i = 0; y < h; y++) for (let x = 0; x < w; x++, i += 4) {
