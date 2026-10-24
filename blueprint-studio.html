@@ -1493,6 +1493,10 @@ const BG_STYLES = [
   { id: 'twelve', n: 'Twelve stars', tip: 'Alhambra-style twelve-point stars, with small hexagons between' },
   { id: 'trellis', n: 'Quatrefoils', tip: 'Moroccan quatrefoils whose pointed tips form a curved trellis' },
   { id: 'weave', n: 'Strapwork', tip: 'Diagonal straps woven over and under each other' },
+  { id: 'ten', n: 'Ten stars', tip: 'Mamluk ten-point stars, with small diamonds between' },
+  { id: 'scales', n: 'Scales', tip: 'Overlapping fish-scale tiles, as on domes' },
+  { id: 'fanous', n: 'Lanterns', tip: 'Pixel-art Ramadan lanterns (fanous)' },
+  { id: 'tulips', n: 'Tulips', tip: 'Pixel-art Ottoman tulips' },
 ];
 let bgStyle = 'spiral';
 // Size and speed of the background's shapes (1× = as first made) and how many
@@ -1580,7 +1584,57 @@ const FIELD = { a: 0, s: 0 };
 const TILING_SIZE = 26, TILING_PX_PER_S = 3, R2 = Math.SQRT2;
 const nearLine = (v, P) => v - P * Math.round(v / P);   // offset from the nearest lattice line
 // the more detailed tilings repeat a little bigger, so their details still read
-const TILING_K = { rosette: 1.15, twelve: 1.6, trellis: 1.45, weave: 1.25 };
+const TILING_K = { rosette: 1.15, twelve: 1.6, trellis: 1.45, weave: 1.25, ten: 1.3, scales: .9, fanous: 1, tulips: .85 };
+// Pixel-art sprites for the sprite tilings: '#' is lit. One sprite pixel is
+// one background pixel at 1× size (bigger sizes use whole multiples).
+const FANOUS = [
+  '....###....',
+  '....#.#....',
+  '....###....',
+  '.....#.....',
+  '...#####...',
+  '..#######..',
+  '.#########.',
+  '..#.#.#.#..',
+  '.##.#.#.##.',
+  '.#.##.##.#.',
+  '.##.#.#.##.',
+  '.#.##.##.#.',
+  '.##.#.#.##.',
+  '..#.#.#.#..',
+  '.#########.',
+  '..#######..',
+  '...#####...',
+  '....###....',
+  '.....#.....',
+];
+const TULIP = [
+  '.....#.....',
+  '....###....',
+  '.#..###..#.',
+  '.##.###.##.',
+  '.###.#.###.',
+  '.#########.',
+  '..#######..',
+  '...#####...',
+  '.....#.....',
+  '.....#.....',
+  '.##..#.....',
+  '..##.#..##.',
+  '...###.##..',
+  '.....###...',
+  '.....#.....',
+];
+// A sprite on staggered rows (every other row shifted by half), drawn in
+// whole background pixels; P sets the sprite's scale and the space between
+function spriteTile(x, y, P, spr) {
+  const n = Math.max(1, Math.round(P / TILING_SIZE)), sw = spr[0].length * n, sh = spr.length * n;
+  const cw = sw + P * .35, ch = sh + P * .15, row = Math.floor(y / ch), off = row % 2 ? cw / 2 : 0;
+  const sx = Math.floor((x - off - cw * Math.floor((x - off) / cw) - (cw - sw) / 2) / n);
+  const sy = Math.floor((y - row * ch - (ch - sh) / 2) / n);
+  return sy >= 0 && sy < spr.length && sx >= 0 && sx < spr[0].length && spr[sy][sx] === '#';
+}
+
 const BG_TILINGS = {
   // eight-point stars (lit) with dark crosses between them
   khatam(x, y, P) {
@@ -1663,6 +1717,36 @@ const BG_TILINGS = {
     if (inB) return !aOver || fu > bw + gap;   // strap B dips under A
     return Math.abs(u - Math.floor(u) - .5) + Math.abs(v - Math.floor(v) - .5) < .13;
   },
+  // Mamluk ten-point stars, each holding a dark ten-point star with a lit
+  // centre, and a small diamond where four stars meet
+  ten(x, y, P) {
+    const sx = nearLine(x, P), sy = nearLine(y, P), r = Math.hypot(sx, sy);
+    const seg = Math.PI / 5, m = ((Math.atan2(sy, sx) % seg) + seg) % seg, phi = seg / 2 - Math.abs(m - seg / 2);   // angle from the nearest tip
+    const star = Ro => {
+      // inside the ten-point star: on the centre's side of the edge from a tip to the next inner corner
+      const Ri = Ro * .62, ax = Ro, ay = 0, bx = Ri * Math.cos(seg / 2), by = Ri * Math.sin(seg / 2);
+      const px = r * Math.cos(phi), py = Math.abs(r * Math.sin(phi));
+      return (bx - ax) * (py - ay) - (by - ay) * (px - ax) >= 0;
+    };
+    const Ro = P * .45;
+    if (star(Ro)) return !star(Ro * .5) || r <= Ro * .2;
+    const cx = Math.abs(nearLine(x - P / 2, P)), cy = Math.abs(nearLine(y - P / 2, P));
+    return cx + cy <= P * .13;
+  },
+  // fish-scale tiles (as on domes and Alhambra walls): rows of overlapping
+  // scales with rounded lower edges, each with a dark rim and an inner arc
+  scales(x, y, P) {
+    const R = P / 2, row0 = Math.floor(y / R);
+    for (let row = row0 - 1; row <= row0 + 1; row++) {   // each row lies over the one below it
+      const off = row % 2 ? R : 0, cx = P * Math.round((x - off) / P) + off, cy = row * R, d = Math.hypot(x - cx, y - cy);
+      if (d <= R) return !(d > R - 1.4 || (y >= cy && Math.abs(d - R * .55) < .7));
+    }
+    return false;
+  },
+  // Ramadan lanterns (fanous), in pixel art, on staggered rows
+  fanous(x, y, P) { return spriteTile(x, y, P, FANOUS); },
+  // Ottoman tulips, in pixel art, on staggered rows
+  tulips(x, y, P) { return spriteTile(x, y, P, TULIP); },
 };
 const LAVA_BLOBS = [[.31, .23, 0, 1.7, .26], [.19, .37, 2.1, .4, .22], [.27, .17, 4.2, 3.1, .3], [.23, .29, 1.3, 5.2, .2], [.37, .21, 3.4, 2.4, .24]];
 const BG_FIELDS = {
