@@ -1479,6 +1479,10 @@ const BG_STYLES = [
   { id: 'squares', n: 'Squares', tip: 'A big chequerboard sliding slowly along a diagonal' },
   { id: 'waves', n: 'Waves', tip: 'Soft horizontal bands gently rolling' },
   { id: 'stripes', n: 'Stripes', tip: 'Wide diagonal stripes sliding slowly' },
+  { id: 'khatam', n: 'Stars & crosses', tip: 'Eight-point stars and crosses (zellige), drifting diagonally' },
+  { id: 'hizb', n: 'Star points', tip: 'Interlaced squares: the points of eight-point stars, drifting diagonally' },
+  { id: 'mashrabiya', n: 'Mashrabiya', tip: 'Squares and diamonds of a mashrabiya screen, drifting diagonally' },
+  { id: 'octagon', n: 'Octagons', tip: 'Eight-point stars in octagons, with squares between, drifting diagonally' },
 ];
 let bgStyle = 'spiral';
 function renderStyles() {
@@ -1518,6 +1522,36 @@ const SWIRL_CELLS_ACROSS = 120;
 // Each movement fills FIELD.a (0-1: main paint, banded into flat steps) and
 // FIELD.s (0-1: highlight streaks above ~0.84) for a point (nx, ny) at time t
 const FIELD = { a: 0, s: 0 };
+// Islamic geometric tilings (filled): for a point (x, y) in background
+// pixels, whether it's in the lit shapes. They drift diagonally at
+// TILING_PX_PER_S, one whole background pixel at a time; TILING_SIZE is the
+// repeat in background pixels.
+const TILING_SIZE = 26, TILING_PX_PER_S = 3, R2 = Math.SQRT2;
+const nearLine = (v, P) => v - P * Math.round(v / P);   // offset from the nearest lattice line
+const BG_TILINGS = {
+  // eight-point stars (lit) with dark crosses between them
+  khatam(x, y, P) {
+    const lx = Math.abs(nearLine(x, P)), ly = Math.abs(nearLine(y, P)), a = P * .354;
+    return Math.max(lx, ly) <= a || (lx + ly) / R2 <= a;
+  },
+  // two overlapping squares: their points lit, the octagon where they overlap dark
+  hizb(x, y, P) {
+    const lx = Math.abs(nearLine(x, P)), ly = Math.abs(nearLine(y, P)), a = P * .4;
+    return (Math.max(lx, ly) <= a) !== ((lx + ly) / R2 <= a);
+  },
+  // the squares where a mashrabiya's bars cross, and a diamond in each opening
+  mashrabiya(x, y, P) {
+    const u = (x + y) / P, v = (x - y) / P;
+    if (Math.max(Math.abs(u - Math.round(u)), Math.abs(v - Math.round(v))) < .17) return true;
+    return Math.abs(u - Math.floor(u) - .5) + Math.abs(v - Math.floor(v) - .5) < .22;
+  },
+  // an eight-point star in each octagon, and the small squares between octagons
+  octagon(x, y, P) {
+    const lx = Math.abs(nearLine(x, P)), ly = Math.abs(nearLine(y, P)), a = P * .22;
+    if ((lx + ly) / R2 > P / 2 * .93) return true;
+    return Math.max(lx, ly) <= a || (lx + ly) / R2 <= a;
+  },
+};
 const LAVA_BLOBS = [[.31, .23, 0, 1.7, .26], [.19, .37, 2.1, .4, .22], [.27, .17, 4.2, 3.1, .3], [.23, .29, 1.3, 5.2, .2], [.37, .21, 3.4, 2.4, .24]];
 const BG_FIELDS = {
   // paint slowly turning around the centre, churning as it goes
@@ -1580,6 +1614,13 @@ const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 // done. A new colour or movement is worked out in full straight away.
 const SWIRL_EVERY_MS = 60, SWIRL_BUDGET_MS = 3;
 function swirlRows(y0, y1, w, h, t, field) {
+  const tiling = BG_TILINGS[bgStyle];
+  if (tiling) {
+    const d = t / SWIRL_SPEED * TILING_PX_PER_S, ox = Math.floor(d) + .5, oy = Math.floor(d * .5) + .5;
+    for (let y = y0, j = y0 * w; y < y1; y++)
+      for (let x = 0; x < w; x++, j++) { swirl.band[j] = tiling(x + ox, y + oy, TILING_SIZE) ? BAND_COUNT - 1 : 0; swirl.lit[j] = 0; }
+    return;
+  }
   const asp = w / h;
   for (let y = y0, j = y0 * w; y < y1; y++) {
     const ny = y / h - .5;
