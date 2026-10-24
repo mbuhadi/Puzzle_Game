@@ -284,6 +284,7 @@ body.playing .ul-icon:active { transform: scale(.9); }
         <div id="palSide" style="margin-bottom:8px"></div>
         <div class="sec-title">BACKGROUND TYPE</div>
         <div class="style-row" id="styleSide"></div>
+        <div id="bgSliders" style="margin-top:8px;display:flex;flex-direction:column;gap:4px"></div>
         <div class="hint" style="margin-top:6px">What the player sees behind the map. Press ▶ Test to see it moving.</div>
       </div>
 
@@ -607,7 +608,7 @@ function toData() {
     tiles: tiles.map(t => ({ id: t.id, pts: t.pts.map(p => [r2(p[0]), r2(p[1])]), start: !!t.start,
       chunk: t.chunk || '', label: t.label || '', opens: [...t.opens], cancels: [...t.cancels],
       ...(t.thumb ? { thumb: { dx: r2(t.thumb.dx * 1000) / 1000, dy: r2(t.thumb.dy * 1000) / 1000, zoom: r2(t.thumb.zoom) } } : {}) })),
-    bg: playBg, bgStyle,
+    bg: playBg, bgStyle, bgSize, bgSpeed, bgPixels,
     labels: labels.map(l => ({ id: l.id, pts: l.pts.map(p => [r2(p[0]), r2(p[1])]), en: l.en || '', ar: l.ar || '', size: l.size, belly: l.belly })),
     unlockers: unlockers.map(u => ({ id: u.id, design: u.design,
       combos: u.combos.map(c => ({ id: c.id, code: [...c.code], opens: [...c.opens], cancels: [...c.cancels] })) })),
@@ -627,6 +628,10 @@ function fromData(d) {
   }
   playBg = /^#[0-9a-f]{6}$/i.test(d.bg || '') ? d.bg.toLowerCase() : DEFAULT_BG;
   bgStyle = BG_STYLES.some(x => x.id === d.bgStyle) ? d.bgStyle : 'spiral';
+  const inRange = (v, s, def) => Number.isFinite(+v) && +v >= s.min && +v <= s.max ? +v : def;
+  bgSize = inRange(d.bgSize, BG_SLIDERS.bgSize, 1);
+  bgSpeed = inRange(d.bgSpeed, BG_SLIDERS.bgSpeed, 1);
+  bgPixels = inRange(d.bgPixels, BG_SLIDERS.bgPixels, SWIRL_CELLS_ACROSS);
   unlockers = (d.unlockers || []).map(u => ({ id: String(u.id), design: String(u.design || ''),
     combos: (u.combos || []).map(c => ({ id: String(c.id), code: (c.code || []).map(Number),
       opens: (c.opens || []).map(String).filter(id => ids.has(id)), cancels: (c.cancels || []).map(String).filter(id => ids.has(id)) })) }));
@@ -1485,6 +1490,37 @@ const BG_STYLES = [
   { id: 'octagon', n: 'Octagons', tip: 'Eight-point stars in octagons, with squares between, drifting diagonally' },
 ];
 let bgStyle = 'spiral';
+// Size and speed of the background's shapes (1× = as first made) and how many
+// background pixels fit across the screen; saved with each blueprint
+let bgSize = 1, bgSpeed = 1, bgPixels = 120;
+const BG_SLIDERS = {
+  bgSize: { n: 'Size', min: .5, max: 2.5, step: .05, fmt: v => +v.toFixed(2) + '×' },
+  bgSpeed: { n: 'Speed', min: 0, max: 4, step: .05, fmt: v => v ? +v.toFixed(2) + '×' : 'still' },
+  bgPixels: { n: 'Pixels', min: 60, max: 240, step: 10, fmt: v => v + ' across' },
+};
+const bgVals = { get bgSize() { return bgSize; }, set bgSize(v) { bgSize = v; }, get bgSpeed() { return bgSpeed; }, set bgSpeed(v) { bgSpeed = v; },
+  get bgPixels() { return bgPixels; }, set bgPixels(v) { bgPixels = v; } };
+function renderBgSliders() {
+  const el = document.getElementById('bgSliders');
+  el.innerHTML = '';
+  for (const [k, sl] of Object.entries(BG_SLIDERS)) {
+    const row = document.createElement('label');
+    row.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px';
+    const nm = document.createElement('span'); nm.textContent = sl.n; nm.style.width = '42px';
+    const inp = document.createElement('input'); inp.type = 'range'; inp.min = sl.min; inp.max = sl.max; inp.step = sl.step; inp.value = bgVals[k];
+    inp.style.flex = '1'; inp.style.minWidth = '0';
+    const val = document.createElement('span'); val.className = 'hint'; val.style.width = '62px'; val.textContent = sl.fmt(bgVals[k]);
+    inp.oninput = () => { bgVals[k] = +inp.value; val.textContent = sl.fmt(+inp.value); render(); };
+    inp.onchange = () => { pushHistory(); document.getElementById('mapNameLbl').textContent = bpName + (isDirty() ? ' •' : ''); };
+    row.append(nm, inp, val);
+    el.appendChild(row);
+  }
+  const reset = document.createElement('button');
+  reset.textContent = 'Reset size, speed & pixels'; reset.style.alignSelf = 'flex-start';
+  reset.onclick = () => { bgSize = 1; bgSpeed = 1; bgPixels = SWIRL_CELLS_ACROSS; pushHistory(); renderBgSliders();
+    document.getElementById('mapNameLbl').textContent = bpName + (isDirty() ? ' •' : ''); render(); };
+  el.appendChild(reset);
+}
 function renderStyles() {
   for (const id of ['styleSide']) {
     const el = document.getElementById(id);
@@ -1514,10 +1550,18 @@ const swirl = { cv: document.createElement('canvas'), data: null, last: -1e9, ke
 // Swirl speed. 1 = the first version (one full turn every ~90 s, churn
 // cycles of ~23-29 s). Lower = slower; at 0.1 a full turn takes ~15 minutes.
 const SWIRL_SPEED = .1;
+// The background's own clock (seconds), running at bgSpeed, so changing the
+// speed carries on from where the movement is instead of jumping
+const bgClock = { t: 0, at: null };
+function bgTime(now) {
+  if (bgClock.at !== null) bgClock.t += Math.max(0, Math.min(250, now - bgClock.at)) / 1000 * bgSpeed;
+  bgClock.at = now;
+  return bgClock.t;
+}
 // The background's brightness bands, as fractions of the base colour:
 // BAND_COUNT bands from BAND_MIN up in steps of BAND_STEP (now 50% and 100%)
 const BAND_COUNT = 2, BAND_MIN = .5, BAND_STEP = .5;
-// How many background pixels fit across the screen
+// How many background pixels fit across the screen by default (bgPixels)
 const SWIRL_CELLS_ACROSS = 120;
 // Each movement fills FIELD.a (0-1: main paint, banded into flat steps) and
 // FIELD.s (0-1: highlight streaks above ~0.84) for a point (nx, ny) at time t
@@ -1525,7 +1569,8 @@ const FIELD = { a: 0, s: 0 };
 // Islamic geometric tilings (filled): for a point (x, y) in background
 // pixels, whether it's in the lit shapes. They drift diagonally at
 // TILING_PX_PER_S, one whole background pixel at a time; TILING_SIZE is the
-// repeat in background pixels.
+// repeat in background pixels. Both are at 1× size / speed and 120 pixels
+// across, and scale so the pattern looks the same with more or fewer pixels.
 const TILING_SIZE = 26, TILING_PX_PER_S = 3, R2 = Math.SQRT2;
 const nearLine = (v, P) => v - P * Math.round(v / P);   // offset from the nearest lattice line
 const BG_TILINGS = {
@@ -1616,16 +1661,17 @@ const SWIRL_EVERY_MS = 60, SWIRL_BUDGET_MS = 3;
 function swirlRows(y0, y1, w, h, t, field) {
   const tiling = BG_TILINGS[bgStyle];
   if (tiling) {
-    const d = t / SWIRL_SPEED * TILING_PX_PER_S, ox = Math.floor(d) + .5, oy = Math.floor(d * .5) + .5;
+    const px = w / SWIRL_CELLS_ACROSS, P = TILING_SIZE * bgSize * px;
+    const d = t / SWIRL_SPEED * TILING_PX_PER_S * px, ox = Math.floor(d) + .5, oy = Math.floor(d * .5) + .5;
     for (let y = y0, j = y0 * w; y < y1; y++)
-      for (let x = 0; x < w; x++, j++) { swirl.band[j] = tiling(x + ox, y + oy, TILING_SIZE) ? BAND_COUNT - 1 : 0; swirl.lit[j] = 0; }
+      for (let x = 0; x < w; x++, j++) { swirl.band[j] = tiling(x + ox, y + oy, P) ? BAND_COUNT - 1 : 0; swirl.lit[j] = 0; }
     return;
   }
   const asp = w / h;
   for (let y = y0, j = y0 * w; y < y1; y++) {
-    const ny = y / h - .5;
+    const ny = (y / h - .5) / bgSize;
     for (let x = 0; x < w; x++, j++) {
-      const nx = (x / w - .5) * asp;
+      const nx = (x / w - .5) * asp / bgSize;
       field(nx, ny, t);
       const dither = (BAYER[(y & 3) * 4 + (x & 3)] - 7.5) / 16;
       // a few flat bands, with a thin dithered seam where they meet
@@ -1650,20 +1696,21 @@ function swirlPaint(w, h, g) {
   g.putImageData(swirl.data, 0, 0);
 }
 function drawSwirl(W, H, now) {
-  const cell = Math.max(3, Math.ceil(W / SWIRL_CELLS_ACROSS));
+  const cell = Math.max(3, Math.ceil(W / bgPixels));
   const w = Math.ceil(W / cell), h = Math.ceil(H / cell), sc = swirl.cv;
   if (sc.width !== w || sc.height !== h) { sc.width = w; sc.height = h; swirl.data = null; }
   const g = sc.getContext('2d');
   const field = BG_FIELDS[bgStyle] || BG_FIELDS.spiral;
   if (!swirl.data) { swirl.data = g.createImageData(w, h); swirl.band = new Uint8Array(w * h); swirl.lit = new Uint8Array(w * h); swirl.key = ''; }
-  if (swirl.key.split('|')[1] !== bgStyle) {   // new movement (or size): everything at once
-    swirlRows(0, h, w, h, now / 1000 * SWIRL_SPEED, field);
+  const T = bgTime(now) * SWIRL_SPEED, look = [bgStyle, bgSize].join(',');
+  if (swirl.key.split('|')[1] !== look) {   // new movement, size or pixel count: everything at once
+    swirlRows(0, h, w, h, T, field);
     swirl.row = h; swirl.last = now;
     swirl.key = '';
   }
-  const key = playBg + '|' + bgStyle;
+  const key = playBg + '|' + look;
   if (swirl.key !== key) { swirl.key = key; swirlPaint(w, h, g); }   // new colour: just repaint
-  if (swirl.row >= h && now - swirl.last >= SWIRL_EVERY_MS) { swirl.row = 0; swirl.last = now; swirl.t = now / 1000 * SWIRL_SPEED; }
+  if (swirl.row >= h && now - swirl.last >= SWIRL_EVERY_MS) { swirl.row = 0; swirl.last = now; swirl.t = T; }
   if (swirl.row < h) {
     const stop = performance.now() + SWIRL_BUDGET_MS;
     while (swirl.row < h && performance.now() < stop) {
@@ -2472,7 +2519,7 @@ function refreshAll() {
   refreshPanels();
   renderUnlockers();
   renderPalettes();
-  renderStyles();
+  renderStyles(); renderBgSliders();
   renderChecks();
   document.getElementById('mapNameLbl').textContent = bpName + (isDirty() ? ' •' : '');
   document.getElementById('mSelect').classList.toggle('active', mode === 'select' && !(sel && sel.kind === 'outline'));
@@ -3519,7 +3566,7 @@ window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault
 // ── Boot ──────────────────────────────────────────────────────────────────────
 buildChunkSelect();
 renderPalettes();
-renderStyles();
+renderStyles(); renderBgSliders();
 loadDesignList();
 new ResizeObserver(resizeCanvas).observe(document.getElementById('canvasWrap'));
 pushHistory(); markSaved();
