@@ -1497,6 +1497,11 @@ const BG_STYLES = [
   { id: 'scales', n: 'Scales', tip: 'Overlapping fish-scale tiles, as on domes' },
   { id: 'fanous', n: 'Lanterns', tip: 'Pixel-art Ramadan lanterns (fanous)' },
   { id: 'tulips', n: 'Tulips', tip: 'Pixel-art Ottoman tulips' },
+  { id: 'crescent', n: 'Crescents', tip: 'Pixel-art crescent moons with a star' },
+  { id: 'dallah', n: 'Dallahs', tip: 'Pixel-art Arabic coffee pots (dallah)' },
+  { id: 'palm', n: 'Palms', tip: 'Pixel-art date palms' },
+  { id: 'mosque', n: 'Mosques', tip: 'Pixel-art mosques: a dome between two minarets' },
+  { id: 'camel', n: 'Camels', tip: 'Pixel-art camels' },
 ];
 let bgStyle = 'spiral';
 // Size and speed of the background's shapes (1× = as first made) and how many
@@ -1584,7 +1589,7 @@ const FIELD = { a: 0, s: 0 };
 const TILING_SIZE = 26, TILING_PX_PER_S = 3, R2 = Math.SQRT2;
 const nearLine = (v, P) => v - P * Math.round(v / P);   // offset from the nearest lattice line
 // the more detailed tilings repeat a little bigger, so their details still read
-const TILING_K = { rosette: 1.15, twelve: 1.6, trellis: 1.45, weave: 1.25, ten: 1.3, scales: .9, fanous: 1, tulips: .85 };
+const TILING_K = { rosette: 1.15, twelve: 1.6, trellis: 1.45, weave: 1.25, ten: 1.3, scales: .9, fanous: 1, tulips: .85, crescent: 0.9, dallah: 1, palm: 1, mosque: 1.15, camel: 1.15 };
 // Pixel-art sprites for the sprite tilings: '#' is lit. One sprite pixel is
 // one background pixel at 1× size (bigger sizes use whole multiples).
 const FANOUS = [
@@ -1624,6 +1629,93 @@ const TULIP = [
   '...###.##..',
   '.....###...',
   '.....#.....',
+];
+const CRESCENT = [
+  '...............',
+  '....###........',
+  '...###.........',
+  '..###..........',
+  '.####..........',
+  '.####......#...',
+  '#####.....###..',
+  '#####....#####.',
+  '#####.....###..',
+  '.#####....#.#..',
+  '.######........',
+  '..#######..#...',
+  '...########....',
+  '....######.....',
+  '...............',
+];
+const DALLAH = [
+  '.....#.......',
+  '....###......',
+  '.....#.......',
+  '....###......',
+  '...#####.....',
+  '....###...##.',
+  '#...###..#..#',
+  '.#..###..#..#',
+  '..#.###...#.#',
+  '...#####...##',
+  '...######..#.',
+  '..########.#.',
+  '.##########..',
+  '.##########..',
+  '..########...',
+  '...######....',
+  '..########...',
+  '.##########..',
+];
+const PALM = [
+  '......##.##......',
+  '...####.#.####...',
+  '.###...###...###.',
+  '##...#######...##',
+  '#...##..#..##...#',
+  '...##...#...##...',
+  '..##....#....##..',
+  '..#.....##....#..',
+  '.........#.......',
+  '.........#.......',
+  '........##.......',
+  '........#........',
+  '........#........',
+  '........##.......',
+  '.........#.......',
+  '.....#########...',
+];
+const MOSQUE = [
+  '..#.......#.......#..',
+  '..#......#.#......#..',
+  '.###......#......###.',
+  '.###.....###.....###.',
+  '.###...#######...###.',
+  '#####.#########.#####',
+  '.###.###########.###.',
+  '.###.###########.###.',
+  '.###.###########.###.',
+  '.###################.',
+  '.###################.',
+  '.####.##.###.##.####.',
+  '.###..##.#.#.##..###.',
+  '.###..##.#.#.##..###.',
+  '.###################.',
+];
+const CAMEL = [
+  '.##..................',
+  '####.................',
+  '.###.................',
+  '..##.........###.....',
+  '...##.....#######....',
+  '....##...#########...',
+  '.....#############...',
+  '.....##############..',
+  '......############.#.',
+  '......##.......##..#.',
+  '......#.#......#.#...',
+  '......#.#......#.#...',
+  '.....##.##....##.##..',
 ];
 // A sprite on staggered rows (every other row shifted by half), drawn in
 // whole background pixels; P sets the sprite's scale and the space between
@@ -1747,6 +1839,11 @@ const BG_TILINGS = {
   fanous(x, y, P) { return spriteTile(x, y, P, FANOUS); },
   // Ottoman tulips, in pixel art, on staggered rows
   tulips(x, y, P) { return spriteTile(x, y, P, TULIP); },
+  crescent(x, y, P) { return spriteTile(x, y, P, CRESCENT); },
+  dallah(x, y, P) { return spriteTile(x, y, P, DALLAH); },
+  palm(x, y, P) { return spriteTile(x, y, P, PALM); },
+  mosque(x, y, P) { return spriteTile(x, y, P, MOSQUE); },
+  camel(x, y, P) { return spriteTile(x, y, P, CAMEL); },
 };
 const LAVA_BLOBS = [[.31, .23, 0, 1.7, .26], [.19, .37, 2.1, .4, .22], [.27, .17, 4.2, 3.1, .3], [.23, .29, 1.3, 5.2, .2], [.37, .21, 3.4, 2.4, .24]];
 const BG_FIELDS = {
