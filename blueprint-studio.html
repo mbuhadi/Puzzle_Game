@@ -1489,6 +1489,10 @@ const BG_STYLES = [
   { id: 'hizb', n: 'Star points', tip: 'Interlaced squares: the points of eight-point stars, drifting diagonally' },
   { id: 'mashrabiya', n: 'Mashrabiya', tip: 'Squares and diamonds of a mashrabiya screen, drifting diagonally' },
   { id: 'octagon', n: 'Octagons', tip: 'Eight-point stars in octagons, with squares between, drifting diagonally' },
+  { id: 'rosette', n: 'Rosettes', tip: 'Zellige rosettes: eight-point stars ringed by petals, cut apart like tile work' },
+  { id: 'twelve', n: 'Twelve stars', tip: 'Alhambra-style twelve-point stars, with small hexagons between' },
+  { id: 'trellis', n: 'Quatrefoils', tip: 'Moroccan quatrefoils whose pointed tips form a curved trellis' },
+  { id: 'weave', n: 'Strapwork', tip: 'Diagonal straps woven over and under each other' },
 ];
 let bgStyle = 'spiral';
 // Size and speed of the background's shapes (1× = as first made) and how many
@@ -1575,6 +1579,8 @@ const FIELD = { a: 0, s: 0 };
 // across, and scale so the pattern looks the same with more or fewer pixels.
 const TILING_SIZE = 26, TILING_PX_PER_S = 3, R2 = Math.SQRT2;
 const nearLine = (v, P) => v - P * Math.round(v / P);   // offset from the nearest lattice line
+// the more detailed tilings repeat a little bigger, so their details still read
+const TILING_K = { rosette: 1.15, twelve: 1.6, trellis: 1.45, weave: 1.25 };
 const BG_TILINGS = {
   // eight-point stars (lit) with dark crosses between them
   khatam(x, y, P) {
@@ -1597,6 +1603,65 @@ const BG_TILINGS = {
     const lx = Math.abs(nearLine(x, P)), ly = Math.abs(nearLine(y, P)), a = P * .22;
     if ((lx + ly) / R2 > P / 2 * .93) return true;
     return Math.max(lx, ly) <= a || (lx + ly) / R2 <= a;
+  },
+  // an eight-point star ringed by eight pointed petals, the pieces cut apart
+  // by thin dark joints like tile work, with a small star where four meet
+  rosette(x, y, P) {
+    const ix = Math.round(x / P), iy = Math.round(y / P), sx = x - ix * P, sy = y - iy * P;
+    const lx = Math.abs(sx), ly = Math.abs(sy), r = Math.hypot(sx, sy), th = Math.atan2(sy, sx);
+    const star = a => Math.max(lx, ly) <= a || (lx + ly) / R2 <= a;
+    const a = P * .2, joint = .8;
+    if (star(a)) return true;
+    // petals: between the star and an octagon turned 22.5°, so each petal
+    // ends in a point between two of the star's points
+    const t8 = Math.PI / 8, rx = Math.abs(sx * Math.cos(t8) + sy * Math.sin(t8)), ry = Math.abs(-sx * Math.sin(t8) + sy * Math.cos(t8));
+    const R = P * .44, oct = m => Math.max(rx, ry) <= R - m && (rx + ry) / R2 <= R - m;
+    if (!oct(0)) {
+      const cx = Math.abs(nearLine(x - P / 2, P)), cy = Math.abs(nearLine(y - P / 2, P)), b = P * .09;
+      return Math.max(cx, cy) <= b || (cx + cy) / R2 <= b;
+    }
+    if (!oct(joint * 1.5) || star(a + joint * 1.8)) return false;
+    const k = Math.round(th / (Math.PI / 4)) * Math.PI / 4;
+    return r * Math.abs(Math.sin(th - k)) > joint;   // joints run out from the star's points
+  },
+  // Alhambra-style twelve-point stars (three squares turned 30° apart) on a
+  // triangular lattice, each with a dark inner outline, and a small hexagon
+  // in each gap between three stars
+  twelve(x, y, P) {
+    const H = P * Math.sqrt(3) / 2, v = y / H, u = x / P - v / 2;
+    let px = 0, py = 0, bd = 1e9;
+    for (const du of [0, 1]) for (const dv of [0, 1]) {
+      const i = Math.floor(u) + du, j = Math.floor(v) + dv, cx = (i + j / 2) * P, cy = j * H, d = (x - cx) ** 2 + (y - cy) ** 2;
+      if (d < bd) { bd = d; px = x - cx; py = y - cy; }
+    }
+    const star = a => [0, Math.PI / 6, Math.PI / 3].some(t => {
+      const c = Math.cos(t), s = Math.sin(t);
+      return Math.max(Math.abs(px * c + py * s), Math.abs(-px * s + py * c)) <= a;
+    });
+    const a = P * .29;
+    if (star(a)) return !(star(a - 2.2) && !star(a - 3.3));
+    const th = Math.atan2(py, px), k = Math.round((th - Math.PI / 6) / (Math.PI / 3)) * Math.PI / 3 + Math.PI / 6;
+    const gx = px - Math.cos(k) * P / Math.sqrt(3), gy = py - Math.sin(k) * P / Math.sqrt(3), hr = P * .085;
+    return [0, 1, 2].every(n => Math.abs(gx * Math.cos(n * Math.PI / 3 + Math.PI / 6) + gy * Math.sin(n * Math.PI / 3 + Math.PI / 6)) <= hr);
+  },
+  // quatrefoils (four round lobes) with pointed tips reaching out to their
+  // diagonal neighbours: the dark gaps between them form a curved trellis
+  trellis(x, y, P) {
+    const lx = Math.abs(nearLine(x, P)), ly = Math.abs(nearLine(y, P)), d = P * .23, rr = P * .135;
+    if (Math.hypot(lx - d, ly) <= rr || Math.hypot(lx, ly - d) <= rr || Math.hypot(lx, ly) <= P * .1) return true;
+    const s = (lx + ly) / R2, t = Math.abs(lx - ly) / R2, L = P * .69, w = P * .075;   // tips along the diagonals
+    return s <= L && t <= w * (1 - s / L);
+  },
+  // diagonal straps going over and under in turn, with a thin dark gap where
+  // a strap passes under, and a small diamond in each opening
+  weave(x, y, P) {
+    const u = (x + y) / P, v = (x - y) / P, fu = Math.abs(u - Math.round(u)) * P / R2, fv = Math.abs(v - Math.round(v)) * P / R2;
+    const bw = P * .11, gap = 1.1, aOver = (Math.round(u) + Math.round(v)) % 2 === 0;
+    const inA = fu <= bw, inB = fv <= bw;
+    if (inA && inB) return true;
+    if (inA) return aOver || fv > bw + gap;    // strap A dips under B
+    if (inB) return !aOver || fu > bw + gap;   // strap B dips under A
+    return Math.abs(u - Math.floor(u) - .5) + Math.abs(v - Math.floor(v) - .5) < .13;
   },
 };
 const LAVA_BLOBS = [[.31, .23, 0, 1.7, .26], [.19, .37, 2.1, .4, .22], [.27, .17, 4.2, 3.1, .3], [.23, .29, 1.3, 5.2, .2], [.37, .21, 3.4, 2.4, .24]];
@@ -1663,7 +1728,7 @@ const SWIRL_EVERY_MS = 60, SWIRL_BUDGET_MS = 3;
 function swirlRows(y0, y1, w, h, t, field) {
   const tiling = BG_TILINGS[bgStyle];
   if (tiling) {
-    const px = w / SWIRL_CELLS_ACROSS, P = TILING_SIZE * bgSize * px;
+    const px = w / SWIRL_CELLS_ACROSS, P = TILING_SIZE * (TILING_K[bgStyle] || 1) * bgSize * px;
     const d = t / SWIRL_SPEED * TILING_PX_PER_S * px, ox = Math.floor(d) + .5, oy = Math.floor(d * .5) + .5;
     for (let y = y0, j = y0 * w; y < y1; y++)
       for (let x = 0; x < w; x++, j++) { swirl.band[j] = tiling(x + ox, y + oy, P) ? bgBands - 1 : 0; swirl.lit[j] = 0; }
