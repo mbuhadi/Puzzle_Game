@@ -608,7 +608,7 @@ function toData() {
     tiles: tiles.map(t => ({ id: t.id, pts: t.pts.map(p => [r2(p[0]), r2(p[1])]), start: !!t.start,
       chunk: t.chunk || '', label: t.label || '', opens: [...t.opens], cancels: [...t.cancels],
       ...(t.thumb ? { thumb: { dx: r2(t.thumb.dx * 1000) / 1000, dy: r2(t.thumb.dy * 1000) / 1000, zoom: r2(t.thumb.zoom) } } : {}) })),
-    bg: playBg, bgStyle, bgSize, bgSpeed, bgPixels,
+    bg: playBg, bgStyle, bgSize, bgSpeed, bgPixels, bgBands,
     labels: labels.map(l => ({ id: l.id, pts: l.pts.map(p => [r2(p[0]), r2(p[1])]), en: l.en || '', ar: l.ar || '', size: l.size, belly: l.belly })),
     unlockers: unlockers.map(u => ({ id: u.id, design: u.design,
       combos: u.combos.map(c => ({ id: c.id, code: [...c.code], opens: [...c.opens], cancels: [...c.cancels] })) })),
@@ -632,6 +632,7 @@ function fromData(d) {
   bgSize = inRange(d.bgSize, BG_SLIDERS.bgSize, 1);
   bgSpeed = inRange(d.bgSpeed, BG_SLIDERS.bgSpeed, 1);
   bgPixels = inRange(d.bgPixels, BG_SLIDERS.bgPixels, SWIRL_CELLS_ACROSS);
+  bgBands = Math.round(inRange(d.bgBands, BG_SLIDERS.bgBands, BAND_COUNT));
   unlockers = (d.unlockers || []).map(u => ({ id: String(u.id), design: String(u.design || ''),
     combos: (u.combos || []).map(c => ({ id: String(c.id), code: (c.code || []).map(Number),
       opens: (c.opens || []).map(String).filter(id => ids.has(id)), cancels: (c.cancels || []).map(String).filter(id => ids.has(id)) })) }));
@@ -1492,14 +1493,15 @@ const BG_STYLES = [
 let bgStyle = 'spiral';
 // Size and speed of the background's shapes (1× = as first made) and how many
 // background pixels fit across the screen; saved with each blueprint
-let bgSize = 1, bgSpeed = 1, bgPixels = 120;
+let bgSize = 1, bgSpeed = 1, bgPixels = 120, bgBands = 2;
 const BG_SLIDERS = {
   bgSize: { n: 'Size', min: .5, max: 2.5, step: .05, fmt: v => +v.toFixed(2) + '×' },
   bgSpeed: { n: 'Speed', min: 0, max: 4, step: .05, fmt: v => v ? +v.toFixed(2) + '×' : 'still' },
   bgPixels: { n: 'Pixels', min: 60, max: 240, step: 10, fmt: v => v + ' across' },
+  bgBands: { n: 'Bands', min: 2, max: 8, step: 1, fmt: v => v + ' levels' },
 };
 const bgVals = { get bgSize() { return bgSize; }, set bgSize(v) { bgSize = v; }, get bgSpeed() { return bgSpeed; }, set bgSpeed(v) { bgSpeed = v; },
-  get bgPixels() { return bgPixels; }, set bgPixels(v) { bgPixels = v; } };
+  get bgPixels() { return bgPixels; }, set bgPixels(v) { bgPixels = v; }, get bgBands() { return bgBands; }, set bgBands(v) { bgBands = v; } };
 function renderBgSliders() {
   const el = document.getElementById('bgSliders');
   el.innerHTML = '';
@@ -1516,8 +1518,8 @@ function renderBgSliders() {
     el.appendChild(row);
   }
   const reset = document.createElement('button');
-  reset.textContent = 'Reset size, speed & pixels'; reset.style.alignSelf = 'flex-start';
-  reset.onclick = () => { bgSize = 1; bgSpeed = 1; bgPixels = SWIRL_CELLS_ACROSS; pushHistory(); renderBgSliders();
+  reset.textContent = 'Reset to defaults'; reset.style.alignSelf = 'flex-start';
+  reset.onclick = () => { bgSize = 1; bgSpeed = 1; bgPixels = SWIRL_CELLS_ACROSS; bgBands = BAND_COUNT; pushHistory(); renderBgSliders();
     document.getElementById('mapNameLbl').textContent = bpName + (isDirty() ? ' •' : ''); render(); };
   el.appendChild(reset);
 }
@@ -1558,9 +1560,9 @@ function bgTime(now) {
   bgClock.at = now;
   return bgClock.t;
 }
-// The background's brightness bands, as fractions of the base colour:
-// BAND_COUNT bands from BAND_MIN up in steps of BAND_STEP (now 50% and 100%)
-const BAND_COUNT = 2, BAND_MIN = .5, BAND_STEP = .5;
+// The background's brightness bands (bgBands of them, BAND_COUNT by default)
+// are spread evenly from BAND_MIN to 100% of the base colour
+const BAND_COUNT = 2, BAND_MIN = .5;
 // How many background pixels fit across the screen by default (bgPixels)
 const SWIRL_CELLS_ACROSS = 120;
 // Each movement fills FIELD.a (0-1: main paint, banded into flat steps) and
@@ -1664,7 +1666,7 @@ function swirlRows(y0, y1, w, h, t, field) {
     const px = w / SWIRL_CELLS_ACROSS, P = TILING_SIZE * bgSize * px;
     const d = t / SWIRL_SPEED * TILING_PX_PER_S * px, ox = Math.floor(d) + .5, oy = Math.floor(d * .5) + .5;
     for (let y = y0, j = y0 * w; y < y1; y++)
-      for (let x = 0; x < w; x++, j++) { swirl.band[j] = tiling(x + ox, y + oy, P) ? BAND_COUNT - 1 : 0; swirl.lit[j] = 0; }
+      for (let x = 0; x < w; x++, j++) { swirl.band[j] = tiling(x + ox, y + oy, P) ? bgBands - 1 : 0; swirl.lit[j] = 0; }
     return;
   }
   const asp = w / h;
@@ -1675,7 +1677,7 @@ function swirlRows(y0, y1, w, h, t, field) {
       field(nx, ny, t);
       const dither = (BAYER[(y & 3) * 4 + (x & 3)] - 7.5) / 16;
       // a few flat bands, with a thin dithered seam where they meet
-      const q = BAND_COUNT - 1;
+      const q = bgBands - 1;
       swirl.band[j] = Math.max(0, Math.min(q, Math.round((FIELD.a + dither * .22) * q)));
       swirl.lit[j] = FIELD.s + dither * .08 > .84 ? 1 : 0;
     }
@@ -1683,10 +1685,10 @@ function swirlRows(y0, y1, w, h, t, field) {
 }
 function swirlPaint(w, h, g) {
   const base = bgNow(), hi = base.map(v => v + (255 - v) * .4), d = swirl.data.data;
-  // band n is BAND_MIN + n × BAND_STEP of the base colour's brightness
+  // band n of bgBands is evenly spaced from BAND_MIN to 100% of the base colour's brightness
   const lut = [];
-  for (let n = 0; n < BAND_COUNT; n++) {
-    const f = BAND_MIN + n * BAND_STEP, c = base.map(v => v * f);
+  for (let n = 0; n < bgBands; n++) {
+    const f = BAND_MIN + n * (1 - BAND_MIN) / (bgBands - 1), c = base.map(v => v * f);
     lut.push(c, c.map((v, k) => v + (hi[k] - v) * .6));
   }
   for (let j = 0, i = 0; j < w * h; j++) {
@@ -1702,8 +1704,8 @@ function drawSwirl(W, H, now) {
   const g = sc.getContext('2d');
   const field = BG_FIELDS[bgStyle] || BG_FIELDS.spiral;
   if (!swirl.data) { swirl.data = g.createImageData(w, h); swirl.band = new Uint8Array(w * h); swirl.lit = new Uint8Array(w * h); swirl.key = ''; }
-  const T = bgTime(now) * SWIRL_SPEED, look = [bgStyle, bgSize].join(',');
-  if (swirl.key.split('|')[1] !== look) {   // new movement, size or pixel count: everything at once
+  const T = bgTime(now) * SWIRL_SPEED, look = [bgStyle, bgSize, bgBands].join(',');
+  if (swirl.key.split('|')[1] !== look) {   // new movement, size, band count or pixel count: everything at once
     swirlRows(0, h, w, h, T, field);
     swirl.row = h; swirl.last = now;
     swirl.key = '';
