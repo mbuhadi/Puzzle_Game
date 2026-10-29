@@ -27,5 +27,11 @@ const PUZZLE_IDEAS = [
   "title": "The logic of the unruly female camel",
   "idea": "Something like this: \nthere should be an 8x8 grid: an tokens of a box a camel a palm tree and a tent. \n\nThe tent should be 2 steps away from the camel the camel can't be at the left side of the box etc ... \n\nleaving only one possibility at the end which will be the answer",
   "added": 1793312876695
+ },
+ {
+  "num": 13,
+  "title": "Lanterns",
+  "idea": "3 lanterns\n\nthe glow in different patterns:\n\non/off\nconstant high\nconstant low\n\nthey can be deciphered. the player shouldn't immediately recognize the cipher",
+  "added": 1793313195817
  }
 ];
