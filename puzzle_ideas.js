@@ -9,5 +9,11 @@ const PUZZLE_IDEAS = [
   "title": "",
   "idea": "This puzzle will have a lock with 3 symbols, each with a dial around it from 0 to 24. There's also going to be a story that tells what each symbol should point to.\n\nExample symbols: goat, mountain, palm tree.\n\"At noon I rested under a tree, then at 4 the goat was fed, etc.\"",
   "added": 1793311985580
+ },
+ {
+  "num": 11,
+  "title": "The Four tiles",
+  "idea": "There will be four seperate tiles each will show a scene or a picture containing a hidden number. the thumbnails of the tiles will show the positions of the numbers on the unlocker",
+  "added": 1793312612449
  }
 ];
