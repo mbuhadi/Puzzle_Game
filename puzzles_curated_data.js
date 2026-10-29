@@ -292,9 +292,10 @@ if (typeof STUDIO_PUZZLES !== 'undefined') {
     });
   }
 }
-/* Puzzle ideas (puzzle_ideas.js, from the Directory's "+ New puzzle"): an
-   idea for a puzzle that's already built is shown above it; any other idea
-   is listed as a puzzle of its own until its givens and problems are made.
+/* Puzzle ideas (puzzle_ideas.js, from the Puzzle Directory): a title and/or
+   idea for a puzzle that's already built renames it and shows the idea
+   above it; any other idea is listed as a puzzle of its own until its givens
+   and problems are made.
    A copy this browser saved in the last few minutes wins, since the site
    takes a minute or two to catch up after a save. */
 const IDEAS_RECENT_KEY = 'puzzleIdeasSaved';
@@ -305,11 +306,12 @@ function currentIdeas() {
   } catch (e) { /* no storage: use the file */ }
   return typeof PUZZLE_IDEAS !== 'undefined' ? PUZZLE_IDEAS : [];
 }
+for (const p of PUZZLES) p.origName = p.name;
 for (const idea of currentIdeas()) {
   const p = PUZZLES.find(q => +q.num === +idea.num);
   if (p) {
-    p.idea = idea.idea || '';
-    if (idea.title && (!p.name || p.name === '؟؟؟')) p.name = idea.title;
+    if (idea.idea) p.idea = idea.idea;
+    if (idea.title) p.name = idea.title;   // the original name stays in origName
   } else {
     PUZZLES.push({ num: String(idea.num), name: idea.title || '؟؟؟', loc: '', idea: idea.idea || '', ideaOnly: true, given: '', problem: '' });
   }

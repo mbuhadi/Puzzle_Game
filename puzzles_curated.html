@@ -60,6 +60,7 @@
   .idea-edit{font:11px sans-serif; letter-spacing:1px; padding:3px 10px; border-radius:999px; cursor:pointer;
     border:1px solid var(--dim); color:var(--muted); background:transparent;}
   .idea-edit:hover{border-color:var(--gold); color:var(--gold);}
+  .title-edit{align-self:center;}
   .idea-only{font:13px sans-serif; color:var(--dim); margin-top:6px;}
   #newPuzzleBtn{font:13px 'Cinzel',serif; letter-spacing:1px; padding:7px 10px; border-radius:6px; cursor:pointer;
     border:1px solid var(--gold); color:var(--gold); background:#221e14;}
@@ -1761,13 +1762,14 @@ function select(i){
   if (sndSelectPuzzleHook) sndSelectPuzzleHook(lastSelectedPuzzleNum);
   detail.innerHTML=`
     <div class="pnum">PUZZLE ${p.num}</div>
-    <div class="title-row"><div class="ptitle">${p.name}</div></div>
+    <div class="title-row"><div class="ptitle">${p.name}</div><button type="button" class="idea-edit title-edit" title="Edit this puzzle's title and idea">Edit</button></div>
     <div class="pkicker">${p.loc.toUpperCase()}</div>
-    ${p.idea!=null?`<div class="section"><h2>THE IDEA</h2><div class="design-note"><div class="design-note-title">Puzzle idea <button type="button" class="idea-edit">Edit</button></div><div class="design-note-body" dir="auto"></div></div>${p.ideaOnly?'<div class="idea-only">The givens and problems for this puzzle haven\'t been made yet.</div>':''}</div>`:''}
+    ${(p.idea||'').trim()?`<div class="section"><h2>THE IDEA</h2><div class="design-note"><div class="design-note-title">Puzzle idea <button type="button" class="idea-edit">Edit</button></div><div class="design-note-body" dir="auto"></div></div>${p.ideaOnly?'<div class="idea-only">The givens and problems for this puzzle haven\'t been made yet.</div>':''}</div>`:''}
     ${(p.given||'').trim()?`<div class="section"><h2>THE GIVEN</h2>${p.given}</div>`:''}
     ${(p.problem||'').trim()?`<div class="section"><h2>THE PROBLEM</h2>${p.problem}</div>`:''}`;
   const ideaBody=detail.querySelector('.design-note-body');
-  if(ideaBody){ ideaBody.textContent=p.idea; detail.querySelector('.idea-edit').onclick=()=>openIdeaForm(p); }
+  if(ideaBody) ideaBody.textContent=p.idea;
+  detail.querySelectorAll('.idea-edit').forEach(b=>b.onclick=()=>openIdeaForm(p));
   // Status tags: on the title, and after every chunk label
   detail.querySelector('.title-row').appendChild(makeTagRow('puzzle:'+p.num,PUZZLE_TAGS));
   detail.querySelectorAll('.clabel').forEach(cl=>{
@@ -1988,9 +1990,11 @@ async function writeIdeasFile(list,sha,message){
 let ideaEditing=null;   // the puzzle whose idea is being edited, or null for a new puzzle
 function openIdeaForm(p){
   ideaEditing=p||null;
-  document.getElementById('ideaHeading').textContent=p?`PUZZLE ${p.num} · IDEA`:'NEW PUZZLE';
+  document.getElementById('ideaHeading').textContent=p?`EDIT PUZZLE ${p.num}`:'NEW PUZZLE';
   document.getElementById('ideaTitle').value=p&&p.name!=='؟؟؟'?p.name:'';
+  document.getElementById('ideaTitle').placeholder=p&&!p.ideaOnly&&p.origName!=='؟؟؟'?'Leave empty for the original: '+p.origName:'Leave empty for ؟؟؟';
   document.getElementById('ideaText').value=p?p.idea||'':'';
+  document.getElementById('ideaText').placeholder=p&&!p.ideaOnly?'Optional for a puzzle that\'s already built':'Describe the puzzle: what the player sees, what they have to work out, the answer…';
   document.getElementById('ideaDelete').style.display=p&&p.ideaOnly?'':'none';
   document.getElementById('ideaMsg').textContent=p?'':`This will be puzzle ${Math.max(0,...PUZZLES.map(q=>+q.num||0))+1}.`;
   document.getElementById('ideaOverlay').classList.add('open');
@@ -2000,7 +2004,8 @@ function closeIdeaForm(){ document.getElementById('ideaOverlay').classList.remov
 async function saveIdea(del){
   const title=document.getElementById('ideaTitle').value.trim(), idea=document.getElementById('ideaText').value.trim();
   const msg=document.getElementById('ideaMsg');
-  if(!del&&!idea){ msg.textContent='Write the puzzle idea first.'; return; }
+  const built=ideaEditing&&!ideaEditing.ideaOnly;   // a built puzzle doesn't need an idea
+  if(!del&&!idea&&!built){ msg.textContent='Write the puzzle idea first.'; return; }
   if(del&&!confirm(`Delete puzzle ${ideaEditing.num} and its idea?`)) return;
   if(!ghToken()){
     const t=(prompt('Saving writes the puzzle to the website (GitHub repo).\nPaste your GitHub token — the same one Map Studio → My Maps uses:')||'').trim();
@@ -2017,9 +2022,12 @@ async function saveIdea(del){
       const i=list.findIndex(x=>+x.num===num);
       if(del){ if(i>=0) list.splice(i,1); message=`Delete puzzle ${num} idea`; }
       else{
-        const e={num,title,idea,added:i>=0?list[i].added:Date.now()};
-        if(i>=0) list[i]=e; else list.push(e);
-        message=`Edit puzzle ${num} idea`;
+        // a built puzzle keeps its own name unless the title differs from it
+        const t=built&&title===ideaEditing.origName?'':title;
+        const e={num,title:t,idea,added:i>=0?list[i].added:Date.now()};
+        if(built&&!t&&!idea){ if(i>=0) list.splice(i,1); }   // nothing left to change
+        else if(i>=0) list[i]=e; else list.push(e);
+        message=`Edit puzzle ${num}${t?': '+t:''}`;
       }
     } else {
       num=Math.max(0,...PUZZLES.map(q=>+q.num||0),...list.map(x=>+x.num||0))+1;
