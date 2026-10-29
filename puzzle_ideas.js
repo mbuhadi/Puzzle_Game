@@ -21,5 +21,11 @@ const PUZZLE_IDEAS = [
   "title": "The Four tiles",
   "idea": "There will be four seperate tiles each will show a scene or a picture containing a hidden number. the thumbnails of the tiles will show the positions of the numbers on the unlocker",
   "added": 1793312612449
+ },
+ {
+  "num": 12,
+  "title": "The logic of the unruly female camel",
+  "idea": "Something like this: \nthere should be an 8x8 grid: an tokens of a box a camel a palm tree and a tent. \n\nThe tent should be 2 steps away from the camel the camel can't be at the left side of the box etc ... \n\nleaving only one possibility at the end which will be the answer",
+  "added": 1793312876695
  }
 ];
