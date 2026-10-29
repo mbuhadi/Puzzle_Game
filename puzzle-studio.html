@@ -183,7 +183,7 @@ button:disabled:hover { border-color: var(--border); color: var(--text); }
     <span class="tb-title">PUZZLE STUDIO</span>
     <span id="puzzleLabel"></span>
     <button onclick="openLoadPanel()" title="Open a puzzle saved from Puzzle Studio to keep editing it">Load</button>
-    <button id="saveBtn" onclick="savePuzzle()" title="Save this puzzle to the Puzzle Guide (commits it to the website's GitHub repo)">Save</button>
+    <button id="saveBtn" onclick="savePuzzle()" title="Save this puzzle to the Puzzle Directory (commits it to the website's GitHub repo)">Save</button>
     <span id="saveFlash"></span>
   </div>
 
@@ -273,7 +273,7 @@ const screens = [];   // {kind: 'problem'|'given', board: <div>, sprites: [{el, 
 let cur = 0;          // index of the active tab
 function curScreen() { return screens[cur]; }
 
-// A new puzzle continues the Puzzle Guide's numbering: one past the highest
+// A new puzzle continues the Puzzle Directory's numbering: one past the highest
 // puzzle number there (hand-made or saved from here). Load switches it to the
 // loaded puzzle's number, so Save then updates that puzzle.
 let puzzleNum = Math.max(0, ...PUZZLES.map(p => +p.num || 0)) + 1;
@@ -285,7 +285,7 @@ function updatePuzzleLabel() {
 }
 updatePuzzleLabel();
 
-// Chunk labels match the Puzzle Guide's: p9p1 = problem, p9g1… = givens
+// Chunk labels match the Puzzle Directory's: p9p1 = problem, p9g1… = givens
 function screenLabel(i) {
   return screens[i].kind === 'problem' ? `p${puzzleNum}p1` : `p${puzzleNum}g${i}`;   // givens follow the problem
 }
@@ -659,8 +659,8 @@ document.addEventListener('pointerdown', e => {
       !e.target.closest('.board')) hideSelMenu();
 }, true);
 
-// ── Save → Puzzle Guide ───────────────────────────────────────────────────────
-// Puzzles live in puzzles_studio.js (STUDIO_PUZZLES), which the Puzzle Guide,
+// ── Save → Puzzle Directory ───────────────────────────────────────────────────────
+// Puzzles live in puzzles_studio.js (STUDIO_PUZZLES), which the Puzzle Directory,
 // Map Studio and the game all load; puzzles_curated_data.js turns each one
 // into ordinary chunks. Saving rewrites that file through the GitHub API with
 // this puzzle added — or replaced, when saving the same number again.
@@ -744,7 +744,7 @@ async function savePuzzle() {
     if (!w.ok) throw await tsGhFail(w);
     editingSaved = true;
     updatePuzzleLabel();
-    flash(`saved puzzle ${puzzleNum} to the Puzzle Guide ✓`);
+    flash(`saved puzzle ${puzzleNum} to the Puzzle Directory ✓`);
   } catch (e) {
     if (/bad credentials/i.test(e.message)) localStorage.removeItem('ghToken');
     flash('save failed ✗ ' + e.message, '#cc7070');
@@ -755,7 +755,7 @@ async function savePuzzle() {
 }
 
 // ── Load (Puzzle Studio puzzles only) ─────────────────────────────────────────
-// Lists the puzzles in puzzles_studio.js — hand-made Puzzle Guide puzzles
+// Lists the puzzles in puzzles_studio.js — hand-made Puzzle Directory puzzles
 // aren't built from sprites, so they can't be opened here.
 const loadOverlay = document.getElementById('loadOverlay');
 async function openLoadPanel() {

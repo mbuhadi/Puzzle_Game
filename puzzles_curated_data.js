@@ -256,6 +256,19 @@ const PUZZLES = [
         <div id="p8grid" style="margin:20px 0; width:fit-content;"></div>
       </div>`,
   },
+  {
+    num:'10', name:'؟؟؟', loc:'',
+    given:`
+      <div class="chunk"><span class="clabel">p10g1</span>
+        <div class="design-note">
+          <div class="design-note-title">Puzzle idea</div>
+          This puzzle will have a lock with 3 symbols, each with a dial around it from 0 to 24.
+          There's also going to be a story that tells what each symbol should point to.<br><br>
+          Example symbols: goat, mountain, palm tree.<br>
+          <i>"At noon I rested under a tree, then at 4 the goat was fed, etc."</i>
+        </div>
+      </div>`,
+  },
 ];
 
 /* Puzzles built in Puzzle Studio (puzzles_studio.js, loaded before this file)
@@ -292,6 +305,8 @@ if (typeof STUDIO_PUZZLES !== 'undefined') {
     });
   }
 }
+// One list in puzzle-number order, whichever page each puzzle was made in
+PUZZLES.sort((a, b) => (+a.num || 0) - (+b.num || 0));
 
 /* Every chunk on the curated page, in page order — the shared interactables
    list. The game shows a chunk by loading puzzles_curated.html?chunk=<id>,

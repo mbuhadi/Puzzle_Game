@@ -935,7 +935,7 @@ function drawFrame(now) {
 
 // ── Tile thumbnails ───────────────────────────────────────────────────────────
 // Each puzzle / given can have a thumbnail (made in Thumbnail Studio, from the
-// Puzzle Guide). On a tile it's cut to the tile's shape; t.thumb = { dx, dy,
+// Puzzle Directory). On a tile it's cut to the tile's shape; t.thumb = { dx, dy,
 // zoom } frames it: by default it just covers the tile's bounding box,
 // zoom scales that, and dx / dy shift its centre by fractions of the box.
 const thumbOf = t => t && t.chunk ? TH.get(t.chunk) : null;
@@ -2541,7 +2541,7 @@ function drawThumbPreview() {
   document.getElementById('thumbCtl').style.display = has ? '' : 'none';
   document.getElementById('tpThumbHint').innerHTML = !t.chunk ? 'Pick a puzzle or given first.'
     : !tb ? 'Loading thumbnail…'
-    : !has ? `No thumbnail for ${t.chunk} yet — make one in the <a href="puzzles_curated.html" style="color:var(--gold)">Puzzle Guide</a> (Thumbnail button by its label).`
+    : !has ? `No thumbnail for ${t.chunk} yet — make one in the <a href="puzzles_curated.html" style="color:var(--gold)">Puzzle Directory</a> (Thumbnail button by its label).`
     : 'Drag to move the tile\'s outline over the picture and choose what shows; the slider zooms.';
   c.style.display = t.chunk ? '' : 'none';
   if (!t || t.pts.length < 3) return;

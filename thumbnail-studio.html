@@ -10,7 +10,7 @@
 /* Thumbnail Studio — the static picture shown on a blueprint tile once it has
    been opened. One per puzzle / given chunk (?chunk=p1p1), all the same size
    (TH.W × TH.H, see thumb_runtime.js), painted with Map Studio's tileset
-   sprites. Opened from the Puzzle Guide (embedded, ?embed=1) or on its own. */
+   sprites. Opened from the Puzzle Directory (embedded, ?embed=1) or on its own. */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
   --gold: #c8a84b; --gold-dim: #7a6030;
@@ -306,7 +306,7 @@ function ui() {
 
 // ── Load / save ──
 async function load() {
-  if (!CHUNK) { flash('open this page with ?chunk=<id> (e.g. from the Puzzle Guide)', '#cc7070'); return; }
+  if (!CHUNK) { flash('open this page with ?chunk=<id> (e.g. from the Puzzle Directory)', '#cc7070'); return; }
   flash('loading…', '#b8a06a');
   const e = await TH.load(CHUNK);
   if (e && e.data) { doc = JSON.parse(JSON.stringify(e.data)); flash('loaded'); }
