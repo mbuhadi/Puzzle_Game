@@ -123,6 +123,8 @@
        border:1px solid var(--dim); color:var(--dim); background:transparent;
        transition:border-color .15s, color .15s, background .15s;}
   .tag:hover{border-color:var(--muted); color:var(--muted);}
+  .tag.locked{cursor:default;}
+  .tag.locked:not(.on){opacity:.4;}
   .tag.on[data-tag="missing"], .tag.on[data-tag="revision"]{
     border-color:var(--red); color:#e08050; background:rgba(192,96,64,0.14);}
   .tag.on[data-tag="complete"], .tag.on[data-tag="done"]{
@@ -1694,7 +1696,8 @@ const foldText=t=>String(t||'').toLowerCase()
   .replace(/[\u064B-\u0652\u0640]/g,'')            // Arabic diacritics and tatweel
   .replace(/[إأآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه');
 const htmlText=h=>{ const d=document.createElement('div'); d.innerHTML=h||''; return d.textContent; };
-const puzzleStatus=p=>{ const t=loadTags()['puzzle:'+p.num]||{}; return t.complete?'complete':t.missing?'missing':'none'; };
+// A puzzle that's still only an idea is always "Missing something"
+const puzzleStatus=p=>{ if(p.ideaOnly) return 'missing'; const t=loadTags()['puzzle:'+p.num]||{}; return t.complete?'complete':t.missing?'missing':'none'; };
 function puzzleMatches(p,words){
   if(!p._search) p._search=foldText([p.num,'p'+p.num,p.name,p.loc,p.idea,
     ...PUZZLE_CHUNKS.filter(c=>c.puzzle===+p.num).map(c=>c.id),htmlText(p.given),htmlText(p.problem)].join(' '));
@@ -1771,7 +1774,14 @@ function select(i){
   if(ideaBody) ideaBody.textContent=p.idea;
   detail.querySelectorAll('.idea-edit').forEach(b=>b.onclick=()=>openIdeaForm(p));
   // Status tags: on the title, and after every chunk label
-  detail.querySelector('.title-row').appendChild(makeTagRow('puzzle:'+p.num,PUZZLE_TAGS));
+  const ptags=makeTagRow('puzzle:'+p.num,PUZZLE_TAGS);
+  if(p.ideaOnly){   // locked on until its givens and problems are made
+    [...ptags.children].forEach(el=>{
+      el.classList.toggle('on',el.dataset.tag==='missing'); el.classList.add('locked'); el.onclick=null;
+      el.title='Stays on until this puzzle\'s givens and problems are made';
+    });
+  }
+  detail.querySelector('.title-row').appendChild(ptags);
   detail.querySelectorAll('.clabel').forEach(cl=>{
     const id=cl.textContent.trim();
     const nodes=[];
