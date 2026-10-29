@@ -54,7 +54,33 @@
   .pnum{font:12px sans-serif; letter-spacing:3px; color:var(--dim); margin-bottom:2px;}
   .design-note{background:var(--panel2); border:1px dashed var(--gold); border-radius:8px; padding:18px 22px; margin:14px 0;
     font:16px/1.7 sans-serif; color:var(--ink); max-width:640px;}
-  .design-note-title{font-family:'Cinzel',serif; font-size:13px; letter-spacing:2px; color:var(--gold); margin-bottom:8px;}
+  .design-note-title{font-family:'Cinzel',serif; font-size:13px; letter-spacing:2px; color:var(--gold); margin-bottom:8px;
+    display:flex; align-items:center; gap:12px;}
+  .design-note-body{white-space:pre-wrap; unicode-bidi:plaintext;}
+  .idea-edit{font:11px sans-serif; letter-spacing:1px; padding:3px 10px; border-radius:999px; cursor:pointer;
+    border:1px solid var(--dim); color:var(--muted); background:transparent;}
+  .idea-edit:hover{border-color:var(--gold); color:var(--gold);}
+  .idea-only{font:13px sans-serif; color:var(--dim); margin-top:6px;}
+  #newPuzzleBtn{font:13px 'Cinzel',serif; letter-spacing:1px; padding:7px 10px; border-radius:6px; cursor:pointer;
+    border:1px solid var(--gold); color:var(--gold); background:#221e14;}
+  #newPuzzleBtn:hover{background:#2c2618;}
+  /* ── New puzzle / edit idea form ── */
+  #ideaOverlay{display:none; position:fixed; inset:0; z-index:500; background:rgba(0,0,0,.6); align-items:center; justify-content:center; padding:16px;}
+  #ideaOverlay.open{display:flex;}
+  #ideaForm{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:22px; width:min(560px,100%);
+    display:flex; flex-direction:column; gap:10px; max-height:100%; overflow:auto;}
+  #ideaForm h3{font-size:16px; letter-spacing:2px; color:var(--gold); font-weight:400;}
+  #ideaForm label{font:12px sans-serif; color:var(--muted); letter-spacing:.5px;}
+  #ideaForm input, #ideaForm textarea{width:100%; background:#0d0c0a; border:1px solid var(--line); border-radius:6px;
+    color:var(--ink); padding:9px 11px; font:15px sans-serif; outline:none; unicode-bidi:plaintext;}
+  #ideaForm textarea{min-height:180px; resize:vertical; line-height:1.6;}
+  #ideaForm input:focus, #ideaForm textarea:focus{border-color:var(--gold);}
+  #ideaForm .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  #ideaForm button{font:13px sans-serif; padding:8px 14px; border-radius:6px; cursor:pointer; border:1px solid var(--line); background:#1e1b14; color:var(--ink);}
+  #ideaForm button.primary{border-color:var(--gold); color:var(--gold);}
+  #ideaForm button.danger{color:var(--red); margin-right:auto;}
+  #ideaForm button:disabled{opacity:.5; cursor:default;}
+  #ideaMsg{font:12px sans-serif; color:var(--muted); min-height:16px;}
 
   /* ── Hamburger button (mobile only) ── */
   #menuBtn{
@@ -298,12 +324,28 @@
     <nav id="sidebar">
       <div class="dir-head">
         <div class="dir-title">PUZZLE DIRECTORY</div>
+        <button id="newPuzzleBtn" type="button">+ New puzzle</button>
         <input id="dirSearch" type="search" autocomplete="off" placeholder="Search puzzles…" title="Search by number, name, place, chunk (p1g1) or any text. Press / to jump here.">
         <div class="dir-filters" id="dirFilters"></div>
         <div class="dir-count" id="dirCount"></div>
       </div>
       <ul class="plist" id="plist"></ul>
     </nav>
+    <div id="ideaOverlay">
+      <form id="ideaForm" autocomplete="off">
+        <h3 id="ideaHeading">NEW PUZZLE</h3>
+        <label for="ideaTitle">Title</label>
+        <input id="ideaTitle" dir="auto" placeholder="Leave empty for ؟؟؟">
+        <label for="ideaText">Puzzle idea</label>
+        <textarea id="ideaText" dir="auto" placeholder="Describe the puzzle: what the player sees, what they have to work out, the answer…"></textarea>
+        <div id="ideaMsg"></div>
+        <div class="row">
+          <button type="button" class="danger" id="ideaDelete">Delete</button>
+          <button type="button" id="ideaCancel">Cancel</button>
+          <button type="submit" class="primary" id="ideaSave">Save</button>
+        </div>
+      </form>
+    </div>
     <main id="detail"></main>
   </div>
 
@@ -342,6 +384,7 @@
   </div>
 
 <script src="puzzles_studio.js"></script>
+<script src="puzzle_ideas.js"></script>
 <script src="puzzles_curated_data.js"></script>
 <script src="assets/custom_tiles.js"></script>
 <script src="thumb_runtime.js"></script>
@@ -1652,7 +1695,7 @@ const foldText=t=>String(t||'').toLowerCase()
 const htmlText=h=>{ const d=document.createElement('div'); d.innerHTML=h||''; return d.textContent; };
 const puzzleStatus=p=>{ const t=loadTags()['puzzle:'+p.num]||{}; return t.complete?'complete':t.missing?'missing':'none'; };
 function puzzleMatches(p,words){
-  if(!p._search) p._search=foldText([p.num,'p'+p.num,p.name,p.loc,
+  if(!p._search) p._search=foldText([p.num,'p'+p.num,p.name,p.loc,p.idea,
     ...PUZZLE_CHUNKS.filter(c=>c.puzzle===+p.num).map(c=>c.id),htmlText(p.given),htmlText(p.problem)].join(' '));
   // a bare number means a puzzle number: "1" finds 1 and 10–19
   return words.every(w=>/^\d+$/.test(w)?p.num.startsWith(w):p._search.includes(w));
@@ -1720,8 +1763,11 @@ function select(i){
     <div class="pnum">PUZZLE ${p.num}</div>
     <div class="title-row"><div class="ptitle">${p.name}</div></div>
     <div class="pkicker">${p.loc.toUpperCase()}</div>
+    ${p.idea!=null?`<div class="section"><h2>THE IDEA</h2><div class="design-note"><div class="design-note-title">Puzzle idea <button type="button" class="idea-edit">Edit</button></div><div class="design-note-body" dir="auto"></div></div>${p.ideaOnly?'<div class="idea-only">The givens and problems for this puzzle haven\'t been made yet.</div>':''}</div>`:''}
     ${(p.given||'').trim()?`<div class="section"><h2>THE GIVEN</h2>${p.given}</div>`:''}
     ${(p.problem||'').trim()?`<div class="section"><h2>THE PROBLEM</h2>${p.problem}</div>`:''}`;
+  const ideaBody=detail.querySelector('.design-note-body');
+  if(ideaBody){ ideaBody.textContent=p.idea; detail.querySelector('.idea-edit').onclick=()=>openIdeaForm(p); }
   // Status tags: on the title, and after every chunk label
   detail.querySelector('.title-row').appendChild(makeTagRow('puzzle:'+p.num,PUZZLE_TAGS));
   detail.querySelectorAll('.clabel').forEach(cl=>{
@@ -1903,6 +1949,100 @@ if (!CHUNK_PARAM) {
       document.body.appendChild(skipBtn);
     }
   })();
+}
+
+/* ── New puzzle / edit idea ──
+   Ideas live in puzzle_ideas.js (PUZZLE_IDEAS), rewritten here through the
+   GitHub API with the same token as the other studios (localStorage
+   'ghToken'). A new puzzle takes the next number after every existing one. */
+const IDEAS_FILE='puzzle_ideas.js';
+const IDEAS_HEADER=`/* Puzzle ideas — added with the Puzzle Directory's "+ New puzzle" button,
+   which rewrites this file through the GitHub API, so don't hand-edit it.
+   Each idea is a puzzle number with a title and the idea in words;
+   puzzles_curated_data.js lists ideas without a built puzzle yet as puzzles
+   of their own, and shows the idea above a puzzle once it's built. */
+`;
+const ideasApi=`https://api.github.com/repos/mbuhadi/Puzzle_Game/contents/${IDEAS_FILE}`;
+const ghToken=()=>{ try{ return localStorage.getItem('ghToken')||''; }catch(e){ return ''; } };
+const ghHeaders=()=>({ Accept:'application/vnd.github+json', ...(ghToken()?{Authorization:'Bearer '+ghToken()}:{}) });
+async function ghFail(r){ try{ return new Error((await r.json()).message||r.statusText); }catch(e){ return new Error(r.statusText||'HTTP '+r.status); } }
+// The current list straight from the repo (the site can lag a minute behind a save)
+async function readIdeasFile(){
+  const r=await fetch(ideasApi+'?ref=main',{headers:ghHeaders(),cache:'no-store'});
+  if(r.status===404) return {list:[],sha:null};
+  if(!r.ok) throw await ghFail(r);
+  const j=await r.json();
+  const text=decodeURIComponent(escape(atob(j.content.replace(/\s/g,''))));
+  const m=text.match(/const PUZZLE_IDEAS = ([\s\S]*);\s*$/);
+  return {list:m?JSON.parse(m[1]):[],sha:j.sha};
+}
+async function writeIdeasFile(list,sha,message){
+  list.sort((a,b)=>a.num-b.num);
+  const text=IDEAS_HEADER+'const PUZZLE_IDEAS = '+JSON.stringify(list,null,1)+';\n';
+  const body={message,branch:'main',content:btoa(unescape(encodeURIComponent(text)))};
+  if(sha) body.sha=sha;
+  const w=await fetch(ideasApi,{method:'PUT',headers:ghHeaders(),body:JSON.stringify(body)});
+  if(!w.ok) throw await ghFail(w);
+  try{ localStorage.setItem(IDEAS_RECENT_KEY,JSON.stringify({at:Date.now(),list})); }catch(e){}
+}
+let ideaEditing=null;   // the puzzle whose idea is being edited, or null for a new puzzle
+function openIdeaForm(p){
+  ideaEditing=p||null;
+  document.getElementById('ideaHeading').textContent=p?`PUZZLE ${p.num} · IDEA`:'NEW PUZZLE';
+  document.getElementById('ideaTitle').value=p&&p.name!=='؟؟؟'?p.name:'';
+  document.getElementById('ideaText').value=p?p.idea||'':'';
+  document.getElementById('ideaDelete').style.display=p&&p.ideaOnly?'':'none';
+  document.getElementById('ideaMsg').textContent=p?'':`This will be puzzle ${Math.max(0,...PUZZLES.map(q=>+q.num||0))+1}.`;
+  document.getElementById('ideaOverlay').classList.add('open');
+  document.getElementById(p?'ideaText':'ideaTitle').focus();
+}
+function closeIdeaForm(){ document.getElementById('ideaOverlay').classList.remove('open'); }
+async function saveIdea(del){
+  const title=document.getElementById('ideaTitle').value.trim(), idea=document.getElementById('ideaText').value.trim();
+  const msg=document.getElementById('ideaMsg');
+  if(!del&&!idea){ msg.textContent='Write the puzzle idea first.'; return; }
+  if(del&&!confirm(`Delete puzzle ${ideaEditing.num} and its idea?`)) return;
+  if(!ghToken()){
+    const t=(prompt('Saving writes the puzzle to the website (GitHub repo).\nPaste your GitHub token — the same one Map Studio → My Maps uses:')||'').trim();
+    if(!t) return;
+    try{ localStorage.setItem('ghToken',t); }catch(e){}
+  }
+  const btns=[...document.querySelectorAll('#ideaForm button')];
+  btns.forEach(b=>b.disabled=true); msg.textContent='Saving…';
+  try{
+    const {list,sha}=await readIdeasFile();
+    let num, message;
+    if(ideaEditing){
+      num=+ideaEditing.num;
+      const i=list.findIndex(x=>+x.num===num);
+      if(del){ if(i>=0) list.splice(i,1); message=`Delete puzzle ${num} idea`; }
+      else{
+        const e={num,title,idea,added:i>=0?list[i].added:Date.now()};
+        if(i>=0) list[i]=e; else list.push(e);
+        message=`Edit puzzle ${num} idea`;
+      }
+    } else {
+      num=Math.max(0,...PUZZLES.map(q=>+q.num||0),...list.map(x=>+x.num||0))+1;
+      list.push({num,title,idea,added:Date.now()});
+      message=`Add puzzle ${num} idea${title?': '+title:''}`;
+    }
+    await writeIdeasFile(list,sha,message);
+    msg.textContent='Saved ✓';
+    location.hash=del?'':'#'+num;
+    location.reload();
+  }catch(e){
+    if(/bad credentials/i.test(e.message)){ try{ localStorage.removeItem('ghToken'); }catch(_){} }
+    msg.textContent='Couldn\'t save: '+e.message;
+    btns.forEach(b=>b.disabled=false);
+  }
+}
+if(!CHUNK_PARAM){
+  document.getElementById('newPuzzleBtn').onclick=()=>openIdeaForm(null);
+  document.getElementById('ideaCancel').onclick=closeIdeaForm;
+  document.getElementById('ideaDelete').onclick=()=>saveIdea(true);
+  document.getElementById('ideaForm').onsubmit=e=>{ e.preventDefault(); saveIdea(false); };
+  document.getElementById('ideaOverlay').addEventListener('click',e=>{ if(e.target.id==='ideaOverlay') closeIdeaForm(); });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&document.getElementById('ideaOverlay').classList.contains('open')) closeIdeaForm(); });
 }
 
 /* ── Hamburger menu ── */

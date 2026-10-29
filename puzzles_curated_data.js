@@ -256,19 +256,6 @@ const PUZZLES = [
         <div id="p8grid" style="margin:20px 0; width:fit-content;"></div>
       </div>`,
   },
-  {
-    num:'10', name:'؟؟؟', loc:'',
-    given:`
-      <div class="chunk"><span class="clabel">p10g1</span>
-        <div class="design-note">
-          <div class="design-note-title">Puzzle idea</div>
-          This puzzle will have a lock with 3 symbols, each with a dial around it from 0 to 24.
-          There's also going to be a story that tells what each symbol should point to.<br><br>
-          Example symbols: goat, mountain, palm tree.<br>
-          <i>"At noon I rested under a tree, then at 4 the goat was fed, etc."</i>
-        </div>
-      </div>`,
-  },
 ];
 
 /* Puzzles built in Puzzle Studio (puzzles_studio.js, loaded before this file)
@@ -303,6 +290,28 @@ if (typeof STUDIO_PUZZLES !== 'undefined') {
       given:   sp.screens.filter(s => s.kind === 'given').map(s => studioScreenHTML(s, sp.board)).join(''),
       problem: sp.screens.filter(s => s.kind === 'problem').map(s => studioScreenHTML(s, sp.board)).join(''),
     });
+  }
+}
+/* Puzzle ideas (puzzle_ideas.js, from the Directory's "+ New puzzle"): an
+   idea for a puzzle that's already built is shown above it; any other idea
+   is listed as a puzzle of its own until its givens and problems are made.
+   A copy this browser saved in the last few minutes wins, since the site
+   takes a minute or two to catch up after a save. */
+const IDEAS_RECENT_KEY = 'puzzleIdeasSaved';
+function currentIdeas() {
+  try {
+    const j = JSON.parse(localStorage.getItem(IDEAS_RECENT_KEY) || 'null');
+    if (j && Date.now() - j.at < 10 * 60 * 1000) return j.list;
+  } catch (e) { /* no storage: use the file */ }
+  return typeof PUZZLE_IDEAS !== 'undefined' ? PUZZLE_IDEAS : [];
+}
+for (const idea of currentIdeas()) {
+  const p = PUZZLES.find(q => +q.num === +idea.num);
+  if (p) {
+    p.idea = idea.idea || '';
+    if (idea.title && (!p.name || p.name === '؟؟؟')) p.name = idea.title;
+  } else {
+    PUZZLES.push({ num: String(idea.num), name: idea.title || '؟؟؟', loc: '', idea: idea.idea || '', ideaOnly: true, given: '', problem: '' });
   }
 }
 // One list in puzzle-number order, whichever page each puzzle was made in
