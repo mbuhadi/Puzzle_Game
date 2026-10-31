@@ -33,5 +33,11 @@ const PUZZLE_IDEAS = [
   "title": "Lanterns",
   "idea": "3 lanterns\n\nthe glow in different patterns:\n\non/off\nconstant high\nconstant low\n\nthey can be deciphered. the player shouldn't immediately recognize the cipher",
   "added": 1793313195817
+ },
+ {
+  "num": 14,
+  "title": "Mecha Camel",
+  "idea": "Mechanical logic puzzle: \n\nPlace the objects in their correct places using only two logical rules. \n 4 immovable objects and 8 movables ones.",
+  "added": 1793471496635
  }
 ];
