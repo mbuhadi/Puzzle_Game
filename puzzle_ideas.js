@@ -45,5 +45,11 @@ const PUZZLE_IDEAS = [
   "title": "One correct order",
   "idea": "5 objects have to placed in order. order is implied through the patterns on them.",
   "added": 1793471870722
+ },
+ {
+  "num": 16,
+  "title": "Inspiration from a child",
+  "idea": "realistic drawing of a scene in the desert with different options(regular tree instead of palm tree, goat instead of camel etc..)\n\nchilds drawing containing the answer",
+  "added": 1793472369497
  }
 ];
