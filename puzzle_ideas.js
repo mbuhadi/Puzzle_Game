@@ -39,5 +39,11 @@ const PUZZLE_IDEAS = [
   "title": "Mecha Camel",
   "idea": "Mechanical logic puzzle: \n\nPlace the objects in their correct places using only two logical rules. \n 4 immovable objects and 8 movables ones.",
   "added": 1793471496635
+ },
+ {
+  "num": 15,
+  "title": "One correct order",
+  "idea": "5 objects have to placed in order. order is implied through the patterns on them.",
+  "added": 1793471870722
  }
 ];
