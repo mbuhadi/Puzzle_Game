@@ -51,5 +51,11 @@ const PUZZLE_IDEAS = [
   "title": "Inspiration from a child",
   "idea": "realistic drawing of a scene in the desert with different options(regular tree instead of palm tree, goat instead of camel etc..)\n\nchilds drawing containing the answer",
   "added": 1793472369497
+ },
+ {
+  "num": 17,
+  "title": "The symbols",
+  "idea": "Symbols implying where items should lie, drag n and drop in the correct places.",
+  "added": 1793473192644
  }
 ];
