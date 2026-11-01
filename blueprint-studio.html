@@ -609,7 +609,7 @@ function toData() {
     tiles: tiles.map(t => ({ id: t.id, pts: t.pts.map(p => [r2(p[0]), r2(p[1])]), start: !!t.start,
       chunk: t.chunk || '', label: t.label || '', opens: [...t.opens], cancels: [...t.cancels],
       ...(t.thumb ? { thumb: { dx: r2(t.thumb.dx * 1000) / 1000, dy: r2(t.thumb.dy * 1000) / 1000, zoom: r2(t.thumb.zoom) } } : {}) })),
-    bg: playBg, bgStyle, bgSize, bgSpeed, bgPixels, bgBands,
+    bg: playBg, bgStyle, bgSize, bgSpeed, bgPixels, bgBands, bgStart, bgStep,
     labels: labels.map(l => ({ id: l.id, pts: l.pts.map(p => [r2(p[0]), r2(p[1])]), en: l.en || '', ar: l.ar || '', size: l.size, belly: l.belly })),
     unlockers: unlockers.map(u => ({ id: u.id, design: u.design,
       combos: u.combos.map(c => ({ id: c.id, code: [...c.code], opens: [...c.opens], cancels: [...c.cancels] })) })),
@@ -634,6 +634,9 @@ function fromData(d) {
   bgSpeed = inRange(d.bgSpeed, BG_SLIDERS.bgSpeed, 1);
   bgPixels = inRange(d.bgPixels, BG_SLIDERS.bgPixels, SWIRL_CELLS_ACROSS);
   bgBands = Math.round(inRange(d.bgBands, BG_SLIDERS.bgBands, BAND_COUNT));
+  // blueprints from before the Start / Step sliders spread their bands from 50% up to 100%
+  bgStart = inRange(d.bgStart, BG_SLIDERS.bgStart, BAND_MIN * 100);
+  bgStep = inRange(d.bgStep, BG_SLIDERS.bgStep, (100 - bgStart) / (bgBands - 1));
   unlockers = (d.unlockers || []).map(u => ({ id: String(u.id), design: String(u.design || ''),
     combos: (u.combos || []).map(c => ({ id: String(c.id), code: (c.code || []).map(Number),
       opens: (c.opens || []).map(String).filter(id => ids.has(id)), cancels: (c.cancels || []).map(String).filter(id => ids.has(id)) })) }));
@@ -1508,14 +1511,22 @@ let bgStyle = 'spiral';
 // Size and speed of the background's shapes (1× = as first made) and how many
 // background pixels fit across the screen; saved with each blueprint
 let bgSize = 1, bgSpeed = 1, bgPixels = 120, bgBands = 2;
+// The bands' brightness: the darkest at bgStart % of the colour, each next one
+// bgStep % brighter (none brighter than 100%)
+let bgStart = 50, bgStep = 50;
 const BG_SLIDERS = {
   bgSize: { n: 'Size', min: .5, max: 2.5, step: .05, fmt: v => +v.toFixed(2) + '×' },
   bgSpeed: { n: 'Speed', min: 0, max: 4, step: .05, fmt: v => v ? +v.toFixed(2) + '×' : 'still' },
   bgPixels: { n: 'Pixels', min: 60, max: 240, step: 10, fmt: v => v + ' across' },
   bgBands: { n: 'Bands', min: 2, max: 8, step: 1, fmt: v => v + ' levels' },
+  bgStart: { n: 'Start', min: 0, max: 100, step: 1, fmt: v => v + '%' },
+  bgStep: { n: 'Step', min: 0, max: 50, step: .5, fmt: v => '+' + +v.toFixed(1) + '%' },
 };
+// Each band's brightness, as a fraction of the base colour
+const bandLevels = () => Array.from({ length: bgBands }, (_, n) => Math.min(100, bgStart + n * bgStep) / 100);
 const bgVals = { get bgSize() { return bgSize; }, set bgSize(v) { bgSize = v; }, get bgSpeed() { return bgSpeed; }, set bgSpeed(v) { bgSpeed = v; },
-  get bgPixels() { return bgPixels; }, set bgPixels(v) { bgPixels = v; }, get bgBands() { return bgBands; }, set bgBands(v) { bgBands = v; } };
+  get bgPixels() { return bgPixels; }, set bgPixels(v) { bgPixels = v; }, get bgBands() { return bgBands; }, set bgBands(v) { bgBands = v; },
+  get bgStart() { return bgStart; }, set bgStart(v) { bgStart = v; }, get bgStep() { return bgStep; }, set bgStep(v) { bgStep = v; } };
 function renderBgSliders() {
   const el = document.getElementById('bgSliders');
   el.innerHTML = '';
@@ -1526,14 +1537,22 @@ function renderBgSliders() {
     const inp = document.createElement('input'); inp.type = 'range'; inp.min = sl.min; inp.max = sl.max; inp.step = sl.step; inp.value = bgVals[k];
     inp.style.flex = '1'; inp.style.minWidth = '0';
     const val = document.createElement('span'); val.className = 'hint'; val.style.width = '62px'; val.textContent = sl.fmt(bgVals[k]);
-    inp.oninput = () => { bgVals[k] = +inp.value; val.textContent = sl.fmt(+inp.value); render(); };
+    inp.oninput = () => { bgVals[k] = +inp.value; val.textContent = sl.fmt(+inp.value); showLevels(); render(); };
     inp.onchange = () => { pushHistory(); document.getElementById('mapNameLbl').textContent = bpName + (isDirty() ? ' •' : ''); };
     row.append(nm, inp, val);
     el.appendChild(row);
   }
+  // the bands these settings give, darkest first
+  const lv = document.createElement('div'); lv.className = 'hint';
+  const showLevels = () => {
+    const raw = Array.from({ length: bgBands }, (_, n) => bgStart + n * bgStep);
+    lv.textContent = 'Bands: ' + raw.map(v => +Math.min(100, v).toFixed(1) + '%').join(' · ') + (raw.some(v => v > 100) ? ' (capped at 100%)' : '');
+  };
+  showLevels();
+  el.appendChild(lv);
   const reset = document.createElement('button');
   reset.textContent = 'Reset to defaults'; reset.style.alignSelf = 'flex-start';
-  reset.onclick = () => { bgSize = 1; bgSpeed = 1; bgPixels = SWIRL_CELLS_ACROSS; bgBands = BAND_COUNT; pushHistory(); renderBgSliders();
+  reset.onclick = () => { bgSize = 1; bgSpeed = 1; bgPixels = SWIRL_CELLS_ACROSS; bgBands = BAND_COUNT; bgStart = BAND_MIN * 100; bgStep = 50; pushHistory(); renderBgSliders();
     document.getElementById('mapNameLbl').textContent = bpName + (isDirty() ? ' •' : ''); render(); };
   el.appendChild(reset);
 }
@@ -1574,8 +1593,8 @@ function bgTime(now) {
   bgClock.at = now;
   return bgClock.t;
 }
-// The background's brightness bands (bgBands of them, BAND_COUNT by default)
-// are spread evenly from BAND_MIN to 100% of the base colour
+// The background's brightness bands by default: BAND_COUNT of them, from
+// BAND_MIN of the base colour (see bgStart / bgStep for the chosen ones)
 const BAND_COUNT = 2, BAND_MIN = .5;
 // How many background pixels fit across the screen by default (bgPixels)
 const SWIRL_CELLS_ACROSS = 120;
@@ -1913,10 +1932,10 @@ function swirlRows(y0, y1, w, h, t, field) {
 }
 function swirlPaint(w, h, g) {
   const base = bgNow(), hi = base.map(v => v + (255 - v) * .4), d = swirl.data.data;
-  // band n of bgBands is evenly spaced from BAND_MIN to 100% of the base colour's brightness
+  // band n is bandLevels()[n] of the base colour's brightness
   const lut = [];
-  for (let n = 0; n < bgBands; n++) {
-    const f = BAND_MIN + n * (1 - BAND_MIN) / (bgBands - 1), c = base.map(v => v * f);
+  for (const f of bandLevels()) {
+    const c = base.map(v => v * f);
     lut.push(c, c.map((v, k) => v + (hi[k] - v) * .6));
   }
   for (let j = 0, i = 0; j < w * h; j++) {
@@ -1938,7 +1957,7 @@ function drawSwirl(W, H, now) {
     swirl.row = h; swirl.last = now;
     swirl.key = '';
   }
-  const key = playBg + '|' + look;
+  const key = [playBg, bgStart, bgStep].join(',') + '|' + look;
   if (swirl.key !== key) { swirl.key = key; swirlPaint(w, h, g); }   // new colour: just repaint
   if (swirl.row >= h && now - swirl.last >= SWIRL_EVERY_MS) { swirl.row = 0; swirl.last = now; swirl.t = T; }
   if (swirl.row < h) {
