@@ -82,6 +82,20 @@
   #ideaForm button.danger{color:var(--red); margin-right:auto;}
   #ideaForm button:disabled{opacity:.5; cursor:default;}
   #ideaMsg{font:12px sans-serif; color:var(--muted); min-height:16px;}
+  /* ── Pictures dropped onto chunks ── */
+  .chunk-pics{display:flex; flex-direction:column; gap:12px; margin:12px 0;}
+  .chunk-pics .pic{position:relative; width:fit-content; max-width:100%;}
+  .chunk-pics img{display:block; max-width:100%; border-radius:6px;}
+  .pic-tools{position:absolute; top:6px; right:6px; display:none; gap:4px;}
+  .pic:hover .pic-tools{display:flex;}
+  .pic-tools button{font:13px sans-serif; width:28px; height:28px; border-radius:6px; cursor:pointer;
+    border:1px solid var(--line); background:rgba(18,17,15,.85); color:var(--ink);}
+  .pic-tools button:hover{border-color:var(--gold); color:var(--gold);}
+  .pic-tools button:disabled{opacity:.35; cursor:default;}
+  .chunk.drop-over{outline:2px dashed var(--gold); outline-offset:6px; border-radius:6px;}
+  .drop-hint{font:11px sans-serif; color:var(--dim); margin:4px 0 0;}
+  #picStatus{position:fixed; left:50%; bottom:70px; transform:translateX(-50%); z-index:400; display:none;
+    background:var(--panel); border:1px solid var(--gold); color:var(--ink); border-radius:8px; padding:9px 16px; font:13px sans-serif;}
 
   /* ── Hamburger button (mobile only) ── */
   #menuBtn{
@@ -388,6 +402,7 @@
 
 <script src="puzzles_studio.js"></script>
 <script src="puzzle_ideas.js"></script>
+<script src="puzzle_pictures.js"></script>
 <script src="puzzles_curated_data.js"></script>
 <script src="assets/custom_tiles.js"></script>
 <script src="thumb_runtime.js"></script>
@@ -1685,6 +1700,8 @@ const CHUNK_PARAM = new URLSearchParams(location.search).get('chunk');
 // own puzzle picker.
 let sndSelectPuzzleHook = null;
 let lastSelectedPuzzleNum = null;
+let currentPuzzleIndex = 0;
+const PICS_RECENT_KEY = 'puzzlePicturesSaved';   // see "Pictures" below; needed before the page is drawn
 
 /* ── Directory: search + status filter over every puzzle ──
    A puzzle matches when every word of the search appears in its name,
@@ -1772,6 +1789,14 @@ function select(i){
     ${(p.problem||'').trim()?`<div class="section"><h2>THE PROBLEM</h2>${p.problem}</div>`:''}`;
   const ideaBody=detail.querySelector('.design-note-body');
   if(ideaBody) ideaBody.textContent=p.idea;
+  detail.querySelectorAll('.chunk').forEach(ch=>{
+    const id=ch.querySelector('.clabel')?.textContent.trim();
+    if(!id) return;
+    appendPictures(ch,id,true);
+    const hint=document.createElement('div'); hint.className='drop-hint'; hint.textContent='Drop pictures here to add them to '+id;
+    ch.appendChild(hint);
+  });
+  currentPuzzleIndex=i;
   detail.querySelectorAll('.idea-edit').forEach(b=>b.onclick=()=>openIdeaForm(p));
   // Status tags: on the title, and after every chunk label
   const ptags=makeTagRow('puzzle:'+p.num,PUZZLE_TAGS);
@@ -1854,6 +1879,7 @@ if (!CHUNK_PARAM) {
     detail.style.width   = '100%';
     detail.style.maxWidth = '900px';
     detail.innerHTML = chunkHTML;
+    appendPictures(detail, CHUNK_PARAM, false);
 
     if (builderKey && BUILDERS[builderKey]) {
       try { BUILDERS[builderKey](); } catch(e) {}
@@ -2061,6 +2087,163 @@ if(!CHUNK_PARAM){
   document.getElementById('ideaForm').onsubmit=e=>{ e.preventDefault(); saveIdea(false); };
   document.getElementById('ideaOverlay').addEventListener('click',e=>{ if(e.target.id==='ideaOverlay') closeIdeaForm(); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&document.getElementById('ideaOverlay').classList.contains('open')) closeIdeaForm(); });
+}
+
+/* ── Pictures: drag and drop onto a chunk ──
+   Dropped pictures are shrunk to at most PIC_MAX px on their longer side,
+   saved as WebP into puzzle_images/ (named after their chunk) and listed per
+   chunk in puzzle_pictures.js — both through the GitHub API with the same
+   token as the rest of the Directory. They show after the chunk's own
+   content, here and in the game. A copy of the list this browser saved in
+   the last few minutes wins (the site takes a minute or two to catch up),
+   and a picture the site doesn't have yet loads from GitHub directly. */
+const PICS_FILE='puzzle_pictures.js', PIC_DIR='puzzle_images', PIC_MAX=1600;
+const PICS_HEADER=`/* Pictures dropped onto puzzle chunks in the Puzzle Directory — rewritten by
+   the Directory (via the GitHub API), so don't hand-edit it. Maps a chunk id
+   (p11g1…) to its pictures, in order; the image files are in puzzle_images/. */
+`;
+const repoApi=path=>`https://api.github.com/repos/mbuhadi/Puzzle_Game/contents/${path}`;
+function currentPictures(){
+  try{
+    const j=JSON.parse(localStorage.getItem(PICS_RECENT_KEY)||'null');
+    if(j&&Date.now()-j.at<10*60*1000) return j.map;
+  }catch(e){}
+  return typeof PUZZLE_PICTURES!=='undefined'?PUZZLE_PICTURES:{};
+}
+function appendPictures(container,id,editable){
+  const pics=currentPictures()[id]||[];
+  if(!pics.length) return;
+  const box=document.createElement('div'); box.className='chunk-pics';
+  pics.forEach((pic,k)=>{
+    const wrap=document.createElement('div'); wrap.className='pic';
+    const img=document.createElement('img'); img.alt=''; img.src=pic.src;
+    if(pic.w) img.style.width=Math.min(pic.w,900)+'px';
+    img.onerror=()=>{ if(!img.dataset.raw){ img.dataset.raw=1; img.src='https://raw.githubusercontent.com/mbuhadi/Puzzle_Game/main/'+pic.src; } };
+    img.onload=()=>window.fitChunkToViewport?.();   // in the game, refit the tile round the picture
+    wrap.appendChild(img);
+    if(editable){
+      const tools=document.createElement('div'); tools.className='pic-tools';
+      const btn=(t,title,fn,off)=>{ const b=document.createElement('button'); b.type='button'; b.textContent=t; b.title=title; b.disabled=!!off; b.onclick=fn; tools.appendChild(b); };
+      btn('↑','Move up',()=>movePicture(id,k,-1),k===0);
+      btn('↓','Move down',()=>movePicture(id,k,1),k===pics.length-1);
+      btn('✕','Remove this picture',()=>removePicture(id,k));
+      wrap.appendChild(tools);
+    }
+    box.appendChild(wrap);
+  });
+  container.appendChild(box);
+}
+function picStatus(msg,ms){
+  let el=document.getElementById('picStatus');
+  if(!el){ el=document.createElement('div'); el.id='picStatus'; document.body.appendChild(el); }
+  el.textContent=msg; el.style.display=msg?'block':'none';
+  clearTimeout(picStatus._t); if(ms) picStatus._t=setTimeout(()=>{ el.style.display='none'; },ms);
+}
+function needToken(){
+  if(ghToken()) return true;
+  const t=(prompt('Saving writes to the website (GitHub repo).\nPaste your GitHub token — the same one Map Studio → My Maps uses:')||'').trim();
+  if(!t) return false;
+  try{ localStorage.setItem('ghToken',t); }catch(e){}
+  return true;
+}
+async function readPicturesFile(){
+  const r=await fetch(repoApi(PICS_FILE)+'?ref=main',{headers:ghHeaders(),cache:'no-store'});
+  if(r.status===404) return {map:{},sha:null};
+  if(!r.ok) throw await ghFail(r);
+  const j=await r.json();
+  const text=decodeURIComponent(escape(atob(j.content.replace(/\s/g,''))));
+  const m=text.match(/const PUZZLE_PICTURES = ([\s\S]*);\s*$/);
+  return {map:m?JSON.parse(m[1]):{},sha:j.sha};
+}
+// Read the list, change it, write it back, and show the result
+async function changePictures(message,change){
+  const {map,sha}=await readPicturesFile();
+  change(map);
+  for(const k of Object.keys(map)) if(!map[k].length) delete map[k];
+  const sorted=Object.fromEntries(Object.keys(map).sort().map(k=>[k,map[k]]));
+  const text=PICS_HEADER+'const PUZZLE_PICTURES = '+JSON.stringify(sorted,null,1)+';\n';
+  const body={message,branch:'main',content:btoa(unescape(encodeURIComponent(text)))};
+  if(sha) body.sha=sha;
+  const w=await fetch(repoApi(PICS_FILE),{method:'PUT',headers:ghHeaders(),body:JSON.stringify(body)});
+  if(!w.ok) throw await ghFail(w);
+  try{ localStorage.setItem(PICS_RECENT_KEY,JSON.stringify({at:Date.now(),map:sorted})); }catch(e){}
+  select(currentPuzzleIndex);
+}
+// A picture as WebP, no bigger than PIC_MAX on its longer side (GIFs are kept as they are, so they still move)
+async function preparePicture(file){
+  if(file.type==='image/gif') return {blob:file,ext:'gif',w:0,h:0};
+  const bmp=await createImageBitmap(file);
+  const k=Math.min(1,PIC_MAX/Math.max(bmp.width,bmp.height)), w=Math.round(bmp.width*k), h=Math.round(bmp.height*k);
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  const g=c.getContext('2d'); g.imageSmoothingQuality='high'; g.drawImage(bmp,0,0,w,h);
+  const blob=await new Promise(res=>c.toBlob(res,'image/webp',.85));
+  return {blob,ext:'webp',w,h};
+}
+const blobBase64=blob=>new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(blob); });
+let picBusy=false;
+async function uploadPictures(id,files){
+  if(picBusy) return picStatus('Still saving the last change…',2500);
+  if(!files.length) return picStatus('Only pictures can be dropped here.',3000);
+  if(!needToken()) return;
+  picBusy=true;
+  try{
+    const added=[];
+    for(const [n,file] of files.entries()){
+      picStatus(`Uploading picture ${n+1} of ${files.length} to ${id}…`);
+      const {blob,ext,w,h}=await preparePicture(file);
+      const src=`${PIC_DIR}/${id}-${Date.now()}${n}.${ext}`;
+      const r=await fetch(repoApi(src),{method:'PUT',headers:ghHeaders(),
+        body:JSON.stringify({message:`Add picture to ${id}`,branch:'main',content:await blobBase64(blob)})});
+      if(!r.ok) throw await ghFail(r);
+      added.push({src,...(w?{w,h}:{})});
+    }
+    picStatus('Saving…');
+    await changePictures(`Add ${added.length} picture${added.length>1?'s':''} to ${id}`,map=>{ map[id]=[...(map[id]||[]),...added]; });
+    picStatus(`Added to ${id} ✓ — live on the site in a minute or two`,4000);
+  }catch(e){
+    if(/bad credentials/i.test(e.message)){ try{ localStorage.removeItem('ghToken'); }catch(_){} }
+    picStatus('Couldn\'t save: '+e.message,6000);
+  }finally{ picBusy=false; }
+}
+async function movePicture(id,k,d){
+  if(picBusy||!needToken()) return;
+  picBusy=true; picStatus('Saving…');
+  try{
+    await changePictures(`Reorder pictures in ${id}`,map=>{ const a=map[id]||[]; if(a[k]&&a[k+d]) [a[k],a[k+d]]=[a[k+d],a[k]]; });
+    picStatus('Saved ✓',2000);
+  }catch(e){ picStatus('Couldn\'t save: '+e.message,6000); }finally{ picBusy=false; }
+}
+async function removePicture(id,k){
+  const pic=(currentPictures()[id]||[])[k];
+  if(!pic||picBusy||!confirm('Remove this picture from '+id+'?')||!needToken()) return;
+  picBusy=true; picStatus('Removing…');
+  try{
+    await changePictures(`Remove a picture from ${id}`,map=>{ map[id]=(map[id]||[]).filter(p=>p.src!==pic.src); });
+    // and delete the file itself, so puzzle_images/ only holds pictures in use
+    const r=await fetch(repoApi(pic.src)+'?ref=main',{headers:ghHeaders(),cache:'no-store'});
+    if(r.ok){
+      const sha=(await r.json()).sha;
+      await fetch(repoApi(pic.src),{method:'DELETE',headers:ghHeaders(),body:JSON.stringify({message:`Delete picture ${pic.src}`,branch:'main',sha})});
+    }
+    picStatus('Removed ✓',2500);
+  }catch(e){ picStatus('Couldn\'t save: '+e.message,6000); }finally{ picBusy=false; }
+}
+if(!CHUNK_PARAM){
+  // Dragging pictures over a chunk outlines it; dropping adds them to it
+  let overChunk=null;
+  const chunkAt=e=>e.target.closest&&e.target.closest('#detail .chunk');
+  const setOver=ch=>{ if(overChunk!==ch){ overChunk?.classList.remove('drop-over'); overChunk=ch; ch?.classList.add('drop-over'); } };
+  const hasFiles=e=>[...(e.dataTransfer?.types||[])].includes('Files');
+  document.addEventListener('dragover',e=>{ if(!hasFiles(e)) return; e.preventDefault(); const ch=chunkAt(e); e.dataTransfer.dropEffect=ch?'copy':'none'; setOver(ch); });
+  document.addEventListener('dragleave',e=>{ if(!e.relatedTarget) setOver(null); });
+  document.addEventListener('drop',e=>{
+    if(!hasFiles(e)) return;
+    e.preventDefault();
+    const ch=chunkAt(e); setOver(null);
+    if(!ch){ picStatus(detail.querySelector('.chunk')?'Drop the picture onto one of the puzzle\'s givens or problems.':'This puzzle has no givens or problems yet to add pictures to.',3500); return; }
+    const id=ch.querySelector('.clabel')?.textContent.trim();
+    if(id) uploadPictures(id,[...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')));
+  });
 }
 
 /* ── Hamburger menu ── */
