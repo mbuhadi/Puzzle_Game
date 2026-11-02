@@ -31,7 +31,7 @@ const PUZZLE_IDEAS = [
  {
   "num": 13,
   "title": "Lanterns",
-  "idea": "3 lanterns\n\nthe glow in different patterns:\n\non/off\nconstant high\nconstant low\n\nthey can be deciphered. the player shouldn't immediately recognize the cipher",
+  "idea": "Answer: STAR\n\nAssets\n\nTwo lantern objects in the scene, placed east and west. Each needs three glow levels: off, dim, and bright.\nA 3×9 letter grid the player can find in the scene (wall carving, tile, carpet, scroll, etc.).\nOptional inscription.\n\nLantern behavior\n\nEast lantern has 3 states, which select the grid row: constant dim (row 1), constant bright (row 2), or fast flashing (row 3). It holds its state for the whole letter.\nWest lantern only flickers. The number of flickers selects the grid column (1–9).\nBetween letters: both lanterns go dark for about 2 seconds.\nAfter the full word: both lanterns go dark for about 6 seconds, then the sequence loops forever.\nSuggested timing: west flicker is 0.4s on / 0.4s off, slow enough to count. East flashing is fast (about 0.15s) so it reads as a state, not something to count.\n\nSequence\n\n#\tLetter\tEast lantern\tWest flickers\n1\tS\tConstant bright\t6\n2\tT\tConstant dim\t2\n3\tA\tFlashing\t5\n4\tR\tConstant dim\t9\n\nGrid (row labels should be lantern icons: dim, bright, flashing, not words)\n\n\t1\t2\t3\t4\t5\t6\t7\t8\t9\nDim\tG\tT\tQ\tM\tL\tW\tE\tX\tR\nBright\tK\tN\tI\tZ\tB\tS\tF\tU\tO\nFlashing\tH\tV\tY\tD\tA\tC\tP\tJ\t🌴\n\nInscription (optional hint)\n\nThe eastern flame tells you how it burns. The western flame tells you how far to walk.\n\nSolve condition: the player enters STAR.",
   "added": 1793313195817
  },
  {
