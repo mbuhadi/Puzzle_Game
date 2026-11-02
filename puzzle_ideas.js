@@ -25,7 +25,7 @@ const PUZZLE_IDEAS = [
  {
   "num": 12,
   "title": "The logic of the unruly female camel",
-  "idea": "Something like this: \nthere should be an 8x8 grid: an tokens of a box a camel a palm tree and a tent. \n\nThe tent should be 2 steps away from the camel the camel can't be at the left side of the box etc ... \n\nleaving only one possibility at the end which will be the answer",
+  "idea": "The Caravan Courtyard\n\nRules:\n\nThe well sits in one of the four center squares.\nAt noon, the palm’s shadow falls on the well.\nThe tent stands against the north wall, in the same column as the well.\nThe camel is tied to the west wall, in the same row as the well, exactly three steps from it.\nThe camel is never tied in the southern half of the courtyard, where the sun beats hardest.\nThe evening wind blows from the west, so the fire pit must sit east of the tent, on the same wall.\nThe fire pit can’t touch any other object, not even diagonally.\n\nSolution: Well D3 · Palm D4 · Tent D1 · Camel A3 · Fire F1 (same as before)",
   "added": 1793312876695
  },
  {
