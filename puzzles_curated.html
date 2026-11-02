@@ -421,7 +421,7 @@ const TREE_CORRECT=['عيسى','فيصل','عبدالعزيز','عبدالرحم
 function buildFamilyTree(){
   const stage=document.getElementById('treeStage'); if(!stage)return;
   const bgImg=document.createElement('img');
-  bgImg.src='tree_bg.png';
+  bgImg.src='puzzle_images/p1-tree-bg.png';
   bgImg.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.3;border-radius:10px;z-index:0;pointer-events:none;';
   stage.appendChild(bgImg);
   const treeLbl=document.createElement('div');
@@ -502,7 +502,7 @@ function buildSlidingWindow(){
   g.imageSmoothingQuality='high';
   const FR=22, gx=FR, gy=FR, gw=W-2*FR, gh=H-2*FR;   // glass area inside the wooden frame
 
-  // Where the gap in the "6 29" house number sits in villa_bg.png, as
+  // Where the gap in the "6 29" house number sits in puzzle_images/p2-villa-bg.png, as
   // fractions of the picture — a same-layout replacement image stays aligned.
   const GAP_X=0.3053, GAP_Y=0.8370, DIGIT_H=0.048;
 
@@ -523,7 +523,7 @@ function buildSlidingWindow(){
 
   const bg=new Image();
   bg.onload=()=>draw();
-  bg.src='villa_bg.png';
+  bg.src='puzzle_images/p2-villa-bg.png';
 
   function drawScene(){
     if(bg.complete&&bg.naturalWidth>0) g.drawImage(bg,gx,gy,gw,gh);
@@ -1318,7 +1318,7 @@ function buildPuzzleSix() {
     }
   }
 
-  const P6_IMGS = [1,2,3,4,5,6].map(i => { const img = new Image(); img.src = `${i}.png`; return img; });
+  const P6_IMGS = [1,2,3,4,5,6].map(i => { const img = new Image(); img.src = `puzzle_images/p6-${i}.png`; return img; });
 
   let input = [], solved = false, wrong = false, wrongTimer = 0;
 
@@ -1579,13 +1579,13 @@ function makeTagRow(scopeKey,defs,extraClass){
 /* ───────────────── Puzzle Eight: two 3×1 columns of cycling tiles ───────────────── */
 const P8_TILE_IMG=(src,alt)=>`<img src="${src}" alt="${alt}" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:5px;filter:grayscale(1);">`;
 const P8_IMG_STYLE='width:135px;height:auto;display:block;border-radius:8px;';
-const P8_BRICK=`<img src="brick.png" alt="Brick" style="${P8_IMG_STYLE}">`;
+const P8_BRICK=`<img src="puzzle_images/p8-brick.png" alt="Brick" style="${P8_IMG_STYLE}">`;
 const P8_STATES=[
-  P8_TILE_IMG('grass.png','Grass'),
-  P8_TILE_IMG('tire.png','Tire'),
-  P8_TILE_IMG('drop%20of%20water.png','Water drop'),
-  P8_TILE_IMG('single%20tree.png','Tree'),
-  P8_TILE_IMG('flower.png','Flower'),
+  P8_TILE_IMG('puzzle_images/p8-grass.png','Grass'),
+  P8_TILE_IMG('puzzle_images/p8-tire.png','Tire'),
+  P8_TILE_IMG('puzzle_images/p8-drop-of-water.png','Water drop'),
+  P8_TILE_IMG('puzzle_images/p8-single-tree.png','Tree'),
+  P8_TILE_IMG('puzzle_images/p8-flower.png','Flower'),
 ];
 
 function P8_makeCell(){

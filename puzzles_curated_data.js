@@ -104,13 +104,13 @@ const PUZZLES = [
         </div>
       </div>
       <div class="chunk"><span class="clabel">p3g2</span>
-        <div class="wardrobe-wrap"><img src="wardrobe%201.png" alt="Wardrobe 1"></div>
+        <div class="wardrobe-wrap"><img src="puzzle_images/p3-wardrobe-1.png" alt="Wardrobe 1"></div>
       </div>
       <div class="chunk"><span class="clabel">p3g3</span>
-        <div class="wardrobe-wrap"><img src="wardrobe%202.png" alt="Wardrobe 2"></div>
+        <div class="wardrobe-wrap"><img src="puzzle_images/p3-wardrobe-2.png" alt="Wardrobe 2"></div>
       </div>
       <div class="chunk"><span class="clabel">p3g4</span>
-        <div class="wardrobe-wrap"><img src="wardrobe%203.png" alt="Wardrobe 3"></div>
+        <div class="wardrobe-wrap"><img src="puzzle_images/p3-wardrobe-3.png" alt="Wardrobe 3"></div>
       </div>
       <div class="chunk"><span class="clabel">p3g5</span>
         ${TV_HTML}
@@ -186,7 +186,7 @@ const PUZZLES = [
         </div>
       </div>
       <div class="chunk"><span class="clabel">p5g2</span>
-        <div class="wardrobe-wrap"><img src="puzzle5img.png" alt="Puzzle 5"></div>
+        <div class="wardrobe-wrap"><img src="puzzle_images/p5-image.png" alt="Puzzle 5"></div>
       </div>`,
     problem:`<div class="chunk"><span class="clabel">p5p1</span>
         <p class="arabic" style="font-size:22px; line-height:2;">خيال الاطفال هو مفتاح الثروة</p>
