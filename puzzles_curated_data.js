@@ -333,6 +333,29 @@ for (const idea of currentIdeas()) {
     PUZZLES.push({ num: String(idea.num), name: idea.title || '؟؟؟', loc: '', idea: idea.idea || '', ideaOnly: true, given: '', problem: '' });
   }
 }
+/* Givens and problems added in the Puzzle Directory (puzzle_chunks.js): each
+   is a text chunk after the puzzle's own ones (its pictures come from
+   puzzle_pictures.js). A puzzle that was only an idea becomes a built one.
+   As with ideas, a copy this browser saved in the last few minutes wins. */
+const ADDED_CHUNKS_RECENT_KEY = 'puzzleChunksSaved';
+function currentAddedChunks() {
+  try {
+    const j = JSON.parse(localStorage.getItem(ADDED_CHUNKS_RECENT_KEY) || 'null');
+    if (j && Date.now() - j.at < 10 * 60 * 1000) return j.map;
+  } catch (e) { /* no storage: use the file */ }
+  return typeof PUZZLE_ADDED_CHUNKS !== 'undefined' ? PUZZLE_ADDED_CHUNKS : {};
+}
+const escapeHTML = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+for (const [num, chunks] of Object.entries(currentAddedChunks())) {
+  let p = PUZZLES.find(q => +q.num === +num);
+  if (!p) PUZZLES.push(p = { num: String(num), name: '؟؟؟', loc: '', given: '', problem: '' });
+  p.ideaOnly = false;
+  for (const c of chunks) {
+    p[c.kind === 'problem' ? 'problem' : 'given'] +=
+      `<div class="chunk" data-added="1"><span class="clabel">${escapeHTML(c.id)}</span>` +
+      `<div class="clue" style="font-family:sans-serif; white-space:pre-wrap;">${escapeHTML(c.text || '')}</div></div>`;
+  }
+}
 // One list in puzzle-number order, whichever page each puzzle was made in
 PUZZLES.sort((a, b) => (+a.num || 0) - (+b.num || 0));
 

@@ -92,6 +92,15 @@
     border:1px solid var(--line); background:rgba(18,17,15,.85); color:var(--ink);}
   .pic-tools button:hover{border-color:var(--gold); color:var(--gold);}
   .pic-tools button:disabled{opacity:.35; cursor:default;}
+  .add-chunk{font:13px 'Cinzel',serif; letter-spacing:1px; padding:7px 14px; border-radius:6px; cursor:pointer; margin:8px 0 4px;
+    border:1px dashed var(--gold); color:var(--gold); background:transparent;}
+  .add-chunk:hover{background:#221e14;}
+  .add-chunk:disabled{opacity:.5; cursor:default;}
+  .chunk-edit textarea{width:100%; min-height:120px; background:#0d0c0a; border:1px solid var(--gold); border-radius:8px; color:var(--ink);
+    padding:12px 14px; font:16px/1.6 sans-serif; outline:none; unicode-bidi:plaintext;}
+  .chunk-edit .row{display:flex; gap:8px; margin-top:6px;}
+  .chunk-edit button{font:13px sans-serif; padding:6px 14px; border-radius:6px; cursor:pointer; border:1px solid var(--line); background:#1e1b14; color:var(--ink);}
+  .chunk-edit button.primary{border-color:var(--gold); color:var(--gold);}
   .chunk.drop-over{outline:2px dashed var(--gold); outline-offset:6px; border-radius:6px;}
   .drop-hint{font:11px sans-serif; color:var(--dim); margin:4px 0 0;}
   #picStatus{position:fixed; left:50%; bottom:70px; transform:translateX(-50%); z-index:400; display:none;
@@ -402,6 +411,7 @@
 
 <script src="puzzles_studio.js"></script>
 <script src="puzzle_ideas.js"></script>
+<script src="puzzle_chunks.js"></script>
 <script src="puzzle_pictures.js"></script>
 <script src="puzzles_curated_data.js"></script>
 <script src="assets/custom_tiles.js"></script>
@@ -1785,8 +1795,9 @@ function select(i){
     <div class="title-row"><div class="ptitle">${p.name}</div><button type="button" class="idea-edit title-edit" title="Edit this puzzle's title and idea">Edit</button></div>
     <div class="pkicker">${p.loc.toUpperCase()}</div>
     ${(p.idea||'').trim()?`<div class="section"><h2>THE IDEA</h2><div class="design-note"><div class="design-note-title">Puzzle idea <button type="button" class="idea-edit">Edit</button></div><div class="design-note-body" dir="auto"></div></div>${p.ideaOnly?'<div class="idea-only">The givens and problems for this puzzle haven\'t been made yet.</div>':''}</div>`:''}
-    ${(p.given||'').trim()?`<div class="section"><h2>THE GIVEN</h2>${p.given}</div>`:''}
-    ${(p.problem||'').trim()?`<div class="section"><h2>THE PROBLEM</h2>${p.problem}</div>`:''}`;
+    <div class="section"><h2>THE GIVEN</h2>${p.given||''}<button type="button" class="add-chunk" data-kind="given">+ Add given</button></div>
+    <div class="section"><h2>THE PROBLEM</h2>${p.problem||''}<button type="button" class="add-chunk" data-kind="problem">+ Add problem</button></div>`;
+  detail.querySelectorAll('.add-chunk').forEach(b=>b.onclick=()=>addChunk(p,b.dataset.kind));
   const ideaBody=detail.querySelector('.design-note-body');
   if(ideaBody) ideaBody.textContent=p.idea;
   detail.querySelectorAll('.chunk').forEach(ch=>{
@@ -1812,6 +1823,13 @@ function select(i){
     const nodes=[];
     nodes.push(makeTagRow('chunk:'+id,CHUNK_TAGS,'chunk-tags'));
     nodes.push(makeThumbButton(id));
+    if(cl.closest('.chunk')?.dataset.added){   // added here: its text can be edited, and it can be deleted
+      const t=document.createElement('span'); t.className='tags chunk-tags';
+      for(const [label,fn] of [['Edit text',()=>editChunkText(p,id,cl.closest('.chunk'))],['Delete',()=>deleteChunk(p,id)]]){
+        const b=document.createElement('span'); b.className='tag'; b.textContent=label; b.onclick=e=>{ e.stopPropagation(); fn(); }; t.appendChild(b);
+      }
+      nodes.push(t);
+    }
     cl.after(...nodes);
   });
   // Interactive canvases (incl. any hidden in the solution) are drawn once here.
@@ -2243,6 +2261,92 @@ if(!CHUNK_PARAM){
     if(!ch){ picStatus(detail.querySelector('.chunk')?'Drop the picture onto one of the puzzle\'s givens or problems.':'This puzzle has no givens or problems yet to add pictures to.',3500); return; }
     const id=ch.querySelector('.clabel')?.textContent.trim();
     if(id) uploadPictures(id,[...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')));
+  });
+}
+
+/* ── Adding givens and problems ──
+   "+ Add given" / "+ Add problem" add a chunk with the next free label
+   (p11g5, p11p2…) holding placeholder text, plus a placeholder thumbnail.
+   Added chunks live in puzzle_chunks.js (PUZZLE_ADDED_CHUNKS), rewritten here
+   through the GitHub API; puzzles_curated_data.js merges them in, so every
+   page — map editor, Blueprint Studio, the game — sees them. Their text can
+   be edited, pictures dropped on them, and they can be deleted. */
+const CHUNKS_FILE='puzzle_chunks.js';
+const CHUNKS_HEADER=`/* Givens and problems added in the Puzzle Directory ("+ Add given" /
+   "+ Add problem") — rewritten by the Directory (via the GitHub API), so
+   don't hand-edit it. Maps a puzzle number to its added chunks, in order:
+   { id: 'p11g5', kind: 'given' | 'problem', text }. Their pictures are in
+   puzzle_pictures.js. */
+`;
+async function readChunksFile(){
+  const r=await fetch(repoApi(CHUNKS_FILE)+'?ref=main',{headers:ghHeaders(),cache:'no-store'});
+  if(r.status===404) return {map:{},sha:null};
+  if(!r.ok) throw await ghFail(r);
+  const j=await r.json();
+  const text=decodeURIComponent(escape(atob(j.content.replace(/\s/g,''))));
+  const m=text.match(/const PUZZLE_ADDED_CHUNKS = ([\s\S]*);\s*$/);
+  return {map:m?JSON.parse(m[1]):{},sha:j.sha};
+}
+// Read the list, change it, write it back; then reload so every list (sounds, tags…) picks it up
+async function changeChunks(message,change){
+  const {map,sha}=await readChunksFile();
+  change(map);
+  for(const k of Object.keys(map)) if(!map[k].length) delete map[k];
+  const sorted=Object.fromEntries(Object.keys(map).sort((a,b)=>a-b).map(k=>[k,map[k]]));
+  const text=CHUNKS_HEADER+'const PUZZLE_ADDED_CHUNKS = '+JSON.stringify(sorted,null,1)+';\n';
+  const body={message,branch:'main',content:btoa(unescape(encodeURIComponent(text)))};
+  if(sha) body.sha=sha;
+  const w=await fetch(repoApi(CHUNKS_FILE),{method:'PUT',headers:ghHeaders(),body:JSON.stringify(body)});
+  if(!w.ok) throw await ghFail(w);
+  try{ localStorage.setItem(ADDED_CHUNKS_RECENT_KEY,JSON.stringify({at:Date.now(),map:sorted})); }catch(e){}
+}
+let chunkBusy=false;
+async function chunkTask(working,done,task){
+  if(chunkBusy) return picStatus('Still saving the last change…',2500);
+  if(!needToken()) return;
+  chunkBusy=true; picStatus(working);
+  document.querySelectorAll('.add-chunk').forEach(b=>b.disabled=true);
+  try{ await task(); picStatus(done,4000); setTimeout(()=>location.reload(),600); }
+  catch(e){
+    if(/bad credentials/i.test(e.message)){ try{ localStorage.removeItem('ghToken'); }catch(_){} }
+    picStatus('Couldn\'t save: '+e.message,6000);
+    document.querySelectorAll('.add-chunk').forEach(b=>b.disabled=false);
+  }finally{ chunkBusy=false; }
+}
+function addChunk(p,kind){
+  chunkTask(`Adding a ${kind}…`,`Added ✓ — live on the site in a minute or two`,async()=>{
+    const {map}=await readChunksFile();
+    // the next free number for this kind, past every chunk the puzzle already has
+    const letter=kind==='problem'?'p':'g', re=new RegExp(`^p${p.num}${letter}(\\d+)$`);
+    const taken=[...PUZZLE_CHUNKS.filter(c=>c.puzzle===+p.num).map(c=>c.id),...(map[p.num]||[]).map(c=>c.id)]
+      .map(id=>+(id.match(re)||[])[1]||0);
+    const id=`p${p.num}${letter}${Math.max(0,...taken)+1}`;
+    await changeChunks(`Add ${kind} ${id}`,m=>{ (m[p.num]=m[p.num]||[]).push({id,kind,text:`This is a placeholder for ${id}`}); });
+    try{ await TH.save(id,{bg:'#3a3226',items:[],text:id}); }catch(e){ /* the chunk is what matters; a thumbnail can be added later */ }
+    location.hash='#'+p.num;
+  });
+}
+function editChunkText(p,id,chunkEl){
+  const clue=chunkEl.querySelector('.clue');
+  if(!clue||chunkEl.querySelector('.chunk-edit')) return;
+  const box=document.createElement('div'); box.className='chunk-edit';
+  box.innerHTML='<textarea dir="auto"></textarea><div class="row"><button type="button" class="primary">Save</button><button type="button">Cancel</button></div>';
+  const ta=box.querySelector('textarea'); ta.value=clue.textContent;
+  clue.replaceWith(box); ta.focus();
+  const [save,cancel]=box.querySelectorAll('button');
+  cancel.onclick=()=>box.replaceWith(clue);
+  save.onclick=()=>chunkTask('Saving…','Saved ✓',()=>changeChunks(`Edit ${id} text`,m=>{
+    const c=(m[p.num]||[]).find(c=>c.id===id); if(c) c.text=ta.value;
+  }));
+}
+function deleteChunk(p,id){
+  if((currentPictures()[id]||[]).length) return picStatus(`Remove ${id}'s pictures first.`,3500);
+  if(!confirm(`Delete ${id}? Anything using it (a blueprint tile, a map) will need a new one.`)) return;
+  chunkTask(`Deleting ${id}…`,'Deleted ✓',async()=>{
+    await changeChunks(`Delete ${id}`,m=>{ m[p.num]=(m[p.num]||[]).filter(c=>c.id!==id); });
+    // and its thumbnail, so thumbnails/ only holds ones in use
+    const path=`thumbnails/${id}.json`, r=await fetch(repoApi(path)+'?ref=main',{headers:ghHeaders(),cache:'no-store'});
+    if(r.ok) await fetch(repoApi(path),{method:'DELETE',headers:ghHeaders(),body:JSON.stringify({message:`Delete thumbnail ${id}`,branch:'main',sha:(await r.json()).sha})});
   });
 }
 
