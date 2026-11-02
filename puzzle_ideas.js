@@ -25,7 +25,7 @@ const PUZZLE_IDEAS = [
  {
   "num": 12,
   "title": "The logic of the unruly female camel",
-  "idea": "The Caravan Courtyard\n\nRules:\n\nThe well sits in one of the four center squares.\nAt noon, the palm’s shadow falls on the well.\nThe tent stands against the north wall, in the same column as the well.\nThe camel is tied to the west wall, in the same row as the well, exactly three steps from it.\nThe camel is never tied in the southern half of the courtyard, where the sun beats hardest.\nThe evening wind blows from the west, so the fire pit must sit east of the tent, on the same wall.\nThe fire pit can’t touch any other object, not even diagonally.\n\nSolution: Well D3 · Palm D4 · Tent D1 · Camel A3 · Fire F1 (same as before)",
+  "idea": "6x6 grid: \nColumns - A to F\nRows - 1 to 6\n\nRules:\nThe well sits in one of the four center squares.\nAt noon, the palm’s shadow falls on the well.\nThe tent stands against the north wall, in the same column as the well.\nThe camel is tied to the west wall, in the same row as the well, exactly three steps from it.\nThe camel is never tied in the southern half of the courtyard, where the sun beats hardest.\nThe evening wind blows from the west, so the fire pit must sit east of the tent, on the same wall.\nThe fire pit can’t touch any other object, not even diagonally.\n\nSolution: Well D3 · Palm D4 · Tent D1 · Camel A3 · Fire F1 (same as before)",
   "added": 1793312876695
  },
  {
