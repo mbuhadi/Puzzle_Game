@@ -13,7 +13,7 @@ const PUZZLE_IDEAS = [
  {
   "num": 10,
   "title": "The mountain The Goat and the palm tree",
-  "idea": "This puzzle will have a lock with 3 symbols, each with a dial around it from 0 to 24. There's also going to be a story that tells what each symbol should point to.\n\nExample symbols: goat, mountain, palm tree.\n\"At noon I rested under a tree, then at 4 the goat was fed, etc.\"",
+  "idea": "This puzzle will have a lock with 3 symbols, each with a dial around it from 0 to 24. There's also going to be a story that tells what each symbol should point to.\n\nFaris woke his camel five hours before the sun stood overhead.\n\nHe walked until the dunes lost their shadows and found an oasis of palms. He rested there three hours, then walked five more, and pitched his tent.\n\nRemember when he woke his camel, found the palm, and pitched his tent, and the desert will let you pass.",
   "added": 1793311985580
  },
  {
