@@ -37,7 +37,7 @@ const PUZZLE_IDEAS = [
  {
   "num": 14,
   "title": "Mecha Camel",
-  "idea": "Mechanical logic puzzle: \n\nPlace the objects in their correct places using only two logical rules. \n 4 immovable objects and 8 movables ones.",
+  "idea": "I made a mockup, pattern_tiles_concept.png, to check I’ve understood how the puzzle works. Each tile has a core symbol and an outline style. Any two tiles that touch (up, down, left or right, not diagonally) must share either the same core or the same outline.\n\nThe mockup shows a 3×4 board with 4 locked tiles and 8 loose ones. I ran a solver on this layout, and only one arrangement of the 8 loose tiles follows the rule.\n\nI’ve read “matching” as same-to-same: outline matches outline, core matches core. You might have meant crossover matches, where one tile’s core matches its neighbor’s outline. If so, tell me and I’ll rebuild it. Once you confirm, I can swap in desert-themed patterns, like geometric Arabic motifs for the cores and dune or tile borders for the outlines.",
   "added": 1793471496635
  },
  {
