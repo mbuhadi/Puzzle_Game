@@ -309,7 +309,11 @@ async function load() {
   if (!CHUNK) { flash('open this page with ?chunk=<id> (e.g. from the Puzzle Directory)', '#cc7070'); return; }
   flash('loading…', '#b8a06a');
   const e = await TH.load(CHUNK);
-  if (e && e.data) { doc = JSON.parse(JSON.stringify(e.data)); flash('loaded'); }
+  if (e && e.data) {
+    doc = JSON.parse(JSON.stringify(e.data));
+    delete doc.text;   // a placeholder's label goes once a real thumbnail is made here
+    flash('loaded');
+  }
   else flash('new thumbnail');
   for (const it of doc.items) whenLoaded(TH.source(it.pick).src);
   savedJSON = JSON.stringify(doc);

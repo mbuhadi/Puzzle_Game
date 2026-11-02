@@ -6,9 +6,11 @@
    same size: TH.W × TH.H pixels (TH.COLS × TH.ROWS cells of 16px).
 
    Saved as thumbnails/<chunk>.json:
-     { version: 1, bg: '#rrggbb', items: [ { pick, x, y, w, h } … ] }
+     { version: 1, bg: '#rrggbb', items: [ { pick, x, y, w, h } … ], text? }
    where pick is a tileset-picker pick (sheet / image / anim — animations use
-   their first frame) and x, y, w, h are in thumbnail pixels, back to front. */
+   their first frame) and x, y, w, h are in thumbnail pixels, back to front.
+   text (optional) is written across the middle — used by placeholder
+   thumbnails until a real one is made. */
 const TH = (() => {
   const CELL = 16, COLS = 16, ROWS = 12, W = COLS * CELL, H = ROWS * CELL;
   const GH = { owner: 'mbuhadi', repo: 'Puzzle_Game', branch: 'main', dir: 'thumbnails' };
@@ -46,6 +48,7 @@ const TH = (() => {
     return {
       version: 1,
       bg: /^#[0-9a-f]{6}$/i.test(d.bg || '') ? d.bg : '#2a2620',
+      ...(d.text ? { text: String(d.text) } : {}),
       items: (d.items || []).filter(it => it && it.pick && source(it.pick))
         .map(it => ({ pick: it.pick, x: +it.x || 0, y: +it.y || 0, w: +it.w || CELL, h: +it.h || CELL })),
     };
@@ -61,6 +64,11 @@ const TH = (() => {
     for (const it of d.items) {
       const s = source(it.pick), im = img(s.src);
       if (im.complete && im.naturalWidth) g.drawImage(im, s.x, s.y, s.w, s.h, it.x, it.y, it.w, it.h);
+    }
+    if (d.text) {
+      g.fillStyle = '#e8dfc8'; g.font = 'bold 30px monospace';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(d.text, W / 2, H / 2, W - 16);
     }
     g.restore();
   }

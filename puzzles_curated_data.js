@@ -256,6 +256,23 @@ const PUZZLES = [
         <div id="p8grid" style="margin:20px 0; width:fit-content;"></div>
       </div>`,
   },
+  {
+    num:'11', name:'؟؟؟', loc:'',
+    given:`
+      <div class="chunk"><span class="clabel">p11g1</span>
+        <div class="clue" style="font-family:sans-serif;">This is a placeholder for p11g1</div>
+      </div>
+      <div class="chunk"><span class="clabel">p11g2</span>
+        <div class="clue" style="font-family:sans-serif;">This is a placeholder for p11g2</div>
+      </div>
+      <div class="chunk"><span class="clabel">p11g3</span>
+        <div class="clue" style="font-family:sans-serif;">This is a placeholder for p11g3</div>
+      </div>
+      <div class="chunk"><span class="clabel">p11g4</span>
+        <div class="clue" style="font-family:sans-serif;">This is a placeholder for p11g4</div>
+      </div>
+    `,
+  },
 ];
 
 /* Puzzles built in Puzzle Studio (puzzles_studio.js, loaded before this file)
