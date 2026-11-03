@@ -101,6 +101,11 @@
   .chunk-edit .row{display:flex; gap:8px; margin-top:6px;}
   .chunk-edit button{font:13px sans-serif; padding:6px 14px; border-radius:6px; cursor:pointer; border:1px solid var(--line); background:#1e1b14; color:var(--ink);}
   .chunk-edit button.primary{border-color:var(--gold); color:var(--gold);}
+  .idea-pics{margin-top:14px; max-width:640px;}
+  .idea-pics h3{font-family:'Cinzel',serif; font-weight:400; font-size:13px; letter-spacing:2px; color:var(--gold); margin-bottom:6px;}
+  .idea-drop{border:1px dashed var(--line); border-radius:8px; padding:10px 14px; min-height:54px;}
+  .idea-drop .chunk-pics{margin:0 0 8px;}
+  .idea-drop.drop-over{outline:2px dashed var(--gold); outline-offset:4px;}
   .chunk.drop-over{outline:2px dashed var(--gold); outline-offset:6px; border-radius:6px;}
   .drop-hint{font:11px sans-serif; color:var(--dim); margin:4px 0 0;}
   #picStatus{position:fixed; left:50%; bottom:70px; transform:translateX(-50%); z-index:400; display:none;
@@ -1794,12 +1799,18 @@ function select(i){
     <div class="pnum">PUZZLE ${p.num}</div>
     <div class="title-row"><div class="ptitle">${p.name}</div><button type="button" class="idea-edit title-edit" title="Edit this puzzle's title and idea">Edit</button></div>
     <div class="pkicker">${p.loc.toUpperCase()}</div>
-    ${(p.idea||'').trim()?`<div class="section"><h2>THE IDEA</h2><div class="design-note"><div class="design-note-title">Puzzle idea <button type="button" class="idea-edit">Edit</button></div><div class="design-note-body" dir="auto"></div></div>${p.ideaOnly?'<div class="idea-only">The givens and problems for this puzzle haven\'t been made yet.</div>':''}</div>`:''}
+    ${(p.idea||'').trim()?`<div class="section"><h2>THE IDEA</h2><div class="design-note"><div class="design-note-title">Puzzle idea <button type="button" class="idea-edit">Edit</button></div><div class="design-note-body" dir="auto"></div></div><div class="idea-pics"><h3>PIC TO HELP WITH IDEA</h3><div class="idea-drop" data-picid="p${p.num}-idea"></div></div>${p.ideaOnly?'<div class="idea-only">The givens and problems for this puzzle haven\'t been made yet.</div>':''}</div>`:''}
     <div class="section"><h2>THE GIVEN</h2>${p.given||''}<button type="button" class="add-chunk" data-kind="given">+ Add given</button></div>
     <div class="section"><h2>THE PROBLEM</h2>${p.problem||''}<button type="button" class="add-chunk" data-kind="problem">+ Add problem</button></div>`;
   detail.querySelectorAll('.add-chunk').forEach(b=>b.onclick=()=>addChunk(p,b.dataset.kind));
   const ideaBody=detail.querySelector('.design-note-body');
   if(ideaBody) ideaBody.textContent=p.idea;
+  // pictures that help with the idea: dropped into the Idea section, kept under "p<N>-idea"
+  detail.querySelectorAll('.idea-drop').forEach(box=>{
+    appendPictures(box,box.dataset.picid,true);
+    const hint=document.createElement('div'); hint.className='drop-hint'; hint.textContent='Drop pictures here to help explain the idea';
+    box.appendChild(hint);
+  });
   detail.querySelectorAll('.chunk').forEach(ch=>{
     const id=ch.querySelector('.clabel')?.textContent.trim();
     if(!id) return;
@@ -2249,7 +2260,7 @@ async function removePicture(id,k){
 if(!CHUNK_PARAM){
   // Dragging pictures over a chunk outlines it; dropping adds them to it
   let overChunk=null;
-  const chunkAt=e=>e.target.closest&&e.target.closest('#detail .chunk');
+  const chunkAt=e=>e.target.closest&&e.target.closest('#detail .chunk, #detail .idea-drop');
   const setOver=ch=>{ if(overChunk!==ch){ overChunk?.classList.remove('drop-over'); overChunk=ch; ch?.classList.add('drop-over'); } };
   const hasFiles=e=>[...(e.dataTransfer?.types||[])].includes('Files');
   document.addEventListener('dragover',e=>{ if(!hasFiles(e)) return; e.preventDefault(); const ch=chunkAt(e); e.dataTransfer.dropEffect=ch?'copy':'none'; setOver(ch); });
@@ -2258,8 +2269,8 @@ if(!CHUNK_PARAM){
     if(!hasFiles(e)) return;
     e.preventDefault();
     const ch=chunkAt(e); setOver(null);
-    if(!ch){ picStatus(detail.querySelector('.chunk')?'Drop the picture onto one of the puzzle\'s givens or problems.':'This puzzle has no givens or problems yet to add pictures to.',3500); return; }
-    const id=ch.querySelector('.clabel')?.textContent.trim();
+    if(!ch){ picStatus('Drop the picture onto the idea\'s picture box, or one of the puzzle\'s givens or problems.',3500); return; }
+    const id=ch.dataset.picid||ch.querySelector('.clabel')?.textContent.trim();
     if(id) uploadPictures(id,[...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')));
   });
 }
