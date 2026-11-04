@@ -22,5 +22,12 @@ const PUZZLE_PICTURES = {
    "w": 1600,
    "h": 1361
   }
+ ],
+ "p16-idea": [
+  {
+   "src": "puzzle_images/p16-idea-17937801204070.webp",
+   "w": 1600,
+   "h": 1067
+  }
  ]
 };
