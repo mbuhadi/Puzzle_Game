@@ -1,0 +1,944 @@
+{
+ "version": 1,
+ "bg": "#2a2620",
+ "items": [
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 112,
+   "y": 80,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 96,
+   "y": 80,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 80,
+   "y": 80,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 64,
+   "y": 80,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 48,
+   "y": 80,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 32,
+   "y": 80,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 32,
+   "y": 96,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 32,
+   "y": 112,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 48,
+   "y": 112,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 48,
+   "y": 128,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 64,
+   "y": 128,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 64,
+   "y": 144,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 80,
+   "y": 144,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 96,
+   "y": 144,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 112,
+   "y": 144,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 128,
+   "y": 144,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 144,
+   "y": 144,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 144,
+   "y": 128,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 160,
+   "y": 128,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 176,
+   "y": 112,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 176,
+   "y": 96,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 192,
+   "y": 96,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 192,
+   "y": 80,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 192,
+   "y": 64,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 176,
+   "y": 64,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 176,
+   "y": 48,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 176,
+   "y": 32,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 160,
+   "y": 32,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 160,
+   "y": 16,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 144,
+   "y": 16,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 128,
+   "y": 16,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 128,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 112,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 96,
+   "y": 0,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 96,
+   "y": 16,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 80,
+   "y": 16,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 64,
+   "y": 32,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 64,
+   "y": 48,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 48,
+   "y": 64,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 48,
+   "y": 80,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 48,
+   "y": 96,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 64,
+   "y": 96,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 64,
+   "y": 112,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 80,
+   "y": 112,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 96,
+   "y": 112,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 112,
+   "y": 112,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 128,
+   "y": 112,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 144,
+   "y": 112,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 144,
+   "y": 96,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 160,
+   "y": 96,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 160,
+   "y": 80,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 144,
+   "y": 64,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 128,
+   "y": 64,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 128,
+   "y": 48,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 112,
+   "y": 48,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 96,
+   "y": 48,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 96,
+   "y": 64,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 80,
+   "y": 64,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 80,
+   "y": 80,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 80,
+   "y": 96,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 96,
+   "y": 96,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 112,
+   "y": 96,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 128,
+   "y": 96,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 144,
+   "y": 96,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 160,
+   "y": 80,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 160,
+   "y": 64,
+   "w": 48,
+   "h": 48
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 7,
+    "sy": 27,
+    "sw": 3,
+    "sh": 3
+   },
+   "x": 176,
+   "y": 64,
+   "w": 48,
+   "h": 48
+  }
+ ]
+}
