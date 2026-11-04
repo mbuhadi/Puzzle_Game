@@ -1,0 +1,76 @@
+{
+ "version": 1,
+ "bg": "#2a2620",
+ "items": [
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 0,
+    "sy": 52,
+    "sw": 9,
+    "sh": 7
+   },
+   "x": 32,
+   "y": 16,
+   "w": 144,
+   "h": 112
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 0,
+    "sy": 52,
+    "sw": 9,
+    "sh": 7
+   },
+   "x": 112,
+   "y": 80,
+   "w": 144,
+   "h": 112
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 0,
+    "sy": 52,
+    "sw": 9,
+    "sh": 7
+   },
+   "x": 48,
+   "y": 96,
+   "w": 144,
+   "h": 112
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 0,
+    "sy": 52,
+    "sw": 9,
+    "sh": 7
+   },
+   "x": 144,
+   "y": 16,
+   "w": 144,
+   "h": 112
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 0,
+    "sy": 52,
+    "sw": 9,
+    "sh": 7
+   },
+   "x": 128,
+   "y": 16,
+   "w": 144,
+   "h": 112
+  }
+ ]
+}
