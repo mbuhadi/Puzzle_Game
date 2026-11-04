@@ -2097,13 +2097,17 @@ function kick(amp = 6) { play.kick = { t: performance.now(), amp }; }
 // combined into one layer (on black, so 'screen' blending leaves the rest
 // alone) and laid over the screen in a single pass
 const glow = { src: document.createElement('canvas'), mix: document.createElement('canvas'), tint: document.createElement('canvas') };
-let glowAt = -1e9;
-const GLOW_REFRESH_MS = 120;   // the bloom is soft: rebuilding it ~8×/s is plenty
+let glowAt = -1e9, glowView = '';
+// The bloom is soft: while the view is still, rebuilding it ~8×/s is plenty.
+// While the map moves (drag, zoom, camera, shake, card lift) it's rebuilt every
+// frame, or the glow lags behind the map like a shadow.
+const GLOW_REFRESH_MS = 120;
 function crtGlow() {
   const w = Math.max(1, Math.ceil(cv.width / 6)), h = Math.max(1, Math.ceil(cv.height / 6));
   const now = performance.now();
   if (glow.mix.width !== w || glow.mix.height !== h) { for (const c of Object.values(glow)) { c.width = w; c.height = h; } glowAt = -1e9; }
-  if (now - glowAt > GLOW_REFRESH_MS) { glowAt = now; buildGlow(w, h); }
+  const v = [view.x, view.y, view.z, shakeOff[0], shakeOff[1], playing && play.lift ? now : ''].join(',');
+  if (v !== glowView || now - glowAt > GLOW_REFRESH_MS) { glowAt = now; glowView = v; buildGlow(w, h); }
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalCompositeOperation = 'screen';
