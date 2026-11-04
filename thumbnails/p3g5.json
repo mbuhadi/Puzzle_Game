@@ -1,0 +1,174 @@
+{
+ "version": 1,
+ "bg": "#2a2620",
+ "items": [
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 10,
+    "sy": 47,
+    "sw": 6,
+    "sh": 2
+   },
+   "x": 80,
+   "y": 48,
+   "w": 96,
+   "h": 32
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 10,
+    "sy": 47,
+    "sw": 6,
+    "sh": 2
+   },
+   "x": 80,
+   "y": 64,
+   "w": 96,
+   "h": 32
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 10,
+    "sy": 47,
+    "sw": 6,
+    "sh": 2
+   },
+   "x": 112,
+   "y": 96,
+   "w": 96,
+   "h": 32
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 10,
+    "sy": 47,
+    "sw": 6,
+    "sh": 2
+   },
+   "x": 96,
+   "y": 96,
+   "w": 96,
+   "h": 32
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 10,
+    "sy": 47,
+    "sw": 6,
+    "sh": 2
+   },
+   "x": 64,
+   "y": 96,
+   "w": 96,
+   "h": 32
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 10,
+    "sy": 47,
+    "sw": 6,
+    "sh": 2
+   },
+   "x": 64,
+   "y": 112,
+   "w": 96,
+   "h": 32
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 10,
+    "sy": 47,
+    "sw": 6,
+    "sh": 2
+   },
+   "x": 64,
+   "y": 144,
+   "w": 96,
+   "h": 32
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 10,
+    "sy": 47,
+    "sw": 6,
+    "sh": 2
+   },
+   "x": 80,
+   "y": 144,
+   "w": 96,
+   "h": 32
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 10,
+    "sy": 47,
+    "sw": 6,
+    "sh": 2
+   },
+   "x": 64,
+   "y": 80,
+   "w": 96,
+   "h": 32
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 10,
+    "sy": 47,
+    "sw": 6,
+    "sh": 2
+   },
+   "x": 32,
+   "y": 64,
+   "w": 96,
+   "h": 32
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 10,
+    "sy": 47,
+    "sw": 6,
+    "sh": 2
+   },
+   "x": 32,
+   "y": 48,
+   "w": 96,
+   "h": 32
+  },
+  {
+   "pick": {
+    "kind": "sheet",
+    "sheet": "interiors",
+    "sx": 10,
+    "sy": 47,
+    "sw": 6,
+    "sh": 2
+   },
+   "x": 112,
+   "y": 16,
+   "w": 96,
+   "h": 32
+  }
+ ]
+}
