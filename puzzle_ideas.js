@@ -49,7 +49,7 @@ const PUZZLE_IDEAS = [
  {
   "num": 16,
   "title": "Inspiration from a child",
-  "idea": "realistic drawing of a scene in the desert with different options(regular tree instead of palm tree, goat instead of camel etc..)\n\nchilds drawing containing the answer",
+  "idea": "realistic drawing of a scene in the desert with different options (camel can be goat or sheep - tent can be car or pickup - palm \n\nchilds drawing containing the answer",
   "added": 1793472369497
  },
  {
