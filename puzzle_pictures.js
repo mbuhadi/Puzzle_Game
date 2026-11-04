@@ -2,6 +2,13 @@
    the Directory (via the GitHub API), so don't hand-edit it. Maps a chunk id
    (p11g1…) to its pictures, in order; the image files are in puzzle_images/. */
 const PUZZLE_PICTURES = {
+ "p10-idea": [
+  {
+   "src": "puzzle_images/p10-idea-17937871405060.webp",
+   "w": 948,
+   "h": 593
+  }
+ ],
  "p12-idea": [
   {
    "src": "puzzle_images/p12-idea-17937748670150.webp",
