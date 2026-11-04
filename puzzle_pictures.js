@@ -25,12 +25,12 @@ const PUZZLE_PICTURES = {
  ],
  "p16-idea": [
   {
-   "src": "puzzle_images/p16-idea-17937801204070.webp",
+   "src": "puzzle_images/p16-idea-17937801324220.webp",
    "w": 1600,
    "h": 1067
   },
   {
-   "src": "puzzle_images/p16-idea-17937801324220.webp",
+   "src": "puzzle_images/p16-idea-17937801204070.webp",
    "w": 1600,
    "h": 1067
   }
