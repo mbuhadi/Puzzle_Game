@@ -106,6 +106,7 @@
   .idea-drop{border:1px dashed var(--line); border-radius:8px; padding:10px 14px; min-height:54px;}
   .idea-drop .chunk-pics{margin:0 0 8px;}
   .idea-drop.drop-over{outline:2px dashed var(--gold); outline-offset:4px;}
+  .thumb-btn.drop-over{outline:2px dashed var(--gold); outline-offset:3px;}
   .chunk.drop-over{outline:2px dashed var(--gold); outline-offset:6px; border-radius:6px;}
   .drop-hint{font:11px sans-serif; color:var(--dim); margin:4px 0 0;}
   #picStatus{position:fixed; left:50%; bottom:70px; transform:translateX(-50%); z-index:400; display:none;
@@ -1553,7 +1554,7 @@ function saveTags(t){ try{ localStorage.setItem(TAG_STORE_KEY,JSON.stringify(t))
 // ── Tile thumbnails (made in Thumbnail Studio, shown on blueprint tiles) ──
 function makeThumbButton(id){
   const b=document.createElement('button');
-  b.type='button'; b.className='thumb-btn'; b.title='Make / edit the tile thumbnail for '+id;
+  b.type='button'; b.className='thumb-btn'; b.title='Make / edit the tile thumbnail for '+id+' — or drop a picture here to use it as the thumbnail';
   const c=document.createElement('canvas'); c.width=TH.W; c.height=TH.H;
   const lbl=document.createElement('span'); lbl.textContent='Thumbnail';
   b.append(c,lbl);
@@ -2234,6 +2235,25 @@ async function uploadPictures(id,files){
     picStatus('Couldn\'t save: '+e.message,6000);
   }finally{ picBusy=false; }
 }
+// A picture dropped on a Thumbnail button becomes that chunk's whole thumbnail
+// (the old one, drawn or not, is replaced); Thumbnail Studio can still edit it
+async function useThumbPicture(btn,file){
+  const id=btn.dataset.thumb;
+  if(!file) return picStatus('Only pictures can be dropped here.',3000);
+  if(picBusy) return picStatus('Still saving the last change…',2500);
+  const had=TH.get(id)?.data;
+  if(had&&(had.items.length||had.text)&&!confirm(`Replace ${id}'s thumbnail with this picture?`)) return;
+  if(!needToken()) return;
+  picBusy=true; picStatus(`Saving ${id}'s thumbnail…`);
+  try{
+    await TH.save(id,{bg:had?.bg||'#2a2620',items:[await TH.pictureItem(file)]});
+    btn._refresh();
+    picStatus(`${id}'s thumbnail saved ✓`,3500);
+  }catch(e){
+    if(/bad credentials/i.test(e.message)){ try{ localStorage.removeItem('ghToken'); }catch(_){} }
+    picStatus('Couldn\'t save: '+e.message,6000);
+  }finally{ picBusy=false; }
+}
 async function movePicture(id,k,d){
   if(picBusy||!needToken()) return;
   picBusy=true; picStatus('Saving…');
@@ -2260,7 +2280,8 @@ async function removePicture(id,k){
 if(!CHUNK_PARAM){
   // Dragging pictures over a chunk outlines it; dropping adds them to it
   let overChunk=null;
-  const chunkAt=e=>e.target.closest&&e.target.closest('#detail .chunk, #detail .idea-drop');
+  // the Thumbnail button first (a picture dropped there becomes the thumbnail), else the chunk or idea box
+  const chunkAt=e=>e.target.closest&&(e.target.closest('#detail .thumb-btn')||e.target.closest('#detail .chunk, #detail .idea-drop'));
   const setOver=ch=>{ if(overChunk!==ch){ overChunk?.classList.remove('drop-over'); overChunk=ch; ch?.classList.add('drop-over'); } };
   const hasFiles=e=>[...(e.dataTransfer?.types||[])].includes('Files');
   document.addEventListener('dragover',e=>{ if(!hasFiles(e)) return; e.preventDefault(); const ch=chunkAt(e); e.dataTransfer.dropEffect=ch?'copy':'none'; setOver(ch); });
@@ -2270,6 +2291,7 @@ if(!CHUNK_PARAM){
     e.preventDefault();
     const ch=chunkAt(e); setOver(null);
     if(!ch){ picStatus('Drop the picture onto the idea\'s picture box, or one of the puzzle\'s givens or problems.',3500); return; }
+    if(ch.classList.contains('thumb-btn')){ useThumbPicture(ch,[...e.dataTransfer.files].find(f=>f.type.startsWith('image/'))); return; }
     const id=ch.dataset.picid||ch.querySelector('.clabel')?.textContent.trim();
     if(id) uploadPictures(id,[...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')));
   });
