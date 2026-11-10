@@ -15,5 +15,12 @@ const PUZZLE_ADDED_CHUNKS = {
    "kind": "problem",
    "text": "This is a placeholder for p10p1"
   }
+ ],
+ "13": [
+  {
+   "id": "p13g1",
+   "kind": "given",
+   "text": "This is a placeholder for p13g1"
+  }
  ]
 };
