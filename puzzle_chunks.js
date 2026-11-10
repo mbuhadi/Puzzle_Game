@@ -9,6 +9,11 @@ const PUZZLE_ADDED_CHUNKS = {
    "id": "p10g1",
    "kind": "given",
    "text": "This is a placeholder for p10g1"
+  },
+  {
+   "id": "p10p1",
+   "kind": "problem",
+   "text": "This is a placeholder for p10p1"
   }
  ]
 };
