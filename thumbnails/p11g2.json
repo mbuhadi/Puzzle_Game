@@ -1,36 +1,5 @@
 {
  "version": 1,
  "bg": "#3a3226",
- "items": [
-  {
-   "pick": {
-    "kind": "image",
-    "src": "puzzle_images/thumb-p11g2-17938737215830.webp",
-    "x": 0,
-    "y": 0,
-    "w": 512,
-    "h": 384,
-    "smooth": true
-   },
-   "x": 0,
-   "y": 0,
-   "w": 256,
-   "h": 192
-  },
-  {
-   "pick": {
-    "kind": "image",
-    "src": "puzzle_images/thumb-p11g2-17938745463100.webp",
-    "x": 0,
-    "y": 0,
-    "w": 512,
-    "h": 384,
-    "smooth": true
-   },
-   "x": 0,
-   "y": 0,
-   "w": 256,
-   "h": 192
-  }
- ]
+ "items": []
 }
